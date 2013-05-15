@@ -1,62 +1,44 @@
 
-#include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <vector>
-#include <string>
-#include <sstream>
-#include <map>
-#include <cstdio>
-
+#include "Definitions.cuh"
 #include "kernel.cuh"
-using namespace std;
 
-void readFile(string filename, char*& input, int& size);
+#include "Tools.h"
+#include "kernelInvoker.cuh"
 
-// Variables set up by hand
-int max_tracks = 400;
+int max_tracks = 1000;
 
 int main()
 {
-	track* tracks;
-	int num_tracks;
-
-	// Read file
+	// Read file (s)
 	char* input;
 	int size;
-	string c = "input_float.dump";
+	std::string c = "pixel-sft-event-0.dump";
 	readFile(c.c_str(), input, size);
+
+	// Return elements
+	Track* tracks;
+	int* num_tracks;
 
 	int numBlocks = 1, numThreads = 1;
 
+	// Pre-processing, quick sort over X
+	quickSortInput(input);
+
     cudaError_t cudaStatus = invokeParallelSearch(numBlocks, numThreads, input, size, tracks, num_tracks);
     if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cuda kernel failed!");
-        return 1;
+        std::cerr << "cuda kernel failed" << std::endl;
+        return cudaStatus;
     }
 
     cudaStatus = cudaDeviceReset();
     if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "cudaDeviceReset failed!");
-        return 1;
+        std::cerr << "cudaDeviceReset failed" << std::endl;
+        return cudaStatus;
     }
+
+	std::cout << "Everything went quite well!" << std::endl;
 
 	getchar();
 
     return 0;
-}
-
-void readFile(string filename, char*& input, int& size){
-	// Give me them datas!!11!
-	ifstream infile (filename.c_str(), ifstream::binary);
-
-	// get size of file
-	infile.seekg(0, ifstream::end);
-	size = infile.tellg();
-	infile.seekg(0);
-
-	// read content of infile with pointers
-	input = (char*) malloc(size);
-	infile.read (input, size);
-	infile.close();
 }

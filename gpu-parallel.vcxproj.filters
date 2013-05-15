@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Tracker">
+      <UniqueIdentifier>{3bfe3ac8-7292-4151-8b38-b3518a864693}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources">
+      <UniqueIdentifier>{fe67de9e-683c-4b78-aad8-d4c9896478d2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Headers">
+      <UniqueIdentifier>{a5e35fa3-8cea-4c4d-9fc0-9523afa0c83e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tracker\Headers">
+      <UniqueIdentifier>{c90752f7-54c3-4638-9271-5c3c5effe6e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tracker\Sources">
+      <UniqueIdentifier>{01975804-e1de-411e-97bf-d0668d4204f3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Tools.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="Definitions.cuh">
+      <Filter>Tracker\Headers</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="Tools.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="kernel.cu">
+      <Filter>Tracker\Sources</Filter>
+    </CudaCompile>
+    <CudaCompile Include="kernelInvoker.cu">
+      <Filter>Tracker\Sources</Filter>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="kernel.cuh">
+      <Filter>Tracker\Headers</Filter>
+    </None>
+    <None Include="kernelInvoker.cuh">
+      <Filter>Tracker\Headers</Filter>
+    </None>
+  </ItemGroup>
+</Project>
