@@ -7,8 +7,8 @@ int* h_sensor_Zs;
 int* h_sensor_hitStarts;
 int* h_sensor_hitNums;
 int* h_hit_IDs;
-double* h_hit_Xs;
-double* h_hit_Ys;
+float* h_hit_Xs;
+float* h_hit_Ys;
 int* h_hit_Zs;
 
 void readFile(std::string filename, char*& input, int& size){
@@ -31,8 +31,8 @@ void readFile(std::string filename, char*& input, int& size){
 	h_sensor_hitStarts = (int*) (h_sensor_Zs + h_no_sensors[0]);
 	h_sensor_hitNums = (int*) (h_sensor_hitStarts + h_no_sensors[0]);
 	h_hit_IDs = (int*) (h_sensor_hitNums + h_no_sensors[0]);
-	h_hit_Xs = (double*) (h_hit_IDs + h_no_hits[0]);
-	h_hit_Ys = (double*) (h_hit_Xs + h_no_hits[0]);
+	h_hit_Xs = (float*) (h_hit_IDs + h_no_hits[0]);
+	h_hit_Ys = (float*) (h_hit_Xs + h_no_hits[0]);
 	h_hit_Zs = (int*) (h_hit_Ys + h_no_hits[0]);
 }
 
@@ -42,7 +42,7 @@ void quickSortInput(char*& input){
 		    h_sensor_hitStarts[i], h_sensor_hitStarts[i] + h_sensor_hitNums[i]);
 }
 
-void quickSort(double*& hit_Xs, double*& hit_Ys, int*& hit_IDs, int*& hit_Zs, int _beginning, int _end)
+void quickSort(float*& hit_Xs, float*& hit_Ys, int*& hit_IDs, int*& hit_Zs, int _beginning, int _end)
 {
 	const int max_levels = 300;
 	int beg[max_levels], end[max_levels], i=0, L, R, swap;

@@ -43,8 +43,8 @@ __device__ int* sensor_Zs;
 __device__ int* sensor_hitStarts;
 __device__ int* sensor_hitNums;
 __device__ int* hit_IDs;
-__device__ double* hit_Xs;
-__device__ double* hit_Ys;
+__device__ float* hit_Xs;
+__device__ float* hit_Ys;
 __device__ int* hit_Zs;
 
 __device__ int* prevs;

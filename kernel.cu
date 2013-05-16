@@ -8,8 +8,8 @@ __global__ void prepareData(char* input, int* _prevs, int* _nexts){
     sensor_hitStarts = (int*) (sensor_Zs + no_sensors[0]);
     sensor_hitNums = (int*) (sensor_hitStarts + no_sensors[0]);
     hit_IDs = (int*) (sensor_hitNums + no_sensors[0]);
-    hit_Xs = (double*) (hit_IDs + no_hits[0]);
-	hit_Ys = (double*) (hit_Xs + no_hits[0]);
+    hit_Xs = (float*) (hit_IDs + no_hits[0]);
+	hit_Ys = (float*) (hit_Xs + no_hits[0]);
 	hit_Zs = (int*) (hit_Ys + no_hits[0]);
 
 	prevs = _prevs;
