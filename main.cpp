@@ -5,8 +5,6 @@
 #include "Tools.h"
 #include "kernelInvoker.cuh"
 
-int max_tracks = 1000;
-
 int main()
 {
 	// Read file (s)
@@ -19,7 +17,7 @@ int main()
 	Track* tracks;
 	int* num_tracks;
 
-	int numBlocks = 1, numThreads = 1;
+	dim3 numBlocks(48), numThreads(32);
 
 	// Pre-processing, quick sort over X
 	quickSortInput(input);

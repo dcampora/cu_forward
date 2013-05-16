@@ -1,6 +1,16 @@
 
 #include "Tools.h"
 
+int* h_no_sensors;
+int* h_no_hits;
+int* h_sensor_Zs;
+int* h_sensor_hitStarts;
+int* h_sensor_hitNums;
+int* h_hit_IDs;
+double* h_hit_Xs;
+double* h_hit_Ys;
+int* h_hit_Zs;
+
 void readFile(std::string filename, char*& input, int& size){
 	// Give me them datas!!11!
 	std::ifstream infile (filename.c_str(), std::ifstream::binary);
@@ -14,22 +24,22 @@ void readFile(std::string filename, char*& input, int& size){
 	input = (char*) malloc(size);
 	infile.read (input, size);
 	infile.close();
+
+	h_no_sensors = (int*) &input[0];
+	h_no_hits = (int*) (h_no_sensors + 1);
+	h_sensor_Zs = (int*) (h_no_hits + 1);
+	h_sensor_hitStarts = (int*) (h_sensor_Zs + h_no_sensors[0]);
+	h_sensor_hitNums = (int*) (h_sensor_hitStarts + h_no_sensors[0]);
+	h_hit_IDs = (int*) (h_sensor_hitNums + h_no_sensors[0]);
+	h_hit_Xs = (double*) (h_hit_IDs + h_no_hits[0]);
+	h_hit_Ys = (double*) (h_hit_Xs + h_no_hits[0]);
+	h_hit_Zs = (int*) (h_hit_Ys + h_no_hits[0]);
 }
 
 void quickSortInput(char*& input){
-	int* l_no_sensors = (int*) &input[0];
-    int* l_no_hits = (int*) (l_no_sensors + 1);
-    int* l_sensor_Zs = (int*) (l_no_hits + 1);
-    int* l_sensor_hitStarts = (int*) (l_sensor_Zs + l_no_sensors[0]);
-    int* l_sensor_hitNums = (int*) (l_sensor_hitStarts + l_no_sensors[0]);
-    int* l_hit_IDs = (int*) (l_sensor_hitNums + l_no_sensors[0]);
-    double* l_hit_Xs = (double*) (l_hit_IDs + l_no_hits[0]);
-	double* l_hit_Ys = (double*) (l_hit_Xs + l_no_hits[0]);
-	int* l_hit_Zs = (int*) (l_hit_Ys + l_no_hits[0]);
-
-	for(int i=0; i<l_no_sensors[0]; i++)
-        quickSort(l_hit_Xs, l_hit_Ys, l_hit_IDs, l_hit_Zs,
-		    l_sensor_hitStarts[i], l_sensor_hitStarts[i] + l_sensor_hitNums[i]);
+	for(int i=0; i<h_no_sensors[0]; i++)
+        quickSort(h_hit_Xs, h_hit_Ys, h_hit_IDs, h_hit_Zs,
+		    h_sensor_hitStarts[i], h_sensor_hitStarts[i] + h_sensor_hitNums[i]);
 }
 
 void quickSort(double*& hit_Xs, double*& hit_Ys, int*& hit_IDs, int*& hit_Zs, int _beginning, int _end)

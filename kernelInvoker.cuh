@@ -2,8 +2,9 @@
 #include <iostream>
 #include "Definitions.cuh"
 
-extern int max_tracks;
+extern int* h_no_hits;
 
-cudaError_t invokeParallelSearch(int numBlocks, int numThreads,
+void getMaxNumberOfHits(char*& input, int& maxHits);
+cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	char* input, int size, Track*& tracks, int*& num_tracks);
 
