@@ -70,27 +70,27 @@ __global__ void neighboursFinder()
 		// - next_hits:   Next hits (HITS_SHARED === blockDim.x)
 
 		for (int i=0; i<current_num_hits_to_load; ++i){
-			int current_element = s[1].hitStart + i * blockDim.x + threadIdx.x;
+			int current_element = i * blockDim.x + threadIdx.x;
 
 			if (current_element < s[1].hitNums){
-				current_hit.x = hit_Xs[current_element];
-				current_hit.y = hit_Ys[current_element];
+				current_hit.x = hit_Xs[s[1].hitStart + current_element];
+				current_hit.y = hit_Ys[s[1].hitStart + current_element];
 			}
 
 			for (int j=0; j<prev_num_hits_to_load; ++j){
-				int prev_element = s[0].hitStart + j * blockDim.x + threadIdx.x;
+				int prev_element = j * blockDim.x + threadIdx.x;
 
 				if (prev_element < s[0].hitNums){
-					prev_hits[threadIdx.x].x = hit_Xs[prev_element];
-					prev_hits[threadIdx.x].y = hit_Ys[prev_element];
+					prev_hits[threadIdx.x].x = hit_Xs[s[0].hitStart + prev_element];
+					prev_hits[threadIdx.x].y = hit_Ys[s[0].hitStart + prev_element];
 				}
 
 				for (int k=0; k<next_num_hits_to_load; ++k){
-					int next_element = s[2].hitStart + k * blockDim.x + threadIdx.x;
+					int next_element = k * blockDim.x + threadIdx.x;
 
 					if (next_element < s[2].hitNums){
-						next_hits[threadIdx.x].x = hit_Xs[next_element];
-						next_hits[threadIdx.x].y = hit_Ys[next_element];
+						next_hits[threadIdx.x].x = hit_Xs[s[2].hitStart + next_element];
+						next_hits[threadIdx.x].y = hit_Ys[s[2].hitStart + next_element];
 					}
 
 					// Start comparison, minimize the best_fit for each current_element
@@ -129,10 +129,14 @@ __global__ void neighboursFinder()
 
 			// Store best fit into solution array.
 			if(current_element < s[1].hitNums){
-				prevs[current_element] = best_prev;
-				nexts[current_element] = best_next;
+				prevs[s[1].hitStart + current_element] = best_prev;
+				nexts[s[1].hitStart + current_element] = best_next;
 			}
 		}
 	}
 }
 
+__global__ void neighboursCleaner()
+{
+	int a = 20 * 40 * 20 * 30;
+}

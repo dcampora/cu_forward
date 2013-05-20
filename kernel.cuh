@@ -17,3 +17,4 @@ struct Hit {
 
 __global__ void prepareData(char* input, int* _prevs, int* _nexts);
 __global__ void neighboursFinder();
+__global__ void neighboursCleaner();

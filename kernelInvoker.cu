@@ -44,6 +44,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
     // Launch a kernel on the GPU with one thread for each element.
 	prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts);
     neighboursFinder<<<numBlocks, numThreads>>>();
+	neighboursCleaner<<<numBlocks, numThreads>>>();
 	
 	// cudaDeviceSynchronize waits for the kernel to finish, and returns
     // any errors encountered during the launch.
