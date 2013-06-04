@@ -2,6 +2,17 @@
 #include "kernelInvoker.cuh"
 #include "kernel.cuh"
 
+
+extern int* h_no_sensors;
+extern int* h_no_hits;
+extern int* h_sensor_Zs;
+extern int* h_sensor_hitStarts;
+extern int* h_sensor_hitNums;
+extern int* h_hit_IDs;
+extern float* h_hit_Xs;
+extern float* h_hit_Ys;
+extern int* h_hit_Zs;
+
 #define cudaCheck(stmt) do {										\
         cudaError_t err = stmt;										\
         if (err != cudaSuccess) {									\
@@ -14,9 +25,12 @@
 cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	char* input, int size, Track*& tracks, int*& num_tracks){
     
+	// int* h_prevs, *h_nexts;
+
 	char *dev_input = 0;
 	int* dev_num_tracks = 0;
 	Track *dev_tracks = 0;
+	bool* dev_track_holders = 0;
 	int* dev_prevs = 0;
 	int* dev_nexts = 0;
     cudaError_t cudaStatus = cudaSuccess;
@@ -29,8 +43,13 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	tracks = (Track*) malloc(MAX_TRACKS * sizeof(Track));
 	num_tracks = (int*) malloc(sizeof(int));
 
+	int* h_prevs = (int*) malloc(h_no_hits[0] * sizeof(int));
+	int* h_nexts = (int*) malloc(h_no_hits[0] * sizeof(int));
+
     // Allocate GPU buffers
     cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
+	cudaCheck(cudaMalloc((void**)&dev_track_holders, MAX_TRACKS * sizeof(bool)));
+
 	cudaCheck(cudaMalloc((void**)&dev_prevs, h_no_hits[0] * sizeof(int)));
 	cudaCheck(cudaMalloc((void**)&dev_nexts, h_no_hits[0] * sizeof(int)));
     
@@ -40,11 +59,34 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
     
 	// memcpys
     cudaCheck(cudaMemcpy(dev_input, input, size, cudaMemcpyHostToDevice));
-    
-    // Launch a kernel on the GPU with one thread for each element.
+
+	// Launch a kernel on the GPU with one thread for each element.
 	prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts);
+
+	// gpuKalman
+	gpuKalman<<<46, 32>>>(dev_tracks, dev_track_holders);
+
     neighboursFinder<<<numBlocks, numThreads>>>();
+
+	// Visualize results
+	cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
+	cudaCheck(cudaMemcpy(h_nexts, dev_nexts, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
+	printOutSensorHits(2, h_prevs, h_nexts);
+
+	/*
+	out = std::ofstream("prevnexts.out");
+	out.write((char*) &h_prevs[0], h_no_hits[0] * sizeof(int));
+	out.write((char*) &h_nexts[0], h_no_hits[0] * sizeof(int));
+	out.close();
+	*/
+
 	neighboursCleaner<<<numBlocks, numThreads>>>();
+	
+	// Visualize results
+	cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
+	cudaCheck(cudaMemcpy(h_nexts, dev_nexts, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
+	// printOutSensorHits(2, h_prevs, h_nexts);
+	printOutAllSensorHits(h_prevs, h_nexts);
 	
 	// cudaDeviceSynchronize waits for the kernel to finish, and returns
     // any errors encountered during the launch.
@@ -57,6 +99,27 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
     cudaCheck(cudaMemcpy(tracks, dev_tracks, num_tracks[0] * sizeof(Track), cudaMemcpyDeviceToHost));
     
     return cudaStatus;
+}
+
+void printOutAllSensorHits(int* prevs, int* nexts){
+	std::cout << "All valid sensor hits: " << std::endl;
+	for(int i=0; i<h_no_sensors[0]; ++i){
+		for(int j=0; j<h_sensor_hitNums[i]; ++j){
+			int hit = h_sensor_hitStarts[i] + j;
+			
+			if(nexts[hit] != -1){
+				std::cout << hit << ", " << nexts[hit] << std::endl;
+			}
+		}
+	}
+}
+
+void printOutSensorHits(int sensorNumber, int* prevs, int* nexts){
+	for(int i=0; i<h_sensor_hitNums[sensorNumber]; ++i){
+		int hstart = h_sensor_hitStarts[sensorNumber];
+
+		std::cout << hstart + i << ": " << prevs[hstart + i] << ", " << nexts[hstart + i] << std::endl;
+	}
 }
 
 void getMaxNumberOfHits(char*& input, int& maxHits){
