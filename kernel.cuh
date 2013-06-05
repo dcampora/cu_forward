@@ -5,14 +5,6 @@
 #define MAX_FLOAT 100000000.0
 #define NUM_SENSORS 48
 
-#define PARAM_W 0.0144338f // 0.050 / sqrt( 12. )
-#define PARAM_MAXXSLOPE 0.4f
-#define PARAM_MAXYSLOPE 0.3f
-
-#define PARAM_TOLERANCE 0.15f
-#define PARAM_TOLERANCE_EXTENDED 0.3f
-
-
 /*
 float 	f_m_maxXSlope			= 0.400;
 float 	f_m_maxYSlope			= 0.300;
@@ -28,42 +20,14 @@ int 	f_m_sensNum				= 48;
 float   f_w						= 0.050 / sqrt( 12. );
 */
 
-struct Sensor {
-	int z;
-	int hitStart;
-	int hitNums;
-};
-
-struct Hit {
-	float x;
-	float y;
-};
-
-struct Track {
-	float x0;
-	float y0;
-	float tx;
-	float ty;
-
-	float s0;
-	float sx;
-	float sz;
-	float sxz;
-	float sz2;
-
-	float u0;
-	float uy;
-	float uz;
-	float uyz;
-	float uz2;
-
-	int hitsNum;
-	int hits[24];
-}
-
+__device__ float fitHits(Hit& h0, Hit& h1, Sensor& s0, Sensor& s1);
+__device__ float fitHitToTrack(Track& t, Hit& h1, Sensor& s1);
+__device__ void acceptTrack(Track& t, Hit& h0, Hit& h1, Sensor& s0, Sensor& s1, int h0_num, int h1_num);
+__device__ void updateTrack(Track& t, Hit& h1, Sensor& s1, int h1_num);
+__device__ void updateTrackCoords(Track& t);
 
 __global__ void prepareData(char* input, int* _prevs, int* _nexts);
 __global__ void neighboursFinder();
 __global__ void neighboursCleaner();
 
-__global__ void gpuKalman();
+__global__ void gpuKalman(Track* tracks, bool* track_holders);

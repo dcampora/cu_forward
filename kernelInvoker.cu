@@ -45,6 +45,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 
 	int* h_prevs = (int*) malloc(h_no_hits[0] * sizeof(int));
 	int* h_nexts = (int*) malloc(h_no_hits[0] * sizeof(int));
+	bool* h_track_holders = (bool*) malloc(MAX_TRACKS * sizeof(bool));
 
     // Allocate GPU buffers
     cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
@@ -65,6 +66,15 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 
 	// gpuKalman
 	gpuKalman<<<46, 32>>>(dev_tracks, dev_track_holders);
+
+	cudaCheck(cudaMemcpy(h_track_holders, dev_track_holders, MAX_TRACKS * sizeof(bool), cudaMemcpyDeviceToHost));
+	cudaCheck(cudaMemcpy(tracks, dev_tracks, MAX_TRACKS * sizeof(Track), cudaMemcpyDeviceToHost));
+
+	for(int i=0; i<h_no_hits[0]; ++i){
+		if(h_track_holders[i]){
+			printTrack(tracks, i);
+		}
+	}
 
     neighboursFinder<<<numBlocks, numThreads>>>();
 
@@ -100,6 +110,33 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
     
     return cudaStatus;
 }
+
+// #track, h0, h1, h2, h3, ..., hn, length, chi2
+void printTrack(Track* tracks, int track_no){
+	std::cout << track_no << ": ";
+
+	Track t = tracks[track_no];
+	for(int i=0; i<t.hitsNum; ++i){
+		std::cout << h_hit_IDs[t.hits[i]] << ", ";
+	}
+
+	std::cout << "length: " << t.hitsNum << std::endl;
+}
+
+/*
+float f_chi2(Track& t)
+{
+	float ch = 0.0;
+	int nDoF  = -4;
+	int hitNumber;
+	for (int i=0; i<t.hitsNum; ++i){
+		hitNumber = t.hits[i];
+		ch += f_chi2Track(t, hitNumber);
+		nDoF += 2;
+	}
+	return ch/nDoF;
+}
+*/
 
 void printOutAllSensorHits(int* prevs, int* nexts){
 	std::cout << "All valid sensor hits: " << std::endl;

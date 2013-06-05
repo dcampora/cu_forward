@@ -266,7 +266,7 @@ __device__ float fitHits(Hit& h0, Hit& h1, Sensor& s0, Sensor& s1){
 	float dymax = PARAM_MAXYSLOPE * fabs((float)( s1.z - s0.z ));*/
 	
 	// Distance to <0,0,0> in its XY plane.
-	float t = - s0.z / s1.z - s0.z;
+	float t = - s0.z / (s1.z - s0.z);
 	float x = h0.x + t * (h1.x - h0.x);
 	float y = h0.y + t * (h1.y - h0.y);
 	float d1 = sqrtf( powf( (float) (x), 2.0) + 
@@ -286,8 +286,11 @@ __device__ float fitHitToTrack(Track& t, Hit& h1, Sensor& s1){
 	float dx = x_prediction - h1.x;
 	float dy = (t.y0 + t.ty * s1.z) - h1.y;
 	float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
+
+	// TODO: The check for chi2_condition can totally be done after this call
+	bool chi2_condition = chi2 < PARAM_MAXCHI2;
 	
-	return tol_condition * chi2 + !tol_condition * MAX_FLOAT;
+	return tol_condition * chi2_condition * chi2 + (!tol_condition || !chi2_condition) * MAX_FLOAT;
 }
 
 // Create track
@@ -331,6 +334,21 @@ __device__ void updateTrack(Track& t, Hit& h1, Sensor& s1, int h1_num){
 
 	t.hits[t.hitsNum] = h1_num;
 	t.hitsNum++;
+
+	updateTrackCoords(t);
+}
+
+// TODO: Check this function
+__device__ void updateTrackCoords (Track& t){
+	float den = ( t.sz2 * t.s0 - t.sz * t.sz );
+	if ( fabs(den) < 10e-10 ) den = 1.f;
+	t.tx     = ( t.sxz * t.s0  - t.sx  * t.sz ) / den;
+	t.x0     = ( t.sx  * t.sz2 - t.sxz * t.sz ) / den;
+
+	den = ( t.uz2 * t.u0 - t.uz * t.uz );
+	if ( fabs(den) < 10e-10 ) den = 1.f;
+	t.ty     = ( t.uyz * t.u0  - t.uy  * t.uz ) / den;
+	t.y0     = ( t.uy  * t.uz2 - t.uyz * t.uz ) / den;
 }
 
 /** Simple implementation of the Kalman Filter selection on the GPU (step 4).
@@ -366,11 +384,11 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 	Sensor s0, s1;
 	Hit h0, h1;
 
-	float fit;
+	float fit, best_fit;
 	bool fit_is_better, accept_track;
-	int best_hit, best_fit, current_hit;
-	
-	int current_sensor = (48 - blockIdx.x);
+	int best_hit, current_hit;
+
+	int current_sensor = (47 - blockIdx.x);
 
 	s0.hitStart = sensor_hitStarts[current_sensor];
 	s0.hitNums = sensor_hitNums[current_sensor];
@@ -378,6 +396,14 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 
 	// Analyze the best hit for next sensor
 	int next_sensor = current_sensor - 2;
+	
+	// TODO: Delete these infamous lines
+	for(int i=0; i<int(ceilf(s0.hitNums / blockDim.x)); ++i){
+		current_hit = blockIdx.x * i + threadIdx.x;
+		if(current_hit < s0.hitNums){
+			track_holders[s0.hitStart + current_hit] = false;
+		}
+	}
 
 	if(next_sensor >= 0){
 		// Iterate in all hits for current sensor
@@ -385,9 +411,14 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 			current_hit = blockIdx.x * i + threadIdx.x;
 
 			h0.x = hit_Xs[ s0.hitStart + current_hit ];
-			t.x0 = h0.x;
-			t.y0 = h0.y;
-			t.tx = -1;
+			h0.y = hit_Ys[ s0.hitStart + current_hit ];
+			// t.x0 = h0.x;
+			// t.y0 = h0.y;
+			
+			// Initialize track
+			for(int j=0; j<TRACK_SIZE; ++j){
+				t.hits[j] = -1;
+			}
 
 			if(current_hit < s0.hitNums){
 				// TODO: shared memory.
@@ -425,9 +456,9 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 					next_sensor -= 2;
 					while(next_sensor >= 0){
 						// Go to following sensor
-						s0.hitNums = s1.hitNums;
+						/*s0.hitNums = s1.hitNums;
 						s0.hitStart = s1.hitStart;
-						s0.z = s1.z;
+						s0.z = s1.z;*/
 						
 						s1.hitStart = sensor_hitStarts[next_sensor];
 						s1.hitNums = sensor_hitNums[next_sensor];
@@ -461,9 +492,10 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 
 				// If it's a track, write it to memory, no matter what kind
 				// of track it is.
-				track_holders[current_hit] = accept_track;
-				if(accept_track){
-					tracks[current_hit] = t;
+				// TODO: Weird problem
+				track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum > 2);
+				if(accept_track && (t.hitsNum > 2)){
+					tracks[s0.hitStart + current_hit] = t;
 				}
 			}
 		}
