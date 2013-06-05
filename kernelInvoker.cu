@@ -29,6 +29,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 
 	char *dev_input = 0;
 	int* dev_num_tracks = 0;
+	int* dev_track_indexes = 0;
 	Track *dev_tracks = 0;
 	bool* dev_track_holders = 0;
 	int* dev_prevs = 0;
@@ -50,6 +51,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
     // Allocate GPU buffers
     cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
 	cudaCheck(cudaMalloc((void**)&dev_track_holders, MAX_TRACKS * sizeof(bool)));
+	cudaCheck(cudaMalloc((void**)&dev_track_indexes, MAX_TRACKS * sizeof(int)));
 
 	cudaCheck(cudaMalloc((void**)&dev_prevs, h_no_hits[0] * sizeof(int)));
 	cudaCheck(cudaMalloc((void**)&dev_nexts, h_no_hits[0] * sizeof(int)));
@@ -62,10 +64,11 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
     cudaCheck(cudaMemcpy(dev_input, input, size, cudaMemcpyHostToDevice));
 
 	// Launch a kernel on the GPU with one thread for each element.
-	prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts);
+	prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts, dev_track_holders);
 
 	// gpuKalman
-	gpuKalman<<<48, 32>>>(dev_tracks, dev_track_holders);
+	gpuKalman<<<46, 32>>>(dev_tracks, dev_track_holders);
+	postProcess<<<1, 512>>>(dev_tracks, dev_track_holders, dev_tracks_indexes, dev_num_tracks);
 
 	cudaCheck(cudaMemcpy(h_track_holders, dev_track_holders, MAX_TRACKS * sizeof(bool), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(tracks, dev_tracks, MAX_TRACKS * sizeof(Track), cudaMemcpyDeviceToHost));
@@ -120,7 +123,7 @@ void printTrack(Track* tracks, int track_no){
 		std::cout << h_hit_IDs[t.hits[i]] << ", ";
 	}
 
-	std::cout << "length: " << t.hitsNum << std::endl;
+	std::cout << "length: " << (int) t.hitsNum << std::endl;
 }
 
 /*

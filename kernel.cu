@@ -1,7 +1,7 @@
 ﻿
 #include "kernel.cuh"
 
-__global__ void prepareData(char* input, int* _prevs, int* _nexts){
+__global__ void prepareData(char* input, int* _prevs, int* _nexts, bool* track_holders){
 	no_sensors = (int*) &input[0];
     no_hits = (int*) (no_sensors + 1);
     sensor_Zs = (int*) (no_hits + 1);
@@ -14,6 +14,10 @@ __global__ void prepareData(char* input, int* _prevs, int* _nexts){
 
 	prevs = _prevs;
 	nexts = _nexts;
+
+	for(int i=0; i<MAX_TRACKS; ++i){
+		track_holders[i] = false;
+	}
 }
 
 __global__ void neighboursFinder()
@@ -398,18 +402,16 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 	int next_sensor = current_sensor - 2;
 	
 	// TODO: Delete these infamous lines
-	for(int i=0; i<=int(ceilf(s0.hitNums / blockDim.x)); ++i){
+	/* for(int i=0; i<=int(ceilf(s0.hitNums / blockDim.x)); ++i){
 		current_hit = blockIdx.x * i + threadIdx.x;
 		if(current_hit < s0.hitNums){
 			track_holders[s0.hitStart + current_hit] = false;
 		}
-	}
-
-
+	} */
 
 	if(next_sensor >= 0){
 		// Iterate in all hits for current sensor
-		for(int i=0; i<=int(ceilf(s0.hitNums / blockDim.x)); ++i){
+		for(int i=0; i<=int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i){
 			current_hit = blockIdx.x * i + threadIdx.x;
 
 			h0.x = hit_Xs[ s0.hitStart + current_hit ];
@@ -502,4 +504,130 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 			}
 		}
 	}
+}
+
+/** The postProcess method takes care of discarding tracks
+which are redundant. In other words, it will (hopefully) increase
+the purity of our tracks.
+
+- Inspect track_holders and generate track_indexes and num_tracks
+
+The main idea is to accept tracks which have unique (> REQUIRED_UNIQUES) hits.
+For this, each track is checked against all other more preferent tracks, and
+hits not common are kept.
+
+A track t0 has preference over another t1 one if:
+t0.hitsNum > t1.hitsNum ||
+(t0.hitsNum == t1.hitsNum && chi2(t0) < chi2(t1))
+*/
+__global__ void postProcess(Track* tracks, bool* track_holders, int* track_indexes, int* num_tracks){
+	// tracks_to_process holds the list of tracks with track_holders[t] == true
+	__shared__ int sh_tracks_to_process[MAX_POST_TRACKS];
+
+	__shared__ Track sh_tracks[MAX_POST_TRACKS];
+	__shared__ float sh_chi2[MAX_POST_TRACKS];
+	
+	// We will use an atomic to write on a vector concurrently on several values
+	__shared__ int tracks_to_process_size = 0;
+	__shared__ int tracks_accepted_size = 0;
+
+	__syncthreads(); // for the atomics tracks_to_process_size, and tracks_processed
+
+	int i, current_track;
+
+	for(i=0; i<=int(ceilf( ((float) no_hits[0]) / blockDim.x)); ++i){
+		current_track = blockDim.x * i + threadIdx.x;
+		if(current_track < no_hits[0]){
+			// Iterate in all tracks (current_track)
+
+			if(track_holders[current_track]){
+				// Atomic add
+				int current_atomic = atomicAdd(tracks_to_process_size, 1);
+
+				// TODO: This shouldn't exist,
+				// redo using method to process in batches if necessary
+				if(current_atomic < MAX_POST_TRACKS)
+					sh_tracks_to_process[current_atomic] = current_track;
+			}
+		}
+	}
+
+	__syncthreads();
+
+	// Copy tracks to shared memory for efficiency! :)
+	for(i=0; i<=int(ceilf( ((float) tracks_to_process_size) / blockDim.x)); ++i){
+		current_track = blockDim.x * i + threadIdx.x;
+		if(current_track < tracks_to_process_size){
+			// Store all tracks in sh_tracks
+			sh_tracks[current_track] = tracks[sh_tracks_to_process[current_track]];
+
+			// TODO: Calculate chi2
+			sh_chi2[current_track] = 0.0f; // trackChi2(sh_tracks[current_track]);
+		}
+	}
+
+	__syncthreads();
+
+	// All tracks are in sh_tracks.
+	// All chi2 are in sh_chi2.
+	// All your base are belong to us.
+	
+	for(i=0; i<=int(ceilf( ((float) tracks_to_process_size) / blockDim.x)); ++i){
+		current_track = blockDim.x * i + threadIdx.x;
+		if(current_track < tracks_to_process_size){
+			// Iterate in all tracks (current_track)
+			for(int next_track=0; next_track<tracks_to_process_size; ++next_track){
+				
+				/* Compare all tracks to check uniqueness, based on
+				- length
+				- chi2
+
+				preferent is a boolean storing this logic. It reads,
+				
+				next_track is preferent if
+					it's not current_track,
+					its length > current_track . length OR
+					(its length == current_track . length AND
+					chi2 < current_track . chi2)
+				*/
+				bool preferent = current_track!=next_track &&
+								 (sh_tracks[next_track].hitsNum > sh_tracks[current_track].hitsNum ||
+								 (sh_tracks[next_track].hitsNum == sh_tracks[current_track].hitsNum &&
+								 sh_chi2[next_track] < sh_chi2[current_track]));
+
+				// TODO: Maybe there's a better way...
+				if(preferent){
+					// Eliminate hits from current_track, based on next_track's
+					for(int current_hit=0; current_hit<TRACK_SIZE; ++current_hit){
+						for(int next_hit=0; next_hit<TRACK_SIZE; ++next_hit){
+							/* apply mask:
+							(a[i] == b[j]) * -1 +
+							(a[i] != b[j]) * b[j]
+							*/
+							sh_tracks[current_track].hits[current_hit] =
+								(sh_tracks[current_track].hits[current_hit] == sh_tracks[next_track].hits[next_hit]) * -1 + 
+								(sh_tracks[current_track].hits[current_hit] != sh_tracks[next_track].hits[next_hit]) *
+									sh_tracks[next_track].hits[next_hit];
+						}
+					}
+				}
+			}
+
+			// Check how many uniques do we have
+			int unique;
+			for(int hit=0; hit<TRACK_SIZE; ++hit)
+				unique += (sh_tracks[current_track].hits[hit]!=-1);
+
+			if(((float) unique) / sh_tracks[current_track].hitsNum > REQUIRED_UNIQUES){
+				int current_track_accepted = atomicAdd(tracks_accepted_size, 1);
+
+				track_indexes[current_track_accepted] = sh_tracks_to_process[current_track];
+			}
+		}
+	}
+
+	__syncthreads();
+
+	if(threadIdx.x==0)
+		num_tracks[0] = tracks_accepted_size;
 }

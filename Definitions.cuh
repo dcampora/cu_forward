@@ -11,6 +11,9 @@
 #define MAX_TRACKS 10000
 #define TRACK_SIZE 24
 
+#define MAX_POST_TRACKS 100
+#define REQUIRED_UNIQUES 0.67f
+
 struct Sensor {
 	int z;
 	int hitStart;

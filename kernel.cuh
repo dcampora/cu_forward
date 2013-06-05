@@ -26,8 +26,9 @@ __device__ void acceptTrack(Track& t, Hit& h0, Hit& h1, Sensor& s0, Sensor& s1, 
 __device__ void updateTrack(Track& t, Hit& h1, Sensor& s1, int h1_num);
 __device__ void updateTrackCoords(Track& t);
 
-__global__ void prepareData(char* input, int* _prevs, int* _nexts);
+__global__ void prepareData(char* input, int* _prevs, int* _nexts, bool* track_holders);
 __global__ void neighboursFinder();
 __global__ void neighboursCleaner();
 
 __global__ void gpuKalman(Track* tracks, bool* track_holders);
+__global__ void postProcess(Track* tracks, bool* track_holders);
