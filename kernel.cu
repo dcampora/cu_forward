@@ -398,16 +398,18 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 	int next_sensor = current_sensor - 2;
 	
 	// TODO: Delete these infamous lines
-	for(int i=0; i<int(ceilf(s0.hitNums / blockDim.x)); ++i){
+	for(int i=0; i<=int(ceilf(s0.hitNums / blockDim.x)); ++i){
 		current_hit = blockIdx.x * i + threadIdx.x;
 		if(current_hit < s0.hitNums){
 			track_holders[s0.hitStart + current_hit] = false;
 		}
 	}
 
+
+
 	if(next_sensor >= 0){
 		// Iterate in all hits for current sensor
-		for(int i=0; i<int(ceilf(s0.hitNums / blockDim.x)); ++i){
+		for(int i=0; i<=int(ceilf(s0.hitNums / blockDim.x)); ++i){
 			current_hit = blockIdx.x * i + threadIdx.x;
 
 			h0.x = hit_Xs[ s0.hitStart + current_hit ];

@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#define MAX_TRACKS 1000
+#define MAX_TRACKS 10000
 #define TRACK_SIZE 24
 
 struct Sensor {

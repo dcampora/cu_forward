@@ -65,7 +65,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts);
 
 	// gpuKalman
-	gpuKalman<<<46, 32>>>(dev_tracks, dev_track_holders);
+	gpuKalman<<<48, 32>>>(dev_tracks, dev_track_holders);
 
 	cudaCheck(cudaMemcpy(h_track_holders, dev_track_holders, MAX_TRACKS * sizeof(bool), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(tracks, dev_tracks, MAX_TRACKS * sizeof(Track), cudaMemcpyDeviceToHost));
