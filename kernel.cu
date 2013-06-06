@@ -286,7 +286,7 @@ __device__ float fitHitToTrack(Track& t, Hit& h1, Sensor& s1){
 	float x_prediction = t.x0 + t.tx * s1.z;
 	bool tol_condition = fabs(x_prediction - h1.x) < PARAM_TOLERANCE;
 
-	// chi2
+	// chi2 of hit (taken out from function for efficiency)
 	float dx = x_prediction - h1.x;
 	float dy = (t.y0 + t.ty * s1.z) - h1.y;
 	float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
@@ -504,6 +504,39 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 	}
 }
 
+
+/* Calculating the chi2 of a track is quite cumbersome.
+It implies loading hit_Xs, hit_Ys, and sensor_Zs elements for each
+hit of the track. This introduces branching, and is slow.
+
+However, the track chi2 has to be calculated only when the
+track has been created (the tx, ty values change).
+*/
+
+__device__ float trackChi2(Track& t){
+	float ch = 0.0;
+	int nDoF  = -4 + 2 * t.hitsNum;
+	Hit h;
+	for (int i=0; i<TRACK_SIZE; i++){
+		// TODO: Maybe there's a better way to do this
+		if(t.hits[i] != -1){
+			h.x = hit_Xs[ t.hits[i] ];
+			h.y = hit_Ys[ t.hits[i] ];
+
+			ch += hitChi2(t, h, hit_Zs[ t.hits[i] ]);
+		}
+	}
+	return ch/nDoF;
+}
+
+__device__ float hitChi2(Track& t, Hit& h, int hit_z){
+	// chi2 of a hit
+	float dx = (t.x0 + t.tx * hit_z) - h.x;
+	float dy = (t.y0 + t.ty * hit_z) - h.y;
+	return dx * dx * PARAM_W + dy * dy * PARAM_W;
+}
+
+
 /** The postProcess method takes care of discarding tracks
 which are redundant. In other words, it will (hopefully) increase
 the purity of our tracks.
@@ -514,6 +547,7 @@ The main idea is to accept tracks which have unique (> REQUIRED_UNIQUES) hits.
 For this, each track is checked against all other more preferent tracks, and
 hits not common are kept.
 
+TODO: Change preference system by something more civilized
 A track t0 has preference over another t1 one if:
 t0.hitsNum > t1.hitsNum ||
 (t0.hitsNum == t1.hitsNum && chi2(t0) < chi2(t1))
@@ -562,8 +596,8 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 			// Store all tracks in sh_tracks
 			sh_tracks[current_track] = tracks[sh_tracks_to_process[current_track]];
 
-			// TODO: Calculate chi2
-			sh_chi2[current_track] = 0.0f; // trackChi2(sh_tracks[current_track]);
+			// Calculate chi2
+			sh_chi2[current_track] = trackChi2(sh_tracks[current_track]);
 		}
 	}
 
@@ -585,6 +619,7 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 
 				preferent is a boolean storing this logic. It reads,
 				
+				TODO: Change preference system by something more civilized
 				next_track is preferent if
 					it's not current_track,
 					its length > current_track . length OR
