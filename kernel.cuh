@@ -31,4 +31,4 @@ __global__ void neighboursFinder();
 __global__ void neighboursCleaner();
 
 __global__ void gpuKalman(Track* tracks, bool* track_holders);
-__global__ void postProcess(Track* tracks, bool* track_holders);
+__global__ void postProcess(Track* tracks, bool* track_holders, int* track_indexes, int* num_tracks);

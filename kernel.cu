@@ -411,20 +411,18 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 
 	if(next_sensor >= 0){
 		// Iterate in all hits for current sensor
-		for(int i=0; i<=int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i){
+		for(int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i){
 			current_hit = blockIdx.x * i + threadIdx.x;
-
-			h0.x = hit_Xs[ s0.hitStart + current_hit ];
-			h0.y = hit_Ys[ s0.hitStart + current_hit ];
-			// t.x0 = h0.x;
-			// t.y0 = h0.y;
-			
-			// Initialize track
-			for(int j=0; j<TRACK_SIZE; ++j){
-				t.hits[j] = -1;
-			}
-
 			if(current_hit < s0.hitNums){
+
+				h0.x = hit_Xs[ s0.hitStart + current_hit ];
+				h0.y = hit_Ys[ s0.hitStart + current_hit ];
+
+				// Initialize track
+				for(int j=0; j<TRACK_SIZE; ++j){
+					t.hits[j] = -1;
+				}
+
 				// TODO: shared memory.
 				s1.hitStart = sensor_hitStarts[next_sensor];
 				s1.hitNums = sensor_hitNums[next_sensor];
@@ -497,8 +495,8 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 				// If it's a track, write it to memory, no matter what kind
 				// of track it is.
 				// TODO: Weird problem
-				track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum > 2);
-				if(accept_track && (t.hitsNum > 2)){
+				track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum >= MIN_HITS_TRACK);
+				if(accept_track && (t.hitsNum >= MIN_HITS_TRACK)){
 					tracks[s0.hitStart + current_hit] = t;
 				}
 			}
@@ -528,21 +526,24 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 	__shared__ float sh_chi2[MAX_POST_TRACKS];
 	
 	// We will use an atomic to write on a vector concurrently on several values
-	__shared__ int tracks_to_process_size = 0;
-	__shared__ int tracks_accepted_size = 0;
+	__shared__ int tracks_to_process_size;
+	__shared__ int tracks_accepted_size;
+
+	tracks_to_process_size = 0;
+	tracks_accepted_size = 0;
 
 	__syncthreads(); // for the atomics tracks_to_process_size, and tracks_processed
 
 	int i, current_track;
 
-	for(i=0; i<=int(ceilf( ((float) no_hits[0]) / blockDim.x)); ++i){
+	for(i=0; i<int(ceilf( ((float) no_hits[0]) / blockDim.x)); ++i){
 		current_track = blockDim.x * i + threadIdx.x;
 		if(current_track < no_hits[0]){
 			// Iterate in all tracks (current_track)
 
 			if(track_holders[current_track]){
 				// Atomic add
-				int current_atomic = atomicAdd(tracks_to_process_size, 1);
+				int current_atomic = atomicAdd(&tracks_to_process_size, 1);
 
 				// TODO: This shouldn't exist,
 				// redo using method to process in batches if necessary
@@ -555,7 +556,7 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 	__syncthreads();
 
 	// Copy tracks to shared memory for efficiency! :)
-	for(i=0; i<=int(ceilf( ((float) tracks_to_process_size) / blockDim.x)); ++i){
+	for(i=0; i<int(ceilf( ((float) tracks_to_process_size) / blockDim.x)); ++i){
 		current_track = blockDim.x * i + threadIdx.x;
 		if(current_track < tracks_to_process_size){
 			// Store all tracks in sh_tracks
@@ -601,25 +602,26 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 					for(int current_hit=0; current_hit<TRACK_SIZE; ++current_hit){
 						for(int next_hit=0; next_hit<TRACK_SIZE; ++next_hit){
 							/* apply mask:
-							(a[i] == b[j]) * -1 +
-							(a[i] != b[j]) * b[j]
+							a[i] = 
+								(a[i] == b[j]) * -1 +
+								(a[i] != b[j]) * a[i]
 							*/
 							sh_tracks[current_track].hits[current_hit] =
 								(sh_tracks[current_track].hits[current_hit] == sh_tracks[next_track].hits[next_hit]) * -1 + 
 								(sh_tracks[current_track].hits[current_hit] != sh_tracks[next_track].hits[next_hit]) *
-									sh_tracks[next_track].hits[next_hit];
+									sh_tracks[current_track].hits[current_hit];
 						}
 					}
 				}
 			}
 
 			// Check how many uniques do we have
-			int unique;
+			int unique = 0;
 			for(int hit=0; hit<TRACK_SIZE; ++hit)
 				unique += (sh_tracks[current_track].hits[hit]!=-1);
 
 			if(((float) unique) / sh_tracks[current_track].hitsNum > REQUIRED_UNIQUES){
-				int current_track_accepted = atomicAdd(tracks_accepted_size, 1);
+				int current_track_accepted = atomicAdd(&tracks_accepted_size, 1);
 
 				track_indexes[current_track_accepted] = sh_tracks_to_process[current_track];
 			}

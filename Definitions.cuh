@@ -13,6 +13,17 @@
 
 #define MAX_POST_TRACKS 100
 #define REQUIRED_UNIQUES 0.67f
+#define MIN_HITS_TRACK 3
+
+#define PARAM_W 0.0144338f // 0.050 / sqrt( 12. )
+#define PARAM_MAXXSLOPE 0.4f
+#define PARAM_MAXYSLOPE 0.3f
+
+#define PARAM_TOLERANCE 0.15f
+#define PARAM_TOLERANCE_EXTENDED 0.3f
+
+#define PARAM_MAXCHI2 100.0f
+#define PARAM_MAXCHI2_EXTENDED 200.0f
 
 struct Sensor {
 	int z;
@@ -64,16 +75,6 @@ __device__ int* hit_Zs;
 
 __device__ int* prevs;
 __device__ int* nexts;
-
-#define PARAM_W 0.0144338f // 0.050 / sqrt( 12. )
-#define PARAM_MAXXSLOPE 0.4f
-#define PARAM_MAXYSLOPE 0.3f
-
-#define PARAM_TOLERANCE 0.15f
-#define PARAM_TOLERANCE_EXTENDED 0.3f
-
-#define PARAM_MAXCHI2 100.0f
-#define PARAM_MAXCHI2_EXTENDED 200.0f
 
 /*
 __device__ __constant__ float 	f_m_maxXSlope			= 0.4f;
