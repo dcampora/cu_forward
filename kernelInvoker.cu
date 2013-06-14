@@ -26,6 +26,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	char* input, int size, Track*& tracks, int*& num_tracks){
     
 	// int* h_prevs, *h_nexts;
+	Histo histo;
 
 	char *dev_input = 0;
 	int* dev_num_tracks = 0;
@@ -77,6 +78,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 			printTrack(tracks, i);
 		}
 	}
+	histo.plotChi2("after-kalman.root", h_track_holders, tracks, h_no_hits[0]);
 
 	postProcess<<<1, 512>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks);
 	cudaCheck(cudaMemcpy(h_track_indexes, dev_track_indexes, MAX_TRACKS * sizeof(int), cudaMemcpyDeviceToHost));
@@ -86,6 +88,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	for(int i=0; i<num_tracks[0]; ++i){
 		printTrack(tracks, h_track_indexes[i]);
 	}
+	histo.plotChi2("after-post-processing.root", h_track_indexes, tracks, num_tracks[0]);
 
     neighboursFinder<<<numBlocks, numThreads>>>();
 

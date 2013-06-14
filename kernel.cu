@@ -376,9 +376,8 @@ best tracks based on (as per the conversation with David):
 - length
 - chi2
 
-For this, simply use the table with all created tracks:
+For this, simply use the table with all created tracks (postProcess):
 
-TODO:
 #track, h0, h1, h2, h3, ..., hn, length, chi2
 
 */
@@ -494,7 +493,6 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 
 				// If it's a track, write it to memory, no matter what kind
 				// of track it is.
-				// TODO: Weird problem
 				track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum >= MIN_HITS_TRACK);
 				if(accept_track && (t.hitsNum >= MIN_HITS_TRACK)){
 					tracks[s0.hitStart + current_hit] = t;
@@ -545,9 +543,9 @@ the purity of our tracks.
 
 The main idea is to accept tracks which have unique (> REQUIRED_UNIQUES) hits.
 For this, each track is checked against all other more preferent tracks, and
-hits not common are kept.
+non common hits are kept.
 
-TODO: Change preference system by something more civilized
+TODO: Change preference system by something more civilized.
 A track t0 has preference over another t1 one if:
 t0.hitsNum > t1.hitsNum ||
 (t0.hitsNum == t1.hitsNum && chi2(t0) < chi2(t1))
@@ -579,7 +577,7 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 				// Atomic add
 				int current_atomic = atomicAdd(&tracks_to_process_size, 1);
 
-				// TODO: This shouldn't exist,
+				// TODO: This condition shouldn't exist,
 				// redo using method to process in batches if necessary
 				if(current_atomic < MAX_POST_TRACKS)
 					sh_tracks_to_process[current_atomic] = current_track;

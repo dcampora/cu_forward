@@ -19,11 +19,14 @@
 #define PARAM_MAXXSLOPE 0.4f
 #define PARAM_MAXYSLOPE 0.3f
 
-#define PARAM_TOLERANCE 0.15f
+#define PARAM_TOLERANCE_BASIC 0.15f
 #define PARAM_TOLERANCE_EXTENDED 0.3f
 
-#define PARAM_MAXCHI2 100.0f
+#define PARAM_MAXCHI2_BASIC 100.0f
 #define PARAM_MAXCHI2_EXTENDED 200.0f
+
+#define PARAM_TOLERANCE PARAM_TOLERANCE_EXTENDED
+#define PARAM_MAXCHI2 PARAM_MAXCHI2_EXTENDED
 
 struct Sensor {
 	int z;
@@ -57,24 +60,6 @@ struct Track { // 57 + 24*4 = 324 B
 	char hitsNum;
 	int hits[TRACK_SIZE];
 };
-
-// __device__ int max_hits;
-// __device__ int hits_num;
-
-__device__ __constant__ int sens_num = 48;
-
-__device__ int* no_sensors;
-__device__ int* no_hits;
-__device__ int* sensor_Zs;
-__device__ int* sensor_hitStarts;
-__device__ int* sensor_hitNums;
-__device__ int* hit_IDs;
-__device__ float* hit_Xs;
-__device__ float* hit_Ys;
-__device__ int* hit_Zs;
-
-__device__ int* prevs;
-__device__ int* nexts;
 
 /*
 __device__ __constant__ float 	f_m_maxXSlope			= 0.4f;

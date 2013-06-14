@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include "Definitions.cuh"
+#include "Histo.h"
 
 #include <fstream>
 
