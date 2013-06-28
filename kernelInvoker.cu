@@ -35,6 +35,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	bool* dev_track_holders = 0;
 	int* dev_prevs = 0;
 	int* dev_nexts = 0;
+	int* dev_tracks_to_process = 0;
     cudaError_t cudaStatus = cudaSuccess;
 
     // Choose which GPU to run on, change this on a multi-GPU system.
@@ -54,6 +55,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
     cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
 	cudaCheck(cudaMalloc((void**)&dev_track_holders, MAX_TRACKS * sizeof(bool)));
 	cudaCheck(cudaMalloc((void**)&dev_track_indexes, MAX_TRACKS * sizeof(int)));
+	cudaCheck(cudaMalloc((void**)&dev_tracks_to_process, MAX_TRACKS * sizeof(int)));
 
 	cudaCheck(cudaMalloc((void**)&dev_prevs, h_no_hits[0] * sizeof(int)));
 	cudaCheck(cudaMalloc((void**)&dev_nexts, h_no_hits[0] * sizeof(int)));
@@ -80,7 +82,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	}
 	histo.plotChi2("after-kalman.root", h_track_holders, tracks, h_no_hits[0]);
 
-	postProcess<<<1, 512>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks);
+	postProcess<<<1, 32>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks, dev_tracks_to_process);
 	cudaCheck(cudaMemcpy(h_track_indexes, dev_track_indexes, MAX_TRACKS * sizeof(int), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(num_tracks, dev_num_tracks, sizeof(int), cudaMemcpyDeviceToHost));
 	std::cout << std::endl

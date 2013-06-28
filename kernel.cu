@@ -550,12 +550,17 @@ A track t0 has preference over another t1 one if:
 t0.hitsNum > t1.hitsNum ||
 (t0.hitsNum == t1.hitsNum && chi2(t0) < chi2(t1))
 */
-__global__ void postProcess(Track* tracks, bool* track_holders, int* track_indexes, int* num_tracks){
+__global__ void postProcess(Track* tracks, bool* track_holders, int* track_indexes, int* num_tracks, int* tracks_to_process){
 	// tracks_to_process holds the list of tracks with track_holders[t] == true
-	__shared__ int sh_tracks_to_process[MAX_POST_TRACKS];
+	
+	// TODO: Try with sh_tracks_to_process
+	// __shared__ int sh_tracks_to_process[MAX_POST_TRACKS];
 
-	__shared__ Track sh_tracks[MAX_POST_TRACKS];
-	__shared__ float sh_chi2[MAX_POST_TRACKS];
+	__shared__ Track sh_tracks[BUNCH_POST_TRACKS];
+	__shared__ float sh_chi2[BUNCH_POST_TRACKS];
+
+	__shared__ Track sh_next_tracks[BUNCH_POST_TRACKS];
+	__shared__ float sh_next_chi2[BUNCH_POST_TRACKS];
 	
 	// We will use an atomic to write on a vector concurrently on several values
 	__shared__ int tracks_to_process_size;
@@ -566,7 +571,8 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 
 	__syncthreads(); // for the atomics tracks_to_process_size, and tracks_processed
 
-	int i, current_track;
+	int i, j, current_track, next_track;
+	bool preferent;
 
 	for(i=0; i<int(ceilf( ((float) no_hits[0]) / blockDim.x)); ++i){
 		current_track = blockDim.x * i + threadIdx.x;
@@ -579,84 +585,99 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 
 				// TODO: This condition shouldn't exist,
 				// redo using method to process in batches if necessary
-				if(current_atomic < MAX_POST_TRACKS)
-					sh_tracks_to_process[current_atomic] = current_track;
+				// if(current_atomic < MAX_POST_TRACKS)
+				tracks_to_process[current_atomic] = current_track;
 			}
 		}
 	}
 
 	__syncthreads();
 
-	// Copy tracks to shared memory for efficiency! :)
+	// Iterate in all current_tracks against all next_tracks.
+	// Do this processing on batches of blockDim.x size
 	for(i=0; i<int(ceilf( ((float) tracks_to_process_size) / blockDim.x)); ++i){
 		current_track = blockDim.x * i + threadIdx.x;
 		if(current_track < tracks_to_process_size){
 			// Store all tracks in sh_tracks
-			sh_tracks[current_track] = tracks[sh_tracks_to_process[current_track]];
+			sh_tracks[threadIdx.x] = tracks[tracks_to_process[current_track]];
 
 			// Calculate chi2
-			sh_chi2[current_track] = trackChi2(sh_tracks[current_track]);
+			sh_chi2[threadIdx.x] = trackChi2(sh_tracks[threadIdx.x]);
 		}
-	}
 
-	__syncthreads();
+		__syncthreads();
 
-	// All tracks are in sh_tracks.
-	// All chi2 are in sh_chi2.
-	// All your base are belong to us.
-	
-	for(i=0; i<=int(ceilf( ((float) tracks_to_process_size) / blockDim.x)); ++i){
-		current_track = blockDim.x * i + threadIdx.x;
-		if(current_track < tracks_to_process_size){
-			// Iterate in all tracks (current_track)
-			for(int next_track=0; next_track<tracks_to_process_size; ++next_track){
+		// if(sh_tracks[threadIdx.x].hits[0] == 987)
+		// 	i = 20;
+
+		// Iterate in all next_tracks
+		for(j=0; j<int(ceilf( ((float) tracks_to_process_size) / blockDim.x)); ++j){
+			next_track = blockDim.x * j + threadIdx.x;
+
+			if(next_track < tracks_to_process_size){
+				// Store all tracks in sh_tracks
+				sh_next_tracks[threadIdx.x] = tracks[tracks_to_process[next_track]];
+
+				// Calculate chi2
+				sh_next_chi2[threadIdx.x] = trackChi2(sh_tracks[threadIdx.x]);
+			}
+
+			__syncthreads();
+
+			// All is loaded, commencing assault!
+			for(int k=0; k<BUNCH_POST_TRACKS; ++k){
+				next_track = blockDim.x * j + k;
+
+				if(current_track < tracks_to_process_size && next_track < tracks_to_process_size){
+					/* Compare all tracks to check uniqueness, based on
+					- length
+					- chi2
+
+					preferent is a boolean storing this logic. It reads,
 				
-				/* Compare all tracks to check uniqueness, based on
-				- length
-				- chi2
+					TODO: Change preference system by something more civilized
+					next_track is preferent if
+						it's not current_track,
+						its length > current_track . length OR
+						(its length == current_track . length AND
+						chi2 < current_track . chi2)
+					*/
+					preferent = current_track!=next_track &&
+										(sh_next_tracks[k].hitsNum > sh_tracks[threadIdx.x].hitsNum ||
+										(sh_next_tracks[k].hitsNum == sh_tracks[threadIdx.x].hitsNum &&
+										sh_next_chi2[k] < sh_chi2[threadIdx.x]));
 
-				preferent is a boolean storing this logic. It reads,
-				
-				TODO: Change preference system by something more civilized
-				next_track is preferent if
-					it's not current_track,
-					its length > current_track . length OR
-					(its length == current_track . length AND
-					chi2 < current_track . chi2)
-				*/
-				bool preferent = current_track!=next_track &&
-								 (sh_tracks[next_track].hitsNum > sh_tracks[current_track].hitsNum ||
-								 (sh_tracks[next_track].hitsNum == sh_tracks[current_track].hitsNum &&
-								 sh_chi2[next_track] < sh_chi2[current_track]));
-
-				// TODO: Maybe there's a better way...
-				if(preferent){
-					// Eliminate hits from current_track, based on next_track's
-					for(int current_hit=0; current_hit<TRACK_SIZE; ++current_hit){
-						for(int next_hit=0; next_hit<TRACK_SIZE; ++next_hit){
-							/* apply mask:
-							a[i] = 
-								(a[i] == b[j]) * -1 +
-								(a[i] != b[j]) * a[i]
-							*/
-							sh_tracks[current_track].hits[current_hit] =
-								(sh_tracks[current_track].hits[current_hit] == sh_tracks[next_track].hits[next_hit]) * -1 + 
-								(sh_tracks[current_track].hits[current_hit] != sh_tracks[next_track].hits[next_hit]) *
-									sh_tracks[current_track].hits[current_hit];
+					// TODO: Maybe there's a better way...
+					if(preferent){
+						// Eliminate hits from current_track, based on next_track's
+						for(int current_hit=0; current_hit<TRACK_SIZE; ++current_hit){
+							for(int next_hit=0; next_hit<TRACK_SIZE; ++next_hit){
+								/* apply mask:
+								a[i] = 
+									(a[i] == b[j]) * -1 +
+									(a[i] != b[j]) * a[i]
+								*/
+								sh_tracks[threadIdx.x].hits[current_hit] =
+									(sh_tracks[threadIdx.x].hits[current_hit] == sh_next_tracks[k].hits[next_hit]) * -1 + 
+									(sh_tracks[threadIdx.x].hits[current_hit] != sh_next_tracks[k].hits[next_hit]) *
+										sh_tracks[threadIdx.x].hits[current_hit];
+							}
 						}
 					}
 				}
 			}
+		}
 
+		if(current_track < tracks_to_process_size){
 			// Check how many uniques do we have
 			int unique = 0;
 			for(int hit=0; hit<TRACK_SIZE; ++hit)
-				unique += (sh_tracks[current_track].hits[hit]!=-1);
+				unique += (sh_tracks[threadIdx.x].hits[hit]!=-1);
 
-			if(((float) unique) / sh_tracks[current_track].hitsNum > REQUIRED_UNIQUES){
+			if(((float) unique) / sh_tracks[threadIdx.x].hitsNum > REQUIRED_UNIQUES){
 				int current_track_accepted = atomicAdd(&tracks_accepted_size, 1);
 
-				track_indexes[current_track_accepted] = sh_tracks_to_process[current_track];
+				track_indexes[current_track_accepted] = tracks_to_process[current_track];
 			}
 		}
 	}

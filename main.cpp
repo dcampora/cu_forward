@@ -28,7 +28,7 @@ int main()
 	dim3 numBlocks(48), numThreads(32);
 
 	// Pre-processing, quick sort over X
-	quickSortInput(input);
+	// quickSortInput(input);
 
     cudaError_t cudaStatus = invokeParallelSearch(numBlocks, numThreads, input, size, tracks, num_tracks);
     if (cudaStatus != cudaSuccess) {
