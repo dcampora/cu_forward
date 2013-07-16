@@ -254,7 +254,7 @@ The accept condition requires dxmax and dymax to be in a range.
 
 The fit (d1) depends on the distance of the tracklet to <0,0,0>.
 */
-__device__ float fitHits(Hit& h0, Hit& h1, Sensor& s0, Sensor& s1){
+__device__ float fitHits(Hit& h0, Hit& h1, Hit &h2, Sensor& s0, Sensor& s1, Sensor& s2){
 	// Max dx, dy permissible over next hit
 
 	// TODO: This can go outside this function (only calc once per pair
@@ -270,13 +270,36 @@ __device__ float fitHits(Hit& h0, Hit& h1, Sensor& s0, Sensor& s1){
 	float dymax = PARAM_MAXYSLOPE * fabs((float)( s1.z - s0.z ));*/
 	
 	// Distance to <0,0,0> in its XY plane.
-	float t = - s0.z / (s1.z - s0.z);
+	/*float t = - s0.z / (s1.z - s0.z);
 	float x = h0.x + t * (h1.x - h0.x);
 	float y = h0.y + t * (h1.y - h0.y);
-	float d1 = sqrtf( powf( (float) (x), 2.0) + 
-				powf( (float) (y), 2.0));
+	float d1 = sqrtf( powf( (float) (x), 2.0f) + 
+				powf( (float) (y), 2.0f));*/
 
-	return accept_condition * d1 + !accept_condition * MAX_FLOAT;
+	// Distance between the hits.
+	// float d1 = sqrtf( powf( (float) (h1.x - h0.x), 2.0f) + 
+	//	        powf( (float) (h1.y - h0.y), 2.0f));
+
+	// Distance between line <h0,h1> and h2 in XY plane (s2.z)
+	// float t = s2.z - s0.z / (s1.z - s0.z);
+	// float x = h0.x + t * (h1.x - h0.x);
+	// float y = h0.y + t * (h1.y - h0.y);
+	// float d1 = sqrtf( powf( (float) (x - h2.x), 2.0f) + 
+	//			powf( (float) (y - h2.y), 2.0f));
+	// accept_condition &= (fabs(x - h2.x) < PARAM_TOLERANCE);
+
+	// Require chi2 of third hit below the threshold
+	// float t = ((float) (s2.z - s0.z)) / ((float) (s1.z - s0.z));
+	float z2_tz = ((float) s2.z - s0.z) / ((float) (s1.z - s0.z));
+	float x = h0.x + (h1.x - h0.x) * z2_tz;
+	float y = h0.y + (h1.y - h0.y) * z2_tz;
+
+	float dx = x - h2.x;
+	float dy = y - h2.y;
+	float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
+	accept_condition &= chi2 < PARAM_MAXCHI2;
+
+	return accept_condition * chi2 + !accept_condition * MAX_FLOAT;
 }
 
 // TODO: Optimize with Olivier's
@@ -384,12 +407,12 @@ For this, simply use the table with all created tracks (postProcess):
 
 __global__ void gpuKalman(Track* tracks, bool* track_holders){
 	Track t;
-	Sensor s0, s1;
-	Hit h0, h1;
+	Sensor s0, s1, s2;
+	Hit h0, h1, h2;
 
 	float fit, best_fit;
 	bool fit_is_better, accept_track;
-	int best_hit, current_hit;
+	int best_hit, best_hit_h2, current_hit;
 
 	int current_sensor = (47 - blockIdx.x);
 
@@ -399,6 +422,7 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 
 	// Analyze the best hit for next sensor
 	int next_sensor = current_sensor - 2;
+	int third_sensor = current_sensor - 4;
 	
 	// TODO: Delete these infamous lines
 	/* for(int i=0; i<=int(ceilf(s0.hitNums / blockDim.x)); ++i){
@@ -408,9 +432,21 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 		}
 	} */
 
-	if(next_sensor >= 0){
+	if(third_sensor >= 0){
+		// TODO: shared memory.
+		s1.hitStart = sensor_hitStarts[next_sensor];
+		s1.hitNums = sensor_hitNums[next_sensor];
+		s1.z = sensor_Zs[next_sensor];
+				
+		// TODO: shared memory.
+		s2.hitStart = sensor_hitStarts[third_sensor];
+		s2.hitNums = sensor_hitNums[third_sensor];
+		s2.z = sensor_Zs[third_sensor];
+
 		// Iterate in all hits for current sensor
 		for(int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i){
+			next_sensor = current_sensor - 2;
+
 			current_hit = blockIdx.x * i + threadIdx.x;
 			if(current_hit < s0.hitNums){
 
@@ -421,27 +457,32 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 				for(int j=0; j<TRACK_SIZE; ++j){
 					t.hits[j] = -1;
 				}
-
-				// TODO: shared memory.
-				s1.hitStart = sensor_hitStarts[next_sensor];
-				s1.hitNums = sensor_hitNums[next_sensor];
-				s1.z = sensor_Zs[next_sensor];
 		
 				// TRACK CREATION
 				// TODO: Modify with preprocessed list of hits.
 				best_fit = MAX_FLOAT;
 				best_hit = -1;
+				best_hit_h2 == -1;
 				for(int j=0; j<sensor_hitNums[next_sensor]; ++j){
 					// TODO: Load in chunks of SHARED_MEMORY and take
 					// them from shared memory.
 					h1.x = hit_Xs[s1.hitStart + j];
 					h1.y = hit_Ys[s1.hitStart + j];
 
-					fit = fitHits(h0, h1, s0, s1);
-					fit_is_better = fit < best_fit;
+					// Iterate in the third! list of hits
+					for(int k=0; k<sensor_hitNums[third_sensor]; ++k){
+						// TODO: Load in chunks of SHARED_MEMORY and take
+						// them from shared memory.
+						h2.x = hit_Xs[s2.hitStart + k];
+						h2.y = hit_Ys[s2.hitStart + k];
 
-					best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-					best_hit = fit_is_better * j + !fit_is_better * best_hit;
+						fit = fitHits(h0, h1, h2, s0, s1, s2);
+						fit_is_better = fit < best_fit;
+
+						best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+						best_hit = fit_is_better * j + !fit_is_better * best_hit;
+						best_hit_h2 = fit_is_better * k + !fit_is_better * best_hit_h2;
+					}
 				}
 
 				accept_track = best_fit != MAX_FLOAT;
@@ -452,9 +493,10 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 				if(accept_track){
 					// Fill in t (ONLY in case the best fit is acceptable)
 					acceptTrack(t, h0, h1, s0, s1, s0.hitStart + current_hit, s1.hitStart + best_hit);
+					updateTrack(t, h2, s2, s2.hitStart + best_hit_h2);
 
 					// TRACK FOLLOWING
-					next_sensor -= 2;
+					next_sensor -= 4;
 					while(next_sensor >= 0){
 						// Go to following sensor
 						/*s0.hitNums = s1.hitNums;

@@ -15,7 +15,11 @@
 #define REQUIRED_UNIQUES 0.67f
 #define MIN_HITS_TRACK 3
 
-#define PARAM_W 0.0144338f // 0.050 / sqrt( 12. )
+// 0,0144338f = 0.050 / sqrt( 12. ) // previous param dx
+// 0,0158771f = 0.055 / sqrt( 12. ) // latest param dx in code
+// PARAM_ERROR is the error a single hit (dx)
+// PARAM_W is 1 / expected squared error in X
+#define PARAM_W 3966.94
 #define PARAM_MAXXSLOPE 0.4f
 #define PARAM_MAXYSLOPE 0.3f
 
