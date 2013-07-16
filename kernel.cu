@@ -411,6 +411,7 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 	if(next_sensor >= 0){
 		// Iterate in all hits for current sensor
 		for(int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i){
+			next_sensor = current_sensor - 2;
 			current_hit = blockIdx.x * i + threadIdx.x;
 			if(current_hit < s0.hitNums){
 
