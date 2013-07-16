@@ -30,7 +30,9 @@ int main()
 	// Pre-processing, quick sort over X
 	// quickSortInput(input);
 
-    cudaError_t cudaStatus = invokeParallelSearch(numBlocks, numThreads, input, size, tracks, num_tracks);
+	int* track_indexes;
+
+    cudaError_t cudaStatus = invokeParallelSearch(numBlocks, numThreads, input, size, tracks, num_tracks, track_indexes);
     if (cudaStatus != cudaSuccess) {
         std::cerr << "cuda kernel failed" << std::endl;
         return cudaStatus;

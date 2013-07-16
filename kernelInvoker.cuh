@@ -9,7 +9,7 @@ extern int* h_no_hits;
 
 void getMaxNumberOfHits(char*& input, int& maxHits);
 cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
-	char* input, int size, Track*& tracks, int*& num_tracks);
+	char* input, int size, Track*& tracks, int*& num_tracks, int*& track_indexes);
 
 void printTrack(Track* tracks, int i);
 void printOutSensorHits(int sensorNumber, int* prevs, int* nexts);

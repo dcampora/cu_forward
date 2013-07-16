@@ -23,10 +23,10 @@ extern int* h_hit_Zs;
 
 // Helper function for using CUDA to add vectors in parallel.
 cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
-	char* input, int size, Track*& tracks, int*& num_tracks){
+	char* input, int size, Track*& tracks, int*& num_tracks, int*& h_track_indexes){
     
 	// int* h_prevs, *h_nexts;
-	Histo histo;
+	// Histo histo;
 
 	char *dev_input = 0;
 	int* dev_num_tracks = 0;
@@ -49,7 +49,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	int* h_prevs = (int*) malloc(h_no_hits[0] * sizeof(int));
 	int* h_nexts = (int*) malloc(h_no_hits[0] * sizeof(int));
 	bool* h_track_holders = (bool*) malloc(MAX_TRACKS * sizeof(bool));
-	int* h_track_indexes = (int*) malloc(MAX_TRACKS * sizeof(int));
+	h_track_indexes = (int*) malloc(MAX_TRACKS * sizeof(int));
 
     // Allocate GPU buffers
     cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
@@ -80,7 +80,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 			printTrack(tracks, i);
 		}
 	}
-	histo.plotChi2("after-kalman.root", h_track_holders, tracks, h_no_hits[0]);
+	// histo.plotChi2("after-kalman.root", h_track_holders, tracks, h_no_hits[0]);
 
 	postProcess<<<1, 32>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks, dev_tracks_to_process);
 	cudaCheck(cudaMemcpy(h_track_indexes, dev_track_indexes, MAX_TRACKS * sizeof(int), cudaMemcpyDeviceToHost));
@@ -90,14 +90,16 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	for(int i=0; i<num_tracks[0]; ++i){
 		printTrack(tracks, h_track_indexes[i]);
 	}
-	histo.plotChi2("after-post-processing.root", h_track_indexes, tracks, num_tracks[0]);
+	std::cout << std::endl << "Generated " << num_tracks[0] << " tracks" << std::endl;
 
-    neighboursFinder<<<numBlocks, numThreads>>>();
+	// histo.plotChi2("after-post-processing.root", h_track_indexes, tracks, num_tracks[0]);
+
+    // neighboursFinder<<<numBlocks, numThreads>>>();
 
 	// Visualize results
-	cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
+	/*cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(h_nexts, dev_nexts, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
-	printOutSensorHits(2, h_prevs, h_nexts);
+	printOutSensorHits(2, h_prevs, h_nexts);*/
 
 	/*
 	out = std::ofstream("prevnexts.out");
@@ -106,13 +108,13 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	out.close();
 	*/
 
-	neighboursCleaner<<<numBlocks, numThreads>>>();
+	// neighboursCleaner<<<numBlocks, numThreads>>>();
 	
 	// Visualize results
-	cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
+	/*cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(h_nexts, dev_nexts, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
 	// printOutSensorHits(2, h_prevs, h_nexts);
-	printOutAllSensorHits(h_prevs, h_nexts);
+	printOutAllSensorHits(h_prevs, h_nexts);*/
 	
 	// cudaDeviceSynchronize waits for the kernel to finish, and returns
     // any errors encountered during the launch.

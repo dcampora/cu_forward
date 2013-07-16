@@ -15,7 +15,7 @@
 #define REQUIRED_UNIQUES 0.67f
 #define MIN_HITS_TRACK 3
 
-#define PARAM_W 0.0144338f // 0.050 / sqrt( 12. )
+#define PARAM_W 3966.95f // 0.0144338f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
 #define PARAM_MAXYSLOPE 0.3f
 
