@@ -73,6 +73,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	// gpuKalman
 	gpuKalman<<<46, 32>>>(dev_tracks, dev_track_holders);
 	
+	/* // Print results
 	cudaCheck(cudaMemcpy(h_track_holders, dev_track_holders, MAX_TRACKS * sizeof(bool), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(tracks, dev_tracks, MAX_TRACKS * sizeof(Track), cudaMemcpyDeviceToHost));
 	for(int i=0; i<h_no_hits[0]; ++i){
@@ -80,9 +81,10 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 			printTrack(tracks, i);
 		}
 	}
-	histo.plotChi2("after-kalman.root", h_track_holders, tracks, h_no_hits[0]);
+	histo.plotChi2("after-kalman.root", h_track_holders, tracks, h_no_hits[0]); */
 
 	postProcess<<<1, 32>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks, dev_tracks_to_process);
+	/* // Print results
 	cudaCheck(cudaMemcpy(h_track_indexes, dev_track_indexes, MAX_TRACKS * sizeof(int), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(num_tracks, dev_num_tracks, sizeof(int), cudaMemcpyDeviceToHost));
 	std::cout << std::endl
@@ -90,7 +92,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	for(int i=0; i<num_tracks[0]; ++i){
 		printTrack(tracks, h_track_indexes[i]);
 	}
-	histo.plotChi2("after-post-processing.root", h_track_indexes, tracks, num_tracks[0]);
+	histo.plotChi2("after-post-processing.root", h_track_indexes, tracks, num_tracks[0]); */
 
     neighboursFinder<<<numBlocks, numThreads>>>();
 

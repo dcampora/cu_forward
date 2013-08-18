@@ -689,6 +689,10 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 										(sh_next_tracks[k].hitsNum == sh_tracks[threadIdx.x].hitsNum &&
 										sh_next_chi2[k] < sh_chi2[threadIdx.x]));
 
+					// Preference system based solely on chi2
+					/*preferent = current_track!=next_track &&
+						        sh_next_chi2[k] < sh_chi2[threadIdx.x]; */
+
 					// TODO: Maybe there's a better way...
 					if(preferent){
 						// Eliminate hits from current_track, based on next_track's

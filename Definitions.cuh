@@ -12,7 +12,7 @@
 #define TRACK_SIZE 24
 
 #define BUNCH_POST_TRACKS 32
-#define REQUIRED_UNIQUES 0.67f
+#define REQUIRED_UNIQUES 0.6f
 #define MIN_HITS_TRACK 3
 
 // 0,0144338f = 0.050 / sqrt( 12. ) // previous param dx
