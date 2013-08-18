@@ -273,8 +273,8 @@ __device__ float fitHits(Hit& h0, Hit& h1, Sensor& s0, Sensor& s1){
 	float t = - ((float) s0.z) / ((float) (s1.z - s0.z));
 	float x = h0.x + t * (h1.x - h0.x);
 	float y = h0.y + t * (h1.y - h0.y);
-	float d1 = sqrtf( powf( (float) (x), 2.0) + 
-				powf( (float) (y), 2.0));
+	float d1 = powf( (float) (x), 2.0) + 
+			   powf( (float) (y), 2.0);
 
 	// Distance between the hits on an XY projection
 	/*float d1 = sqrtf( powf( (float) (h1.x - h0.x), 2.0f) +
@@ -368,7 +368,7 @@ Implementation,
 - Perform implementation searching on all hits for each sensor
 
 The algorithm has two parts:
-- Track creation (two hits)
+- Tracklet creation (two hits)
 - Track following (consecutive sensors)
 
 
@@ -404,14 +404,6 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 
 	// Analyze the best hit for next sensor
 	int next_sensor = current_sensor - 2;
-	
-	// TODO: Delete these infamous lines
-	/* for(int i=0; i<=int(ceilf(s0.hitNums / blockDim.x)); ++i){
-		current_hit = blockIdx.x * i + threadIdx.x;
-		if(current_hit < s0.hitNums){
-			track_holders[s0.hitStart + current_hit] = false;
-		}
-	} */
 
 	if(next_sensor >= 0){
 		// Iterate in all hits for current sensor
@@ -497,8 +489,8 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 					}
 				}
 
-				// If it's a track, write it to memory, no matter what kind
-				// of track it is.
+				// If it's a track, write it to memory, as long as 
+				// it fulfills a minimum length.
 				track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum >= MIN_HITS_TRACK);
 				if(accept_track && (t.hitsNum >= MIN_HITS_TRACK)){
 					tracks[s0.hitStart + current_hit] = t;
