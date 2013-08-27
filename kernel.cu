@@ -270,16 +270,15 @@ __device__ float fitHits(Hit& h0, Hit& h1, Sensor& s0, Sensor& s1){
 	float dymax = PARAM_MAXYSLOPE * fabs((float)( s1.z - s0.z ));*/
 	
 	// Distance to <0,0,0> in its XY plane.
-	float t = - ((float) s0.z) / ((float) (s1.z - s0.z));
+	/* float t = - ((float) s0.z) / ((float) (s1.z - s0.z));
 	float x = h0.x + t * (h1.x - h0.x);
 	float y = h0.y + t * (h1.y - h0.y);
 	float d1 = powf( (float) (x), 2.0) + 
-			   powf( (float) (y), 2.0);
+			   powf( (float) (y), 2.0); */
 
 	// Distance between the hits on an XY projection
-	/*float d1 = sqrtf( powf( (float) (h1.x - h0.x), 2.0f) +
-                      powf( (float) (h1.y - h0.y), 2.0f));*/
-
+	float d1 = powf( (float) (h1.x - h0.x), 2.0f) +
+               powf( (float) (h1.y - h0.y), 2.0f);
 
 	return accept_condition * d1 + !accept_condition * MAX_FLOAT;
 }
@@ -672,7 +671,7 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 			for(int hit=0; hit<TRACK_SIZE; ++hit)
 				unique += (sh_tracks[threadIdx.x].hits[hit]!=-1);
 
-			if(true || ((float) unique) / sh_tracks[threadIdx.x].hitsNum > REQUIRED_UNIQUES){
+			if(((float) unique) / sh_tracks[threadIdx.x].hitsNum > REQUIRED_UNIQUES){
 				int current_track_accepted = atomicAdd(&tracks_accepted_size, 1);
 
 				track_indexes[current_track_accepted] = tracks_to_process[current_track];
