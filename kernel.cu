@@ -671,7 +671,7 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 			for(int hit=0; hit<TRACK_SIZE; ++hit)
 				unique += (sh_tracks[threadIdx.x].hits[hit]!=-1);
 
-			if(!ALLOW_POSTPROCESS || ((float) unique) / sh_tracks[threadIdx.x].hitsNum > REQUIRED_UNIQUES){
+			if(!ALLOW_POSTPROCESSING || ((float) unique) / sh_tracks[threadIdx.x].hitsNum > REQUIRED_UNIQUES){
 				int current_track_accepted = atomicAdd(&tracks_accepted_size, 1);
 
 				track_indexes[current_track_accepted] = tracks_to_process[current_track];
