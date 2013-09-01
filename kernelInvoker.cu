@@ -84,22 +84,23 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	histo.plotChi2("after-kalman.root", h_track_holders, tracks, h_no_hits[0]); */
 
 	postProcess<<<1, 32>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks, dev_tracks_to_process);
-	/* // Print results
+	// Print results
 	cudaCheck(cudaMemcpy(h_track_indexes, dev_track_indexes, MAX_TRACKS * sizeof(int), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(num_tracks, dev_num_tracks, sizeof(int), cudaMemcpyDeviceToHost));
-	std::cout << std::endl
+	/*std::cout << std::endl
 			  << "Post-processed:" << std::endl;
 	for(int i=0; i<num_tracks[0]; ++i){
 		printTrack(tracks, h_track_indexes[i]);
-	}
-	histo.plotChi2("after-post-processing.root", h_track_indexes, tracks, num_tracks[0]); */
+	}*/
+	std::cout << num_tracks[0] << " tracks" << std::endl;
+	// histo.plotChi2("after-post-processing.root", h_track_indexes, tracks, num_tracks[0]); */
 
     neighboursFinder<<<numBlocks, numThreads>>>();
 
 	// Visualize results
 	cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(h_nexts, dev_nexts, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
-	printOutSensorHits(2, h_prevs, h_nexts);
+	// printOutSensorHits(2, h_prevs, h_nexts);
 
 	/*
 	out = std::ofstream("prevnexts.out");
@@ -114,7 +115,7 @@ cudaError_t invokeParallelSearch(dim3 numBlocks, dim3 numThreads,
 	cudaCheck(cudaMemcpy(h_prevs, dev_prevs, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
 	cudaCheck(cudaMemcpy(h_nexts, dev_nexts, h_no_hits[0] * sizeof(int), cudaMemcpyDeviceToHost));
 	// printOutSensorHits(2, h_prevs, h_nexts);
-	printOutAllSensorHits(h_prevs, h_nexts);
+	// printOutAllSensorHits(h_prevs, h_nexts);
 	
 	// cudaDeviceSynchronize waits for the kernel to finish, and returns
     // any errors encountered during the launch.
