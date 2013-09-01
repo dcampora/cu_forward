@@ -491,7 +491,7 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 				// If it's a track, write it to memory, as long as 
 				// it fulfills a minimum length.
 				track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum >= MIN_HITS_TRACK);
-				if(accept_track && (t.hitsNum >= MIN_HITS_TRACK)){
+				if(!ALLOW_POSTPROCESS || accept_track && (t.hitsNum >= MIN_HITS_TRACK)){
 					tracks[s0.hitStart + current_hit] = t;
 				}
 			}
