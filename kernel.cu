@@ -491,7 +491,7 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders){
 				// If it's a track, write it to memory, as long as 
 				// it fulfills a minimum length.
 				track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum >= MIN_HITS_TRACK);
-				if(!ALLOW_POSTPROCESS || accept_track && (t.hitsNum >= MIN_HITS_TRACK)){
+				if(accept_track && (t.hitsNum >= MIN_HITS_TRACK)){
 					tracks[s0.hitStart + current_hit] = t;
 				}
 			}
@@ -671,7 +671,7 @@ __global__ void postProcess(Track* tracks, bool* track_holders, int* track_index
 			for(int hit=0; hit<TRACK_SIZE; ++hit)
 				unique += (sh_tracks[threadIdx.x].hits[hit]!=-1);
 
-			if(((float) unique) / sh_tracks[threadIdx.x].hitsNum > REQUIRED_UNIQUES){
+			if(!ALLOW_POSTPROCESS || ((float) unique) / sh_tracks[threadIdx.x].hitsNum > REQUIRED_UNIQUES){
 				int current_track_accepted = atomicAdd(&tracks_accepted_size, 1);
 
 				track_indexes[current_track_accepted] = tracks_to_process[current_track];
