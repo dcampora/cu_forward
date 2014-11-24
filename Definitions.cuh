@@ -1,4 +1,3 @@
-
 #ifndef DEFINITIONS_CUH
 #define DEFINITIONS_CUH 1
 
@@ -6,21 +5,20 @@
 #include "device_launch_parameters.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
-#define MAX_TRACKS 10000
-#define TRACK_SIZE 24
+#include <vector>
 
-#define POST_PROCESSING 1
+#define MAX_TRACKS 10000
+#define MAX_TRACK_SIZE 24
+
+#define ALLOW_POSTPROCESSING 0
 #define BUNCH_POST_TRACKS 32
 #define REQUIRED_UNIQUES 0.6f
 #define MIN_HITS_TRACK 3
 
-// 0,0144338f = 0.050 / sqrt( 12. ) // previous param dx
-// 0,0158771f = 0.055 / sqrt( 12. ) // latest param dx in code
-// PARAM_ERROR is the error a single hit (dx)
-// PARAM_W is 1 / expected squared error in X
-#define PARAM_W 3966.94
+#define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
 #define PARAM_MAXYSLOPE 0.3f
 
@@ -49,7 +47,12 @@ struct Track { // 57 + 24*4 = 324 B
 	float tx;
 	float y0;
 	float ty;
+	
+	int hitsNum;
+	int hits[MAX_TRACK_SIZE];
+};
 
+struct TrackFit {
 	float s0;
 	float sx;
 	float sz;
@@ -61,9 +64,6 @@ struct Track { // 57 + 24*4 = 324 B
 	float uz;
 	float uyz;
 	float uz2;
-	
-	char hitsNum;
-	int hits[TRACK_SIZE];
 };
 
 /*
