@@ -32,14 +32,7 @@ __device__ float trackChi2(Track& t);
 __device__ float hitChi2(Track& t, Hit& h, int hit_z);
 
 __global__ void prepareData(char* input, int* _prevs, int* _nexts, bool* track_holders);
-__global__ void neighboursFinder();
-__global__ void neighboursCleaner();
-
 __global__ void gpuKalman(Track* tracks, bool* track_holders);
 __global__ void postProcess(Track* tracks, bool* track_holders, int* track_indexes, int* num_tracks, int* tracks_to_process);
-
-
-// __device__ int max_hits;
-// __device__ int hits_num;
 
 #endif
