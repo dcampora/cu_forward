@@ -6,7 +6,9 @@
 #define HITS_SHARED 32
 #define MAX_FLOAT 100000000.0
 #define NUM_SENSORS 48
-#define POST_PROCESSING 0
+
+// Turn post processing on or off
+#define POST_PROCESSING false
 
 /*
 float   f_m_maxXSlope           = 0.400;

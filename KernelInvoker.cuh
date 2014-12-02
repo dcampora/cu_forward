@@ -10,13 +10,18 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <iomanip>
+#include <map>
 #include <stdint.h>
+#include <assert.h>
 
 void getMaxNumberOfHits(char*& input, int& maxHits);
-void printTrack(Track* tracks, int i, std::ostream& logger);
 void printOutSensorHits(int sensorNumber, int* prevs, int* nexts, std::ostream& logger);
 void printOutAllSensorHits(int* prevs, int* nexts, std::ostream& logger);
 void printInfo(std::ostream& logger);
+void printTrack(Track* tracks, const int trackID, std::ostream& logger,
+  const int trackNumber, const std::map<int, int>& zhit_to_module);
+int findClosestModule(const int z, const std::map<int, int>& zhit_to_module);
 
 cudaError_t invokeParallelSearch(
     dim3                         numBlocks,

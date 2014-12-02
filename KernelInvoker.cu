@@ -29,6 +29,24 @@ cudaError_t invokeParallelSearch(
   setHPointersFromInput(const_cast<uint8_t*>(&input[0]), input.size());
   printInfo(logger);
 
+  // TODO: Depending on the verbosity, we may not want this
+  // map to convert from z of hit to module
+  std::map<int, int> zhit_to_module;
+  for(int i=0; i<*h_no_sensors; ++i){
+    const int z = h_sensor_Zs[i];
+    zhit_to_module[z] = i;
+  }
+
+  // Some hits z may not correspond to a sensor's,
+  // but be close enough
+  for(int i=0; i<*h_no_hits; ++i){
+    const int z = h_hit_Zs[i];
+    if (zhit_to_module.find(z) == zhit_to_module.end()){
+      const int sensor = findClosestModule(z, zhit_to_module);
+      zhit_to_module[z] = sensor;
+    }
+  }
+
   // int* h_prevs, *h_nexts;
   // Histo histo;
 
@@ -128,8 +146,10 @@ cudaError_t invokeParallelSearch(
 
   // print debug info
 
-  for(int i=0; i<num_tracks[0]; ++i)
-    printTrack(tracks, h_track_indexes[i], logger);
+  for(int i=0; i<num_tracks[0]; ++i){
+    printTrack(tracks, h_track_indexes[i], logger, i, zhit_to_module);
+  }
+
   logger << "Processed " << num_tracks[0] << " tracks" << std::endl;
 
   free(h_prevs);
@@ -141,16 +161,62 @@ cudaError_t invokeParallelSearch(
   return cudaStatus;
 }
 
-// #track, h0, h1, h2, h3, ..., hn, length, chi2
-void printTrack(Track* tracks, int track_no, std::ostream& logger){
-  logger << track_no << ": ";
+/**
+ * Prints tracks
+ * Track #n, length <length>:
+ *  <ID> module <module>, x <x>, y <y>, z <z>
+ * 
+ * @param tracks      
+ * @param trackNumber 
+ * @param logger      
+ */
+void printTrack(Track* tracks, const int trackID, std::ostream& logger,
+  const int trackNumber, const std::map<int, int>& zhit_to_module){
 
-  Track t = tracks[track_no];
+  const Track t = tracks[trackID];
+  logger << "Track #" << trackNumber << ", length " << (int) t.hitsNum << std::endl;
+
   for(int i=0; i<t.hitsNum; ++i){
-    logger << h_hit_IDs[t.hits[i]] << ", ";
+    const int hitNumber = t.hits[i];
+    const int id = h_hit_IDs[hitNumber];
+    const float x = h_hit_Xs[hitNumber];
+    const float y = h_hit_Ys[hitNumber];
+    const int z = h_hit_Zs[hitNumber];
+    const int module = zhit_to_module.at(z);
+
+    logger << " " << std::setw(8) << id
+      << " module " << std::setw(2) << module
+      << ", x " << std::setw(6) << x
+      << ", y " << std::setw(6) << y
+      << ", z " << std::setw(4) << z << std::endl;
   }
 
-  logger << "length: " << (int) t.hitsNum << std::endl;
+  logger << std::endl;
+}
+
+/**
+ * The z of the hit may not correspond to any z in the sensors.
+ * @param  z              
+ * @param  zhit_to_module 
+ * @return                sensor number
+ */
+int findClosestModule(const int z, const std::map<int, int>& zhit_to_module){
+  if (zhit_to_module.find(z) != zhit_to_module.end())
+    return zhit_to_module.at(z);
+
+  int error = 0;
+  while(true){
+    error++;
+    const int lowerAttempt = z - error;
+    const int higherAttempt = z + error;
+
+    if (zhit_to_module.find(lowerAttempt) != zhit_to_module.end()){
+      return zhit_to_module.at(lowerAttempt);
+    }
+    if (zhit_to_module.find(higherAttempt) != zhit_to_module.end()){
+      return zhit_to_module.at(higherAttempt);
+    }
+  }
 }
 
 void printOutAllSensorHits(int* prevs, int* nexts, std::ostream& logger){

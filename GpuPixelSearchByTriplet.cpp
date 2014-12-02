@@ -12,6 +12,8 @@ int independent_execute(
     converted_input[i] = &(input[i]);
   }
 
+  std::cout << std::fixed << std::setprecision(2);
+
   return gpuPixelSearchByTripletInvocation(converted_input, output, std::cout);
 }
 

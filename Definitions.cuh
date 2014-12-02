@@ -16,7 +16,7 @@
 #define ALLOW_POSTPROCESSING 0
 #define BUNCH_POST_TRACKS 32
 #define REQUIRED_UNIQUES 0.6f
-#define MIN_HITS_TRACK 3
+#define MIN_HITS_TRACK 4
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
