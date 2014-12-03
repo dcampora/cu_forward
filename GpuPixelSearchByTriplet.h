@@ -5,6 +5,7 @@
 #include "FileStdLogger.h"
 #include "Tools.cuh"
 #include "KernelInvoker.cuh"
+#include "Logger.h"
 
 #include <stdint.h>
 
@@ -22,11 +23,9 @@ int gpuPixelSearchByTriplet(
  * Common entrypoint for Gaudi and non-Gaudi
  * @param input  
  * @param output 
- * @param logger 
  */
 int gpuPixelSearchByTripletInvocation(
     const std::vector<const std::vector<uint8_t>* > & input,
-    std::vector<std::vector<uint8_t> > & output,
-    std::ostream      & logger);
+    std::vector<std::vector<uint8_t> > & output);
 
 #endif

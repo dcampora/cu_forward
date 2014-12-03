@@ -7,10 +7,10 @@ __device__ int* no_hits;
 __device__ int* sensor_Zs;
 __device__ int* sensor_hitStarts;
 __device__ int* sensor_hitNums;
-__device__ int* hit_IDs;
+__device__ unsigned int* hit_IDs;
 __device__ float* hit_Xs;
 __device__ float* hit_Ys;
-__device__ int* hit_Zs;
+__device__ float* hit_Zs;
 
 __device__ int* prevs;
 __device__ int* nexts;
@@ -22,10 +22,10 @@ __global__ void prepareData(char* input, int* _prevs, int* _nexts, bool* track_h
   sensor_Zs = (int*) (no_hits + 1);
   sensor_hitStarts = (int*) (sensor_Zs + no_sensors[0]);
   sensor_hitNums = (int*) (sensor_hitStarts + no_sensors[0]);
-  hit_IDs = (int*) (sensor_hitNums + no_sensors[0]);
+  hit_IDs = (unsigned int*) (sensor_hitNums + no_sensors[0]);
   hit_Xs = (float*) (hit_IDs + no_hits[0]);
   hit_Ys = (float*) (hit_Xs + no_hits[0]);
-  hit_Zs = (int*) (hit_Ys + no_hits[0]);
+  hit_Zs = (float*) (hit_Ys + no_hits[0]);
 
   prevs = _prevs;
   nexts = _nexts;

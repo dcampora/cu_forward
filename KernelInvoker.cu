@@ -5,45 +5,45 @@ extern int*   h_no_hits;
 extern int*   h_sensor_Zs;
 extern int*   h_sensor_hitStarts;
 extern int*   h_sensor_hitNums;
-extern int*   h_hit_IDs;
+extern unsigned int* h_hit_IDs;
 extern float* h_hit_Xs;
 extern float* h_hit_Ys;
-extern int*   h_hit_Zs;
+extern float* h_hit_Zs;
 
 cudaError_t invokeParallelSearch(
     dim3                         numBlocks,
     dim3                         numThreads,
     const std::vector<uint8_t> & input,
-    std::vector<uint8_t>       & solution,
-    std::ostream               & logger) {
+    std::vector<uint8_t>       & solution) {
   // For now, just perform what we did before
   // (backwards compatibility)
   int* h_track_indexes;
   int* num_tracks;
   Track* tracks;
 
-  logger << "Input pointer: " 
+  DEBUG << "Input pointer: " 
     << std::hex << "0x" << (long long int) &(input[0])
     << std::dec << std::endl;
 
   setHPointersFromInput(const_cast<uint8_t*>(&input[0]), input.size());
-  printInfo(logger);
+  printInfo();
 
-  // TODO: Depending on the verbosity, we may not want this
-  // map to convert from z of hit to module
   std::map<int, int> zhit_to_module;
-  for(int i=0; i<*h_no_sensors; ++i){
-    const int z = h_sensor_Zs[i];
-    zhit_to_module[z] = i;
-  }
+  if (logger::ll.verbosityLevel > 0){
+    // map to convert from z of hit to module
+    for(int i=0; i<*h_no_sensors; ++i){
+      const int z = h_sensor_Zs[i];
+      zhit_to_module[z] = i;
+    }
 
-  // Some hits z may not correspond to a sensor's,
-  // but be close enough
-  for(int i=0; i<*h_no_hits; ++i){
-    const int z = h_hit_Zs[i];
-    if (zhit_to_module.find(z) == zhit_to_module.end()){
-      const int sensor = findClosestModule(z, zhit_to_module);
-      zhit_to_module[z] = sensor;
+    // Some hits z may not correspond to a sensor's,
+    // but be close enough
+    for(int i=0; i<*h_no_hits; ++i){
+      const int z = h_hit_Zs[i];
+      if (zhit_to_module.find(z) == zhit_to_module.end()){
+        const int sensor = findClosestModule(z, zhit_to_module);
+        zhit_to_module[z] = sensor;
+      }
     }
   }
 
@@ -95,7 +95,7 @@ cudaError_t invokeParallelSearch(
   prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts, dev_track_holders);
 
   // gpuKalman
-  logger << "gpuKalman" << std::endl;
+  DEBUG << "gpuKalman" << std::endl;
   cudaEvent_t start_kalman, start_postprocess, stop;
   float t0, t1, t2;
 
@@ -110,7 +110,7 @@ cudaError_t invokeParallelSearch(
   cudaEventRecord(start_postprocess);
 
 
-  logger << "postProcess" << std::endl;
+  DEBUG << "postProcess" << std::endl;
   postProcess<<<1, numThreads>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks, dev_tracks_to_process);
 
   cudaEventRecord( stop, 0 );
@@ -136,7 +136,6 @@ cudaError_t invokeParallelSearch(
       ++no_tracks_stage1;
 
   // copy selected track to the solution vector
-
   if (*num_tracks > 0) {
     solution.resize(*num_tracks * sizeof(Track));
     Track * solutionTracks = (Track*)&solution[0];
@@ -145,12 +144,13 @@ cudaError_t invokeParallelSearch(
   }
 
   // print debug info
-
-  for(int i=0; i<num_tracks[0]; ++i){
-    printTrack(tracks, h_track_indexes[i], logger, i, zhit_to_module);
+  if (logger::ll.verbosityLevel > 0){
+    for(int i=0; i<num_tracks[0]; ++i){
+      printTrack(tracks, h_track_indexes[i], i, zhit_to_module);
+    }
   }
 
-  logger << "Processed " << num_tracks[0] << " tracks" << std::endl;
+  DEBUG << "Processed " << num_tracks[0] << " tracks" << std::endl;
 
   free(h_prevs);
   free(h_nexts);
@@ -168,30 +168,29 @@ cudaError_t invokeParallelSearch(
  * 
  * @param tracks      
  * @param trackNumber 
- * @param logger      
  */
-void printTrack(Track* tracks, const int trackID, std::ostream& logger,
+void printTrack(Track* tracks, const int trackID,
   const int trackNumber, const std::map<int, int>& zhit_to_module){
 
   const Track t = tracks[trackID];
-  logger << "Track #" << trackNumber << ", length " << (int) t.hitsNum << std::endl;
+  DEBUG << "Track #" << trackNumber << ", length " << (int) t.hitsNum << std::endl;
 
   for(int i=0; i<t.hitsNum; ++i){
     const int hitNumber = t.hits[i];
-    const int id = h_hit_IDs[hitNumber];
+    const unsigned int id = h_hit_IDs[hitNumber];
     const float x = h_hit_Xs[hitNumber];
     const float y = h_hit_Ys[hitNumber];
-    const int z = h_hit_Zs[hitNumber];
-    const int module = zhit_to_module.at(z);
+    const float z = h_hit_Zs[hitNumber];
+    const int module = zhit_to_module.at((int) z);
 
-    logger << " " << std::setw(8) << id
+    DEBUG << " " << std::setw(8) << id
       << " module " << std::setw(2) << module
       << ", x " << std::setw(6) << x
       << ", y " << std::setw(6) << y
-      << ", z " << std::setw(4) << z << std::endl;
+      << ", z " << std::setw(6) << z << std::endl;
   }
 
-  logger << std::endl;
+  DEBUG << std::endl;
 }
 
 /**
@@ -219,43 +218,43 @@ int findClosestModule(const int z, const std::map<int, int>& zhit_to_module){
   }
 }
 
-void printOutAllSensorHits(int* prevs, int* nexts, std::ostream& logger){
-  logger << "All valid sensor hits: " << std::endl;
+void printOutAllSensorHits(int* prevs, int* nexts){
+  DEBUG << "All valid sensor hits: " << std::endl;
   for(int i=0; i<h_no_sensors[0]; ++i){
     for(int j=0; j<h_sensor_hitNums[i]; ++j){
       int hit = h_sensor_hitStarts[i] + j;
 
       if(nexts[hit] != -1){
-        std::cout << hit << ", " << nexts[hit] << std::endl;
+        DEBUG << hit << ", " << nexts[hit] << std::endl;
       }
     }
   }
 }
 
-void printOutSensorHits(int sensorNumber, int* prevs, int* nexts, std::ostream& logger){
+void printOutSensorHits(int sensorNumber, int* prevs, int* nexts){
   for(int i=0; i<h_sensor_hitNums[sensorNumber]; ++i){
     int hstart = h_sensor_hitStarts[sensorNumber];
 
-    logger << hstart + i << ": " << prevs[hstart + i] << ", " << nexts[hstart + i] << std::endl;
+    DEBUG << hstart + i << ": " << prevs[hstart + i] << ", " << nexts[hstart + i] << std::endl;
   }
 }
 
-void printInfo(std::ostream& logger) {
-  logger << "Read info:" << std::endl
+void printInfo() {
+  DEBUG << "Read info:" << std::endl
     << " no sensors: " << h_no_sensors[0] << std::endl
     << " no hits: " << h_no_hits[0] << std::endl
     << "First 5 sensors: " << std::endl;
 
   for (int i=0; i<5; ++i){
-    logger << " Zs: " << h_sensor_Zs[i] << std::endl
+    DEBUG << " Zs: " << h_sensor_Zs[i] << std::endl
       << " hitStarts: " << h_sensor_hitStarts[i] << std::endl
       << " hitNums: " << h_sensor_hitNums[i] << std::endl << std::endl;
   }
 
-  logger << "First 5 hits: " << std::endl;
+  DEBUG << "First 5 hits: " << std::endl;
 
   for (int i=0; i<5; ++i){
-    logger << " hit_id: " << h_hit_IDs[i] << std::endl
+    DEBUG << " hit_id: " << h_hit_IDs[i] << std::endl
       << " hit_X: " << h_hit_Xs[i] << std::endl
       << " hit_Y: " << h_hit_Ys[i] << std::endl
       << " hit_Z: " << h_hit_Zs[i] << std::endl << std::endl;
