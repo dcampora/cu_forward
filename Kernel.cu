@@ -312,15 +312,15 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders) {
           acceptTrack(t, tfit, h0, h1, s0.hitStart + first_hit, best_hit_h1);
           updateTrack(t, tfit, h2, best_hit_h2);
 
-          // Interchange hits
-          // h0 and h1 host the last two hits found,
-          // and we search for h2
-          h0 = h1;
-          h1 = h2;
-
           // TRACK FOLLOWING
           int f_next_sensor = third_sensor - 2;
           while(f_next_sensor >= 0) {
+            // Interchange hits
+            // h0 and h1 host the last two hits found,
+            // and we search for h2
+            h0 = h1;
+            h1 = h2;
+
             // Go to following sensor
             s2.hitStart = sensor_hitStarts[f_next_sensor];
             s2.hitNums = sensor_hitNums[f_next_sensor];
@@ -335,15 +335,16 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders) {
 
             best_fit = MAX_FLOAT;
             for(int k=0; k<s2.hitNums; ++k) {
-              h2.x = hit_Xs[s2.hitStart + k];
-              h2.y = hit_Ys[s2.hitStart + k];
-              h2.z = hit_Zs[s2.hitStart + k];
+              const int h2_index = s2.hitStart + k;
+              h2.x = hit_Xs[h2_index];
+              h2.y = hit_Ys[h2_index];
+              h2.z = hit_Zs[h2_index];
 
               fit = fitHitToTrack(tx, ty, h0, t, h2);
               fit_is_better = fit < best_fit;
 
               best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-              best_hit_h2 = fit_is_better * k + !fit_is_better * best_hit_h2;
+              best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
             }
 
             // We have a best fit!
@@ -351,11 +352,12 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders) {
 
             // TODO: Maybe try to do this more "parallel"
             if(best_fit != MAX_FLOAT) {
-              updateTrack(t, tfit, h2, s2.hitStart + best_hit_h2);
-
-              // Interchange hits
-              h0 = h1;
-              h1 = h2;
+              // Reload h2
+              h2.x = hit_Xs[best_hit_h2];
+              h2.y = hit_Ys[best_hit_h2];
+              h2.z = hit_Zs[best_hit_h2];
+              
+              updateTrack(t, tfit, h2, best_hit_h2);
             }
 
             f_next_sensor -= 2;
