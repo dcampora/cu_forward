@@ -41,14 +41,14 @@ The accept condition requires dxmax and dymax to be in a range.
 
 The fit (d1) depends on the distance of the tracklet to <0,0,0>.
 */
-__device__ float fitHits(Hit& h0, Hit& h1, Hit &h2, Sensor& s0, Sensor& s1, Sensor& s2) {
+__device__ float fitHits(Hit& h0, Hit& h1, Hit &h2) {
   // Max dx, dy permissible over next hit
 
   // TODO: This can go outside this function (only calc once per pair
   // of sensors). Also, it could only be calculated on best fitting distance d1.
-  float s_dist = fabs((float)( s1.z - s0.z ));
-  float dxmax = PARAM_MAXXSLOPE * s_dist;
-  float dymax = PARAM_MAXYSLOPE * s_dist;
+  const float h_dist = fabs((float)( h1.z - h0.z ));
+  float dxmax = PARAM_MAXXSLOPE * h_dist;
+  float dymax = PARAM_MAXYSLOPE * h_dist;
   
   bool accept_condition = fabs(h1.x - h0.x) < dxmax &&
               fabs(h1.y - h0.y) < dymax;
@@ -77,22 +77,24 @@ __device__ float fitHits(Hit& h0, Hit& h1, Hit &h2, Sensor& s0, Sensor& s1, Sens
 
   // Require chi2 of third hit below the threshold
   // float t = ((float) (s2.z - s0.z)) / ((float) (s1.z - s0.z));
-  float z2_tz = ((float) s2.z - s0.z) / ((float) (s1.z - s0.z));
+
+  // First approximation -
+  // With the sensor z, instead of the hit z
+  float z2_tz = ((float) h2.z - h0.z) / ((float) (h1.z - h0.z));
   float x = h0.x + (h1.x - h0.x) * z2_tz;
   float y = h0.y + (h1.y - h0.y) * z2_tz;
 
   float dx = x - h2.x;
   float dy = y - h2.y;
   float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
-  accept_condition &= chi2 < PARAM_MAXCHI2;
+  // accept_condition &= chi2 < PARAM_MAXCHI2; // No need for this
 
   return accept_condition * chi2 + !accept_condition * MAX_FLOAT;
 }
 
-// TODO: Optimize with Olivier's
+// Deprecated
 __device__ float fitHitToTrack(Track& t, Hit& h1, Sensor& s1) {
   // tolerance
-  // TODO: To improve efficiency, try with PARAM_TOLERANCE_EXTENDED
   float x_prediction = t.x0 + t.tx * s1.z;
   bool tol_condition = fabs(x_prediction - h1.x) < PARAM_TOLERANCE;
 
@@ -107,44 +109,75 @@ __device__ float fitHitToTrack(Track& t, Hit& h1, Sensor& s1) {
   return tol_condition * chi2_condition * chi2 + (!tol_condition || !chi2_condition) * MAX_FLOAT;
 }
 
+/**
+ * @brief Fits hits to tracks.
+ * @details In case the tolerances constraints are met,
+ *          returns the chi2 weight of the track. Otherwise,
+ *          returns MAX_FLOAT.
+ * 
+ * @param tx 
+ * @param ty 
+ * @param h0 
+ * @param t 
+ * @param h2 
+ * @return 
+ */
+__device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, const Track& t, const Hit& h2){
+  // tolerances
+  const float dz = h2.z - h0.z;
+  const float x_prediction = h0.x + tx * dz;
+  const float dx = fabs(x_prediction - h2.x);
+  const bool tolx_condition = dx < PARAM_TOLERANCE;
+
+  const float y_prediction = h0.y + ty * dz;
+  const float dy = fabs(y_prediction - h2.y);
+  const bool toly_condition = dy < PARAM_TOLERANCE;
+
+  // chi2 - how good is this fit
+  const float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
+  const bool condition = tolx_condition && toly_condition;
+
+  return condition * chi2 + !condition * MAX_FLOAT;
+}
+
 // Create track
-__device__ void acceptTrack(Track& t, TrackFit& fit, Hit& h0, Hit& h1, Sensor& s0, Sensor& s1, int h0_num, int h1_num) {
-  float wz = PARAM_W * s0.z;
+__device__ void acceptTrack(Track& t, TrackFit& fit, Hit& h0, Hit& h1, int h0_num, int h1_num) {
+  const float wz = PARAM_W * h0.z;
 
   fit.s0 = PARAM_W;
   fit.sx = PARAM_W * h0.x;
   fit.sz = wz;
   fit.sxz = wz * h0.x;
-  fit.sz2 = wz * s0.z;
+  fit.sz2 = wz * h0.z;
 
   fit.u0 = PARAM_W;
   fit.uy = PARAM_W * h0.y;
   fit.uz = wz;
   fit.uyz = wz * h0.y;
-  fit.uz2 = wz * s0.z;
+  fit.uz2 = wz * h0.z;
 
   t.hitsNum = 1;
   t.hits[0] = h0_num;
 
   // note: This could be done here (inlined)
-  updateTrack(t, fit, h1, s1, h1_num);
+  updateTrack(t, fit, h1, h1_num);
 }
 
 // Update track
-__device__ void updateTrack(Track& t, TrackFit& fit, Hit& h1, Sensor& s1, int h1_num) {
-  float wz = PARAM_W * s1.z;
+__device__ void updateTrack(Track& t, TrackFit& fit, Hit& h1, int h1_num) {
+  const float wz = PARAM_W * h1.z;
 
   fit.s0 += PARAM_W;
   fit.sx += PARAM_W * h1.x;
   fit.sz += wz;
   fit.sxz += wz * h1.x;
-  fit.sz2 += wz * s1.z;
+  fit.sz2 += wz * h1.z;
 
   fit.u0 += PARAM_W;
   fit.uy += PARAM_W * h1.y;
   fit.uz += wz;
   fit.uyz += wz * h1.y;
-  fit.uz2 += wz * s1.z;
+  fit.uz2 += wz * h1.z;
 
   t.hits[t.hitsNum] = h1_num;
   t.hitsNum++;
@@ -200,33 +233,31 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders) {
 
   float fit, best_fit;
   bool fit_is_better, accept_track;
-  int best_hit, best_hit_h2, current_hit;
+  int first_hit, best_hit_h1, best_hit_h2;
 
-  int current_sensor = (47 - blockIdx.x);
+  int first_sensor = (51 - blockIdx.x);
+  int second_sensor = first_sensor - 2;
+  int third_sensor  = first_sensor - 4;
 
-  s0.hitStart = sensor_hitStarts[current_sensor];
-  s0.hitNums = sensor_hitNums[current_sensor];
-  s0.z = sensor_Zs[current_sensor];
+  s0.hitStart = sensor_hitStarts[first_sensor];
+  s0.hitNums = sensor_hitNums[first_sensor];
+  // s0.z = sensor_Zs[first_sensor];
 
-  // Analyze the best hit for next sensor
-  int next_sensor = current_sensor - 2;
-  int third_sensor = current_sensor - 4;
 
   if(third_sensor >= 0) {
-    // TODO: shared memory.
-    s1.hitStart = sensor_hitStarts[next_sensor];
-    s1.hitNums = sensor_hitNums[next_sensor];
-    s1.z = sensor_Zs[next_sensor];
+    s1.hitStart = sensor_hitStarts[second_sensor];
+    s1.hitNums = sensor_hitNums[second_sensor];
+    // s1.z = sensor_Zs[second_sensor];
 
     // Iterate in all hits for current sensor
     for(int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i) {
-      next_sensor = current_sensor - 2;
+      first_hit = blockDim.x * i + threadIdx.x;
 
-      current_hit = blockIdx.x * i + threadIdx.x;
-      if(current_hit < s0.hitNums) {
-
-        h0.x = hit_Xs[ s0.hitStart + current_hit ];
-        h0.y = hit_Ys[ s0.hitStart + current_hit ];
+      if(first_hit < s0.hitNums) {
+        const int h0_index = s0.hitStart + first_hit;
+        h0.x = hit_Xs[h0_index];
+        h0.y = hit_Ys[h0_index];
+        h0.z = hit_Zs[h0_index];
 
         // Initialize track
         for(int j=0; j<MAX_TRACK_SIZE; ++j) {
@@ -234,74 +265,85 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders) {
         }
     
         // TRACK CREATION
-        // TODO: Modify with preprocessed list of hits.
         best_fit = MAX_FLOAT;
-        best_hit = -1;
+        best_hit_h1 = -1;
         best_hit_h2 = -1;
-        for(int j=0; j<sensor_hitNums[next_sensor]; ++j) {
-          // TODO: Load in chunks of SHARED_MEMORY and take
-          // them from shared memory.
-          h1.x = hit_Xs[s1.hitStart + j];
-          h1.y = hit_Ys[s1.hitStart + j];
+        for(int j=0; j<s1.hitNums; ++j) {
+          const int h1_index = s1.hitStart + j;
+          h1.x = hit_Xs[h1_index];
+          h1.y = hit_Ys[h1_index];
+          h1.z = hit_Zs[h1_index];
 
-          // Search in both sides
-          for(int displ=1; displ>-3; --displ) {
-            // TODO: shared memory.
-            s2.hitStart = sensor_hitStarts[third_sensor+displ];
-            s2.hitNums = sensor_hitNums[third_sensor+displ];
-            s2.z = sensor_Zs[third_sensor+displ];
+          s2.hitStart = sensor_hitStarts[third_sensor];
+          s2.hitNums = sensor_hitNums[third_sensor];
+          // s2.z = sensor_Zs[third_sensor];
 
-            // Iterate in the third! list of hits
-            for(int k=0; k<sensor_hitNums[third_sensor+displ]; ++k) {
-              // TODO: Load in chunks of SHARED_MEMORY and take
-              // them from shared memory.
-              h2.x = hit_Xs[s2.hitStart + k];
-              h2.y = hit_Ys[s2.hitStart + k];
+          // Iterate in the third! list of hits
+          for(int k=0; k<s2.hitNums; ++k) {
+            const int h2_index = s2.hitStart + k;
+            h2.x = hit_Xs[h2_index];
+            h2.y = hit_Ys[h2_index];
+            h2.z = hit_Zs[h2_index];
 
-              fit = fitHits(h0, h1, h2, s0, s1, s2);
-              fit_is_better = fit < best_fit;
+            fit = fitHits(h0, h1, h2);
+            fit_is_better = fit < best_fit;
 
-              best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-              best_hit = fit_is_better * j + !fit_is_better * best_hit;
-              best_hit_h2 = fit_is_better * k + !fit_is_better * best_hit_h2;
-            }
+            best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+            best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
+            best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
           }
         }
 
+        // We have a best fit! - haven't we?
         accept_track = best_fit != MAX_FLOAT;
-
-        // We have a best fit!
 
         // For those who have tracks, we go on
         if(accept_track) {
+          // Reload h1 and h2
+          h1.x = hit_Xs[best_hit_h1];
+          h1.y = hit_Ys[best_hit_h1];
+          h1.z = hit_Zs[best_hit_h1];
+
+          h2.x = hit_Xs[best_hit_h2];
+          h2.y = hit_Ys[best_hit_h2];
+          h2.z = hit_Zs[best_hit_h2];
+
           // Fill in t (ONLY in case the best fit is acceptable)
-          acceptTrack(t, tfit, h0, h1, s0, s1, s0.hitStart + current_hit, s1.hitStart + best_hit);
-          updateTrack(t, tfit, h2, s2, s2.hitStart + best_hit_h2);
+          acceptTrack(t, tfit, h0, h1, s0.hitStart + first_hit, best_hit_h1);
+          updateTrack(t, tfit, h2, best_hit_h2);
+
+          // Interchange hits
+          // h0 and h1 host the last two hits found,
+          // and we search for h2
+          h0 = h1;
+          h1 = h2;
 
           // TRACK FOLLOWING
-          next_sensor -= 4;
-          while(next_sensor >= 0) {
+          int f_next_sensor = third_sensor - 2;
+          while(f_next_sensor >= 0) {
             // Go to following sensor
-            /*s0.hitNums = s1.hitNums;
-            s0.hitStart = s1.hitStart;
-            s0.z = s1.z;*/
-            
-            s1.hitStart = sensor_hitStarts[next_sensor];
-            s1.hitNums = sensor_hitNums[next_sensor];
-            s1.z = sensor_Zs[next_sensor];
+            s2.hitStart = sensor_hitStarts[f_next_sensor];
+            s2.hitNums = sensor_hitNums[f_next_sensor];
+            // s2.z = sensor_Zs[f_next_sensor];
+
+            // Line calculations
+            const float td = 1.0f / (h1.z - h0.z);
+            const float txn = (h1.x - h0.x);
+            const float tyn = (h1.y - h0.y);
+            const float tx = txn * td;
+            const float ty = tyn * td;
 
             best_fit = MAX_FLOAT;
-            for(int k=0; k<sensor_hitNums[next_sensor]; ++k) {
-              // TODO: Load in chunks of SHARED_MEMORY and take
-              // them from shared memory.
-              h1.x = hit_Xs[s1.hitStart + k];
-              h1.y = hit_Ys[s1.hitStart + k];
+            for(int k=0; k<s2.hitNums; ++k) {
+              h2.x = hit_Xs[s2.hitStart + k];
+              h2.y = hit_Ys[s2.hitStart + k];
+              h2.z = hit_Zs[s2.hitStart + k];
 
-              fit = fitHitToTrack(t, h1, s1);
+              fit = fitHitToTrack(tx, ty, h0, t, h2);
               fit_is_better = fit < best_fit;
 
               best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-              best_hit = fit_is_better * k + !fit_is_better * best_hit;
+              best_hit_h2 = fit_is_better * k + !fit_is_better * best_hit_h2;
             }
 
             // We have a best fit!
@@ -309,18 +351,22 @@ __global__ void gpuKalman(Track* tracks, bool* track_holders) {
 
             // TODO: Maybe try to do this more "parallel"
             if(best_fit != MAX_FLOAT) {
-              updateTrack(t, tfit, h1, s1, s1.hitStart + best_hit);
+              updateTrack(t, tfit, h2, s2.hitStart + best_hit_h2);
+
+              // Interchange hits
+              h0 = h1;
+              h1 = h2;
             }
 
-            next_sensor -= 2;
+            f_next_sensor -= 2;
           }
         }
 
-        // If it's a track, write it to memory, no matter what kind
-        // of track it is.
-        track_holders[s0.hitStart + current_hit] = accept_track && (t.hitsNum >= MIN_HITS_TRACK);
+        // If it's a track, write it to memory
+        // If track_holders is already initialized, we can rewrite this
+        track_holders[s0.hitStart + first_hit] = accept_track && (t.hitsNum >= MIN_HITS_TRACK);
         if(accept_track && (t.hitsNum >= MIN_HITS_TRACK)) {
-          tracks[s0.hitStart + current_hit] = t;
+          tracks[s0.hitStart + first_hit] = t;
         }
       }
     }

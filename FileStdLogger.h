@@ -18,13 +18,15 @@
 #include <string>
 
 // Dumb type, just making constructor public
-class FileStdLogger : public std::ostream {};
+class FileStdLogger : public std::ostream {
+private:
+    std::streambuf* b;
+public:
+    FileStdLogger() : std::ostream(b) {}
+};
 
 // Can't believe this is so simple
 class MessageLogger : public std::streambuf {
-private:
-    pthread_mutex_t mutex;
-
 public:
     std::string _buf;
     std::ofstream* _file_io;
@@ -43,7 +45,6 @@ public:
     }
 
     int overflow(int c){
-        pthread_mutex_lock(&mutex);
         if (c == '\n'){
             std::cout << _buf << std::endl;
             (*_file_io) << _buf << std::endl;
@@ -52,7 +53,6 @@ public:
         else
             _buf += c;
 
-        pthread_mutex_unlock(&mutex);
         return c;
     }
 };

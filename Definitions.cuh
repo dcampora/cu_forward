@@ -13,10 +13,13 @@
 #define MAX_TRACKS 10000
 #define MAX_TRACK_SIZE 24
 
-#define ALLOW_POSTPROCESSING 0
+// Turn post processing on or off
+#define POST_PROCESSING false
 #define BUNCH_POST_TRACKS 32
+#define HITS_SHARED 32
 #define REQUIRED_UNIQUES 0.6f
 #define MIN_HITS_TRACK 4
+#define MAX_FLOAT 100000000.0
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
@@ -24,11 +27,12 @@
 
 #define PARAM_TOLERANCE_BASIC 0.15f
 #define PARAM_TOLERANCE_EXTENDED 0.3f
+#define PARAM_TOLERANCE_EXTRA 0.6f
 
 #define PARAM_MAXCHI2_BASIC 100.0f
 #define PARAM_MAXCHI2_EXTENDED 200.0f
 
-#define PARAM_TOLERANCE PARAM_TOLERANCE_EXTENDED
+#define PARAM_TOLERANCE PARAM_TOLERANCE_EXTRA
 #define PARAM_MAXCHI2 PARAM_MAXCHI2_EXTENDED
 
 struct Sensor {
@@ -40,6 +44,7 @@ struct Sensor {
 struct Hit {
 	float x;
 	float y;
+	float z;
 };
 
 struct Track { // 57 + 24*4 = 324 B
@@ -79,6 +84,7 @@ __device__ __constant__ float   f_m_maxChi2Short		= 6.0f;
 __device__ __constant__ float   f_m_maxChi2PerHit		= 16.0f;
 __device__ __constant__ int 	f_m_sensNum				= 48;
 __device__ __constant__ float   f_w						= 0.0144338f; // 0.050 / sqrt( 12. )
+// max_scatter is 0.004
 */
 
 #endif
