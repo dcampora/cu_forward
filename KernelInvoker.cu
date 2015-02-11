@@ -15,11 +15,6 @@ cudaError_t invokeParallelSearch(
     dim3                         numThreads,
     const std::vector<uint8_t> & input,
     std::vector<uint8_t>       & solution) {
-  // For now, just perform what we did before
-  // (backwards compatibility)
-  int* h_track_indexes;
-  int* num_tracks;
-  Track* tracks;
 
   DEBUG << "Input pointer: " 
     << std::hex << "0x" << (long long int) &(input[0])
@@ -51,114 +46,82 @@ cudaError_t invokeParallelSearch(
   // Histo histo;
 
   char*  dev_input             = 0;
-  int*   dev_num_tracks        = 0;
-  int*   dev_track_indexes     = 0;
   Track* dev_tracks            = 0;
-  bool*  dev_track_holders     = 0;
-  int*   dev_prevs             = 0;
-  int*   dev_nexts             = 0;
-  int*   dev_tracks_to_process = 0;
-  cudaError_t cudaStatus = cudaSuccess;
+  bool*  dev_hit_used          = 0;
+  int*   dev_tracks_to_follow  = 0;
+  int*   dev_atomicsStorage    = 0;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   cudaCheck( cudaSetDevice(0) );
 
   // Allocate memory
   // Allocate CPU buffers
-  tracks = (Track*) malloc(MAX_TRACKS * sizeof(Track));
-  //solution.resize(MAX_TRACKS * sizeof(Track));
-  //tracks = (Track*) &(solution[0]);
-  num_tracks = (int*) malloc(sizeof(int));
-
-  int* h_prevs = (int*) malloc(h_no_hits[0] * sizeof(int));
-  int* h_nexts = (int*) malloc(h_no_hits[0] * sizeof(int));
-  bool* h_track_holders = (bool*) malloc(MAX_TRACKS * sizeof(bool));
-  h_track_indexes = (int*) malloc(MAX_TRACKS * sizeof(int));
+  Track* tracks = (Track*) malloc(MAX_TRACKS * sizeof(Track));
+  int* h_atomics = (int*) malloc(10 * sizeof(int));
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_track_holders, MAX_TRACKS * sizeof(bool)));
-  cudaCheck(cudaMalloc((void**)&dev_track_indexes, MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_process, MAX_TRACKS * sizeof(int)));
-
-  cudaCheck(cudaMalloc((void**)&dev_prevs, h_no_hits[0] * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_nexts, h_no_hits[0] * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_used, h_no_hits[0] * sizeof(bool)));
+  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, 10 * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_input, input.size()));
 
   // Copy input file from host memory to GPU buffers
-  cudaCheck(cudaMalloc((void**)&dev_input, input.size()));
-  cudaCheck(cudaMalloc((void**)&dev_num_tracks, sizeof(int)));
-
-  // memcpys
   cudaCheck(cudaMemcpy(dev_input, &(input[0]), input.size(), cudaMemcpyHostToDevice));
 
   // Launch a kernel on the GPU with one thread for each element.
-  prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts, dev_track_holders);
+  prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts, dev_track_holders, dev_tracks_to_follow, dev_hit_used, dev_atomicsStorage);  
 
-  // gpuKalman
-  DEBUG << "gpuKalman" << std::endl;
-  cudaEvent_t start_kalman, start_postprocess, stop;
-  float t0, t1, t2;
+  // searchByTriplet
+  DEBUG << "Now, on your favourite GPU: searchByTriplet..." << std::endl;
+  cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
+  float t0;
 
-  cudaEventCreate(&start_kalman);
-  cudaEventCreate(&start_postprocess);
-  cudaEventCreate(&stop);
+  cudaEventCreate(&start_searchByTriplet);
+  cudaEventCreate(&stop_searchByTriplet);
 
-  cudaEventRecord(start_kalman, 0 );
+  cudaEventRecord(start_searchByTriplet, 0 );
 
-  gpuKalman<<<numBlocks, numThreads>>>(dev_tracks, dev_track_holders);
+  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks);
 
-  cudaEventRecord(start_postprocess);
+  cudaEventRecord( stop_searchByTriplet, 0 );
+  cudaEventSynchronize( stop_searchByTriplet );
+  cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
 
+  cudaEventDestroy( start_searchByTriplet );
+  cudaEventDestroy( stop_searchByTriplet );
 
-  DEBUG << "postProcess" << std::endl;
-  postProcess<<<1, numThreads>>>(dev_tracks, dev_track_holders, dev_track_indexes, dev_num_tracks, dev_tracks_to_process);
-
-  cudaEventRecord( stop, 0 );
-  cudaEventSynchronize( stop );
-
-  cudaEventElapsedTime( &t0, start_kalman, start_postprocess );
-  cudaEventElapsedTime( &t1, start_postprocess, stop );
-  cudaEventElapsedTime( &t2, start_kalman, stop );
-  cudaEventDestroy( start_kalman );
-  cudaEventDestroy( start_postprocess );
-  cudaEventDestroy( stop );
+  DEBUG << "Done!" << std::endl;
 
   // Get results
-  cudaCheck(cudaMemcpy(h_track_holders, dev_track_holders, MAX_TRACKS * sizeof(bool), cudaMemcpyDeviceToHost));
-  cudaCheck(cudaMemcpy(h_track_indexes, dev_track_indexes, MAX_TRACKS * sizeof(int), cudaMemcpyDeviceToHost));
-  cudaCheck(cudaMemcpy(tracks, dev_tracks, MAX_TRACKS * sizeof(Track), cudaMemcpyDeviceToHost));
-  cudaCheck(cudaMemcpy(num_tracks, dev_num_tracks, sizeof(int), cudaMemcpyDeviceToHost));
+  cudaCheck(cudaMemcpy(h_atomics, dev_atomicsStorage, 10 * sizeof(int), cudaMemcpyDeviceToHost));
+  const int numberOfTracks = h_atomics[1];
 
-  // number of tracks after stage#1
-  int no_tracks_stage1 = 0;
-  for(int i=0; i<h_no_hits[0]; ++i)
-    if(h_track_holders[i])
-      ++no_tracks_stage1;
+  cudaCheck(cudaMemcpy(tracks, dev_tracks, numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
 
-  // copy selected track to the solution vector
-  if (*num_tracks > 0) {
-    solution.resize(*num_tracks * sizeof(Track));
-    Track * solutionTracks = (Track*)&solution[0];
-    for (size_t i = 0; i != *num_tracks; ++i)
-      solutionTracks[i] = tracks[h_track_indexes[i]];
+  // Copy selected track to the solution vector
+  // TODO: This is unnecessary.
+  if (numberOfTracks > 0) {
+    solution.resize(numberOfTracks * sizeof(Track));
+    Track * solutionTracks = (Track*) &solution[0];
+    for (size_t i = 0; i != numberOfTracks; ++i)
+      solutionTracks[i] = tracks[i];
   }
 
   // print debug info
   if (logger::ll.verbosityLevel > 0){
-    for(int i=0; i<num_tracks[0]; ++i){
-      printTrack(tracks, h_track_indexes[i], i, zhit_to_module);
+    for(int i=0; i<numberOfTracks; ++i){
+      printTrack(tracks, i, zhit_to_module);
     }
   }
 
-  DEBUG << "Processed " << num_tracks[0] << " tracks" << std::endl;
+  DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
 
-  free(h_prevs);
-  free(h_nexts);
-  free(h_track_holders);
   free(tracks);
-  free(num_tracks);
+  free(h_atomics);
 
-  return cudaStatus;
+  // cudaError_t cudaStatus = cudaSuccess;
+  return cudaSuccess;
 }
 
 /**
@@ -169,10 +132,8 @@ cudaError_t invokeParallelSearch(
  * @param tracks      
  * @param trackNumber 
  */
-void printTrack(Track* tracks, const int trackID,
-  const int trackNumber, const std::map<int, int>& zhit_to_module){
-
-  const Track t = tracks[trackID];
+void printTrack(Track* tracks, const int trackNumber, const std::map<int, int>& zhit_to_module){
+  const Track t = tracks[trackNumber];
   DEBUG << "Track #" << trackNumber << ", length " << (int) t.hitsNum << std::endl;
 
   for(int i=0; i<t.hitsNum; ++i){

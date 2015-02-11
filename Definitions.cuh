@@ -18,7 +18,7 @@
 #define BUNCH_POST_TRACKS 32
 #define HITS_SHARED 32
 #define REQUIRED_UNIQUES 0.6f
-#define MIN_HITS_TRACK 4
+#define MIN_HITS_TRACK 3
 #define MAX_FLOAT 100000000.0
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
