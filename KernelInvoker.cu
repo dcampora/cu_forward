@@ -45,11 +45,14 @@ cudaError_t invokeParallelSearch(
   // int* h_prevs, *h_nexts;
   // Histo histo;
 
-  char*  dev_input             = 0;
-  Track* dev_tracks            = 0;
-  bool*  dev_hit_used          = 0;
-  int*   dev_tracks_to_follow  = 0;
-  int*   dev_atomicsStorage    = 0;
+  char*  dev_input               = 0;
+  Track* dev_tracks              = 0;
+  Track* dev_tracklets           = 0;
+  int*   dev_weak_tracks         = 0;
+  bool*  dev_hit_used            = 0;
+  int*   dev_tracks_to_follow_q1 = 0;
+  int*   dev_tracks_to_follow_q2 = 0;
+  int*   dev_atomicsStorage      = 0;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   cudaCheck( cudaSetDevice(0) );
@@ -61,7 +64,10 @@ cudaError_t invokeParallelSearch(
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracklets, MAX_TRACKS * sizeof(Track)));
+  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q1, MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q2, MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, h_no_hits[0] * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, 10 * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_input, input.size()));
@@ -70,7 +76,8 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMemcpy(dev_input, &(input[0]), input.size(), cudaMemcpyHostToDevice));
 
   // Launch a kernel on the GPU with one thread for each element.
-  prepareData<<<1, 1>>>(dev_input, dev_prevs, dev_nexts, dev_track_holders, dev_tracks_to_follow, dev_hit_used, dev_atomicsStorage);  
+  prepareData<<<1, 1>>>(dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2, dev_hit_used,
+    dev_atomicsStorage, dev_tracklets, dev_weak_tracks);  
 
   // searchByTriplet
   DEBUG << "Now, on your favourite GPU: searchByTriplet..." << std::endl;

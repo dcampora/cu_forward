@@ -10,7 +10,8 @@ __device__ void acceptTrack(Track& t, TrackFit& fit, const Hit& h0, const Hit& h
 __device__ void updateTrack(Track& t, TrackFit& fit, const Hit& h1, const int h1_num);
 __device__ void updateTrackCoords(Track& t, TrackFit& fit);
 
-__global__ void prepareData(char* input, int* _prevs, int* _nexts, bool* track_holders);
-__global__ void searchByTriplet(Track* tracks, bool* track_holders);
+__global__ void prepareData(char* input, int* _tracks_to_follow_q1, int* _tracks_to_follow_q2,
+	bool* used, int* _atomicsStorage, Track* dev_tracklets, int* dev_weak_tracks);
+__global__ void searchByTriplet(Track* tracks);
 
 #endif
