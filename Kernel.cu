@@ -1,7 +1,5 @@
 ﻿#include "Kernel.cuh"
 
-// __device__ __constant__ int sens_num = 48;
-
 __device__ int* no_sensors;
 __device__ int* no_hits;
 __device__ int* sensor_Zs;
