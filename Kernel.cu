@@ -273,6 +273,11 @@ __global__ void searchByTriplet(Track* tracks) {
               // and update trackno
               trackno = atomicAdd(tracks_insertPointer, 1);
               tracks[trackno] = t;
+
+              // Also mark the first three as used
+              hit_used[t.hits[0]] = true;
+              hit_used[t.hits[1]] = true;
+              hit_used[t.hits[2]] = true;
             }
 
             // Add the tracks to the bag of tracks to_follow
@@ -289,15 +294,15 @@ __global__ void searchByTriplet(Track* tracks) {
             weak_tracks[weakP] = trackno & 0x7FFFFFFF;
           }
 
-          else {
-            // There are more than three hits in this track,
-            // but we didn't find any further hits.
-            // Mark the first three hits as used. (all the other
-            // are already marked :) )
-            hit_used[t.hits[0]] = true;
-            hit_used[t.hits[1]] = true;
-            hit_used[t.hits[2]] = true;
-          }
+          // else {
+          //   // There are more than three hits in this track,
+          //   // but we didn't find any further hits.
+          //   // Mark the first three hits as used. (all the other
+          //   // are already marked :) )
+          //   hit_used[t.hits[0]] = true;
+          //   hit_used[t.hits[1]] = true;
+          //   hit_used[t.hits[2]] = true;
+          // }
         }
       }
 
@@ -399,14 +404,14 @@ __global__ void searchByTriplet(Track* tracks) {
           weak_tracks[weakP] = trackno & 0x7FFFFFFF;
         }
 
-        else {
-          // There are more than three hits in this track.
-          // Mark the first three hits as used. (all the other
-          // are already marked :) )
-          hit_used[t.hits[0]] = true;
-          hit_used[t.hits[1]] = true;
-          hit_used[t.hits[2]] = true;
-        }
+        // else {
+        //   // There are more than three hits in this track.
+        //   // Mark the first three hits as used. (all the other
+        //   // are already marked :) )
+        //   hit_used[t.hits[0]] = true;
+        //   hit_used[t.hits[1]] = true;
+        //   hit_used[t.hits[2]] = true;
+        // }
       }
     }
 
