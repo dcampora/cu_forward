@@ -4,7 +4,7 @@
 #include "Definitions.cuh"
 
 __device__ float fitHits(Hit& h0, Hit& h1, Hit& h2);
-__device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, const Hit& h2);
+__device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, const float& h1_z, const Hit& h2);
 
 __device__ void acceptTrack(Track& t, TrackFit& fit, const Hit& h0, const Hit& h1, const int h0_num, const int h1_num);
 __device__ void updateTrack(Track& t, TrackFit& fit, const Hit& h1, const int h1_num);

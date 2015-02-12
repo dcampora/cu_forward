@@ -73,23 +73,30 @@ __device__ float fitHits(Hit& h0, Hit& h1, Hit &h2) {
   // TODO: This can go outside this function (only calc once per pair
   // of sensors). Also, it could only be calculated on best fitting distance d1.
   const float h_dist = fabs((float)( h1.z - h0.z ));
-  float dxmax = PARAM_MAXXSLOPE * h_dist;
-  float dymax = PARAM_MAXYSLOPE * h_dist;
-  
-  bool accept_condition = fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax;
+  const float dxmax = PARAM_MAXXSLOPE * h_dist;
+  const float dymax = PARAM_MAXYSLOPE * h_dist;
 
   // First approximation -
   // With the sensor z, instead of the hit z
-  float z2_tz = ((float) h2.z - h0.z) / ((float) (h1.z - h0.z));
-  float x = h0.x + (h1.x - h0.x) * z2_tz;
-  float y = h0.y + (h1.y - h0.y) * z2_tz;
+  const float z2_tz = ((float) h2.z - h0.z) / ((float) (h1.z - h0.z));
+  const float x = h0.x + (h1.x - h0.x) * z2_tz;
+  const float y = h0.y + (h1.y - h0.y) * z2_tz;
 
-  float dx = x - h2.x;
-  float dy = y - h2.y;
-  float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
-  // accept_condition &= chi2 < PARAM_MAXCHI2; // No need for this
+  const float dx = x - h2.x;
+  const float dy = y - h2.y;
 
-  return accept_condition * chi2 + !accept_condition * MAX_FLOAT;
+  // Scatter - Updated to last PrPixel
+  const float scatterNum = (dx * dx) + (dy * dy);
+  const float scatterDenom = 1.f / (h2.z - h1.z);
+  const float scatter = scatterNum * scatterDenom * scatterDenom;
+
+  const bool scatter_condition = scatter < MAX_SCATTER;
+  const bool condition = fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax && scatter_condition;
+
+  return condition * scatter + !condition * MAX_FLOAT;
+
+  // float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
+  // return accept_condition * chi2 + !accept_condition * MAX_FLOAT;
 }
 
 /**
@@ -104,7 +111,7 @@ __device__ float fitHits(Hit& h0, Hit& h1, Hit &h2) {
  * @param h2 
  * @return 
  */
-__device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, const Hit& h2){
+__device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, const float& h1_z, const Hit& h2){
   // tolerances
   const float dz = h2.z - h0.z;
   const float x_prediction = h0.x + tx * dz;
@@ -115,11 +122,19 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
   const float dy = fabs(y_prediction - h2.y);
   const bool toly_condition = dy < PARAM_TOLERANCE;
 
-  // chi2 - how good is this fit
-  const float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
-  const bool condition = tolx_condition && toly_condition;
+  // Scatter - Updated to last PrPixel
+  const float scatterNum = (dx * dx) + (dy * dy);
+  const float scatterDenom = 1.f / (h2.z - h1_z);
+  const float scatter = scatterNum * scatterDenom * scatterDenom;
 
-  return condition * chi2 + !condition * MAX_FLOAT;
+  const bool scatter_condition = scatter < MAX_SCATTER;
+  const bool condition = tolx_condition && toly_condition && scatter_condition;
+
+  return condition * scatter + !condition * MAX_FLOAT;
+
+  // chi2 - how good is this fit
+  // const float chi2 = dx * dx * PARAM_W + dy * dy * PARAM_W;
+  // return condition * chi2 + !condition * MAX_FLOAT;
 }
 
 /** Simple implementation of the Kalman Filter selection on the GPU (step 4).
@@ -239,7 +254,7 @@ __global__ void searchByTriplet(Track* tracks) {
             h2.y = hit_Ys[h2_index];
             h2.z = hit_Zs[h2_index];
 
-            fit = fitHitToTrack(tx, ty, h0, h2);
+            fit = fitHitToTrack(tx, ty, h0, h1.z, h2);
             fit_is_better = fit < best_fit;
 
             best_fit = fit_is_better * fit + !fit_is_better * best_fit;

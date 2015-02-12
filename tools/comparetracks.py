@@ -5,58 +5,12 @@
 
 import re
 import sys
-if len(sys.argv) != 3:
-    print "Usage: comparetracks.py <prpixel-outputlog> <gpupixel-outputlog>"
-
-filename = sys.argv[1]
-f = open(filename)
-s = ''.join(f.readlines())
-f.close()
-
-# Track:
-# {'ntrack':, 'nhits':, 'hits:' [{'hitid':, 'module':, 'x':, 'y':, 'z':}, ...]}
-prpixel_tracks = []
-
-# Find all debug lines with created tracks
-for i in re.finditer('Store track Nb (?P<ntrack>\d+)[^\d]nhits (?P<nhits>\d+).*?PrPixelTracking[ \t]*?(INFO ===|DEBUG)', s, re.DOTALL):
-    hits = []
-    # Find all hits in the track
-    for j in re.finditer('PrPixelTracking.*?(?P<hitid>\d+) *module *(?P<module>\d+) x *(?P<x>[\d\.\-]+) y *(?P<y>[\d\.\-]+) z *(?P<z>[\d\-\.]+) used \d', i.group(0), re.DOTALL):
-        hits.append({'hitid': j.group('hitid'),
-            'module': j.group('module'),
-            'x': j.group('x'),
-            'y': j.group('y'),
-            'z': j.group('z')})
-
-    prpixel_tracks.append({'ntrack': i.group('ntrack'),
-        'nhits': i.group('nhits'),
-        'hits': hits})
-
-
-# The same for gpupixel
-filename = sys.argv[2]
-f = open(filename)
-s = ''.join(f.readlines())
-f.close()
-
-gpupixel_tracks = []
-
-for i in re.finditer("Track #(?P<ntrack>\d+), length (?P<nhits>\d+)\n(?P<hits>.*?)\n\n", s, re.DOTALL):
-    hits = []
-    for j in re.finditer(" (?P<hitid>\d+) module *(?P<module>\d+), x *(?P<x>[\d\.\-]+), y *(?P<y>[\d\.\-]+), z *(?P<z>[\d\.\-]+)", i.group(0), re.DOTALL):
-        hits.append({'hitid': j.group('hitid'),
-            'module': j.group('module'),
-            'x': j.group('x'),
-            'y': j.group('y'),
-            'z': j.group('z')})
-
-    gpupixel_tracks.append({'ntrack': i.group('ntrack'),
-        'nhits': i.group('nhits'),
-        'hits': hits})
+if len(sys.argv) < 3:
+    print "Usage: comparetracks.py <prpixel-outputlog> <gpupixel-outputlog> [--inverse]"
 
 
 # Finds a track, defined by the first hit's hitid
-def findTrack(trackSearched, tracks=gpupixel_tracks):
+def findTrack(trackSearched, tracks):
     try:
         hitid = trackSearched['hits'][0]['hitid']
         for track in tracks:
@@ -68,7 +22,7 @@ def findTrack(trackSearched, tracks=gpupixel_tracks):
         raise
 
 # Compares two tracks
-def compareTrack(trackA, tracks=gpupixel_tracks):
+def compareTrack(trackA, tracks):
     
     trackB = findTrack(trackA, tracks)
     if trackB == None:
@@ -100,7 +54,76 @@ def compareTrack(trackA, tracks=gpupixel_tracks):
     else:
         print "Track ID", trackA['hits'][0]['hitid'], "are equal! :)"
 
+
+
+
+def readfiles(prpixel_filename, gpupixel_filename):
+    f = open(prpixel_filename)
+    s = ''.join(f.readlines())
+    f.close()
+
+    # Track:
+    # {'ntrack':, 'nhits':, 'hits:' [{'hitid':, 'module':, 'x':, 'y':, 'z':}, ...]}
+    prpixel_tracks = []
+
+    # Find all debug lines with created tracks
+    for i in re.finditer('Store track Nb (?P<ntrack>\d+)[^\d]nhits (?P<nhits>\d+).*?PrPixelTracking[ \t]*?(INFO ===|DEBUG)', s, re.DOTALL):
+        hits = []
+        # Find all hits in the track
+        for j in re.finditer('PrPixelTracking.*?(?P<hitid>\d+) *module *(?P<module>\d+) x *(?P<x>[\d\.\-]+) y *(?P<y>[\d\.\-]+) z *(?P<z>[\d\-\.]+) used \d', i.group(0), re.DOTALL):
+            hits.append({'hitid': j.group('hitid'),
+                'module': j.group('module'),
+                'x': j.group('x'),
+                'y': j.group('y'),
+                'z': j.group('z')})
+
+        prpixel_tracks.append({'ntrack': i.group('ntrack'),
+            'nhits': i.group('nhits'),
+            'hits': hits})
+
+
+    # The same for gpupixel
+    f = open(gpupixel_filename)
+    s = ''.join(f.readlines())
+    f.close()
+
+    gpupixel_tracks = []
+
+    for i in re.finditer("Track #(?P<ntrack>\d+), length (?P<nhits>\d+)\n(?P<hits>.*?)\n\n", s, re.DOTALL):
+        hits = []
+        for j in re.finditer(" (?P<hitid>\d+) module *(?P<module>\d+), x *(?P<x>[\d\.\-]+), y *(?P<y>[\d\.\-]+), z *(?P<z>[\d\.\-]+)", i.group(0), re.DOTALL):
+            hits.append({'hitid': j.group('hitid'),
+                'module': j.group('module'),
+                'x': j.group('x'),
+                'y': j.group('y'),
+                'z': j.group('z')})
+
+        gpupixel_tracks.append({'ntrack': i.group('ntrack'),
+            'nhits': i.group('nhits'),
+            'hits': hits})
+
+    return prpixel_tracks, gpupixel_tracks
+
+
 # Print per track the compareTrack info and a space
-for track in prpixel_tracks:
-    compareTrack(track)
-    print
+def main():
+    prpixel_filename = sys.argv[1]
+    gpupixel_filename = sys.argv[2]
+
+    # I know, this is just a hack...
+    inverse = False
+    try: inverse = sys.argv[3]
+    except: pass
+
+    prpixel_tracks, gpupixel_tracks = readfiles(prpixel_filename, gpupixel_filename)
+
+    if inverse == "--inverse":
+        for track in gpupixel_tracks:
+            compareTrack(track, prpixel_tracks)
+            print
+    else:
+        for track in prpixel_tracks:
+            compareTrack(track, gpupixel_tracks)
+            print
+
+main()
