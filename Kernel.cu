@@ -205,13 +205,10 @@ __global__ void searchByTriplet(Track* tracks) {
         const int ttf_element = blockDim.x * i + threadIdx.x;
 
         if (ttf_element < last_ttf_insertPointer) {
-          const int trackno = prev_tracks_to_follow[ttf_element];
+          int trackno = prev_tracks_to_follow[ttf_element];
 
-          const long long int cond_tracklet = (trackno & 0x80000000) << 32;
-          const Track* track_pointer = (Track*) (cond_tracklet * ((long long int) &tracklets[0])
-            + !cond_tracklet * ((long long int) &tracks[0]));
-
-          t = track_pointer[trackno];
+          const Track* track_pointer = (trackno & 0x80000000) == 0x80000000 ? tracklets : tracks;
+          t = track_pointer[trackno & 0x7FFFFFFF];
 
           // Load last two hits in h0, h1
           const int t_hitsNum = t.hitsNum;
@@ -391,11 +388,8 @@ __global__ void searchByTriplet(Track* tracks) {
       if (ttf_element < last_ttf_insertPointer) {
         const int trackno = tracks_to_follow[ttf_element];
 
-        const long long int cond_tracklet = (trackno & 0x80000000) << 32;
-        const Track* track_pointer = (Track*) (cond_tracklet * ((long long int) &tracklets[0])
-          + !cond_tracklet * ((long long int) &tracks[0]));
-
-        t = track_pointer[trackno];
+        const Track* track_pointer = (trackno & 0x80000000) == 0x80000000 ? tracklets : tracks;
+        t = track_pointer[trackno & 0x7FFFFFFF];
 
         if (t.hitsNum == 3){
           // If there are only three hits in this track,
