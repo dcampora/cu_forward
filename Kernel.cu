@@ -286,7 +286,7 @@ __global__ void searchByTriplet(Track* tracks) {
             // If there are only three hits in this track,
             // mark it as "doubtful"
             const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-            weak_tracks[weakP] = trackno;
+            weak_tracks[weakP] = trackno & 0x7FFFFFFF;
           }
 
           else {
@@ -396,7 +396,7 @@ __global__ void searchByTriplet(Track* tracks) {
           // If there are only three hits in this track,
           // mark it as "doubtful"
           const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-          weak_tracks[weakP] = trackno;
+          weak_tracks[weakP] = trackno & 0x7FFFFFFF;
         }
 
         else {
@@ -411,12 +411,12 @@ __global__ void searchByTriplet(Track* tracks) {
     }
 
     // Compute the three-hit tracks left
-    const int weaktracksno = weaktracks_insertPointer[0];
-    for (int i=0; i<int(ceilf( ((float) weaktracksno) / blockDim.x)); ++i) {
-      const int trackletno = blockDim.x * i + threadIdx.x;
-      if (trackletno < weaktracksno){
+    const int weaktracks_total = weaktracks_insertPointer[0];
+    for (int i=0; i<int(ceilf( ((float) weaktracks_total) / blockDim.x)); ++i) {
+      const int weaktrack_no = blockDim.x * i + threadIdx.x;
+      if (weaktrack_no < weaktracks_total){
         // Load the tracks from the tracklets
-        t = tracklets[trackletno];
+        t = tracklets[weak_tracks[weaktrack_no]];
 
         // Store them in the tracks bag iff they
         // are made out of three unused hits
