@@ -373,7 +373,7 @@ __global__ void searchByTriplet(Track* tracks) {
             // Add the tracks to the bag of tracks to_follow
             // Note: The first bit marks if this is a tracklet or a full track (>=4 hits)
             const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
-            tracks_to_follow[ttfP] = 0x80000000 & trackP;
+            tracks_to_follow[ttfP] = 0x80000000 | trackP;
           }
         }
       }
