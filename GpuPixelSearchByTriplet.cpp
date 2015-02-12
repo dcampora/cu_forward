@@ -29,7 +29,7 @@ int gpuPixelSearchByTriplet(
 
   // Silent execution
   std::cout << std::fixed << std::setprecision(2);
-  logger::ll.verbosityLevel = 3;
+  logger::ll.verbosityLevel = 0;
   return gpuPixelSearchByTripletInvocation(input, output);
 }
 

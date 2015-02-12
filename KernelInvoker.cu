@@ -123,6 +123,7 @@ cudaError_t invokeParallelSearch(
   }
 
   DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
+  DEBUG << "It took " << t0 << " milliseconds." << std::endl;
 
   free(tracks);
   free(h_atomics);

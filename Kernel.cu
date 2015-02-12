@@ -205,10 +205,12 @@ __global__ void searchByTriplet(Track* tracks) {
         const int ttf_element = blockDim.x * i + threadIdx.x;
 
         if (ttf_element < last_ttf_insertPointer) {
-          int trackno = prev_tracks_to_follow[ttf_element];
+          const int fulltrackno = prev_tracks_to_follow[ttf_element];
+          const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
+          int trackno = fulltrackno & 0x7FFFFFFF;
 
-          const Track* track_pointer = (trackno & 0x80000000) == 0x80000000 ? tracklets : tracks;
-          t = track_pointer[trackno & 0x7FFFFFFF];
+          const Track* track_pointer = track_flag ? tracklets : tracks;
+          t = track_pointer[trackno];
 
           // Load last two hits in h0, h1
           const int t_hitsNum = t.hitsNum;
@@ -287,22 +289,12 @@ __global__ void searchByTriplet(Track* tracks) {
           // In the "else" case, we couldn't follow up the track,
           // so we won't be track following it anymore.
           
-          else if (t.hitsNum == 3){
+          else if (track_flag){
             // If there are only three hits in this track,
             // mark it as "doubtful"
             const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-            weak_tracks[weakP] = trackno & 0x7FFFFFFF;
+            weak_tracks[weakP] = trackno;
           }
-
-          // else {
-          //   // There are more than three hits in this track,
-          //   // but we didn't find any further hits.
-          //   // Mark the first three hits as used. (all the other
-          //   // are already marked :) )
-          //   hit_used[t.hits[0]] = true;
-          //   hit_used[t.hits[1]] = true;
-          //   hit_used[t.hits[2]] = true;
-          // }
         }
       }
 
@@ -311,42 +303,47 @@ __global__ void searchByTriplet(Track* tracks) {
       for (int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i) {
         const int first_hit = blockDim.x * i + threadIdx.x;
         const int h0_index = s0.hitStart + first_hit;
-        const bool is_used = hit_used[h0_index];
+        const bool is_h0_used = hit_used[h0_index];
 
-        if (!is_used && first_hit < s0.hitNums) {
+        if (!is_h0_used && first_hit < s0.hitNums) {
           h0.x = hit_Xs[h0_index];
           h0.y = hit_Ys[h0_index];
           h0.z = hit_Zs[h0_index];
 
-          // TODO: This is actually unnecessary, just a sanity check
+          // This is actually unnecessary, just a sanity check
           // Initialize track
-          for(int j=0; j<MAX_TRACK_SIZE; ++j) {
-            t.hits[j] = -1;
-          }
+          // for(int j=0; j<MAX_TRACK_SIZE; ++j) {
+          //   t.hits[j] = -1;
+          // }
       
           // TRACK CREATION
           best_fit = MAX_FLOAT;
-          // best_hit_h1 = -1;
-          // best_hit_h2 = -1;
           for (int j=0; j<s1.hitNums; ++j) {
             const int h1_index = s1.hitStart + j;
-            h1.x = hit_Xs[h1_index];
-            h1.y = hit_Ys[h1_index];
-            h1.z = hit_Zs[h1_index];
+            // const bool is_h1_used = hit_used[h1_index];
+            // if (!is_h1_used){
 
-            // Iterate in the third! list of hits
-            for (int k=0; k<s2.hitNums; ++k) {
-              const int h2_index = s2.hitStart + k;
-              h2.x = hit_Xs[h2_index];
-              h2.y = hit_Ys[h2_index];
-              h2.z = hit_Zs[h2_index];
+              h1.x = hit_Xs[h1_index];
+              h1.y = hit_Ys[h1_index];
+              h1.z = hit_Zs[h1_index];
 
-              fit = fitHits(h0, h1, h2);
-              fit_is_better = fit < best_fit;
+              // Iterate in the third! list of hits
+              for (int k=0; k<s2.hitNums; ++k) {
+                const int h2_index = s2.hitStart + k;
+                // const bool is_h2_used = hit_used[h2_index];
+                // if (!is_h2_used){
+                  h2.x = hit_Xs[h2_index];
+                  h2.y = hit_Ys[h2_index];
+                  h2.z = hit_Zs[h2_index];
 
-              best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-              best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
-              best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+                  fit = fitHits(h0, h1, h2);
+                  fit_is_better = fit < best_fit;
+
+                  best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+                  best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
+                  best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+                // }
+              // }
             }
           }
 
@@ -376,7 +373,8 @@ __global__ void searchByTriplet(Track* tracks) {
             tracklets[trackP] = t;
 
             // Add the tracks to the bag of tracks to_follow
-            // Note: The first bit marks if this is a tracklet or a full track (>=4 hits)
+            // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
+            // and hence it is stored in tracklets
             const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
             tracks_to_follow[ttfP] = 0x80000000 | trackP;
           }
@@ -392,46 +390,35 @@ __global__ void searchByTriplet(Track* tracks) {
       const int ttf_element = blockDim.x * i + threadIdx.x;
 
       if (ttf_element < last_ttf_insertPointer) {
-        const int trackno = tracks_to_follow[ttf_element];
+        const int fulltrackno = prev_tracks_to_follow[ttf_element];
+        const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
+        const int trackno = fulltrackno & 0x7FFFFFFF;
 
-        const Track* track_pointer = (trackno & 0x80000000) == 0x80000000 ? tracklets : tracks;
-        t = track_pointer[trackno & 0x7FFFFFFF];
-
-        if (t.hitsNum == 3){
-          // If there are only three hits in this track,
-          // mark it as "doubtful"
+        // Here we are only interested in three-hit tracks,
+        // to mark them as "doubtful"
+        if (track_flag) {
           const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-          weak_tracks[weakP] = trackno & 0x7FFFFFFF;
+          weak_tracks[weakP] = trackno;
         }
-
-        // else {
-        //   // There are more than three hits in this track.
-        //   // Mark the first three hits as used. (all the other
-        //   // are already marked :) )
-        //   hit_used[t.hits[0]] = true;
-        //   hit_used[t.hits[1]] = true;
-        //   hit_used[t.hits[2]] = true;
-        // }
       }
     }
+  }
 
-    // Compute the three-hit tracks left
-    const int weaktracks_total = weaktracks_insertPointer[0];
-    for (int i=0; i<int(ceilf( ((float) weaktracks_total) / blockDim.x)); ++i) {
-      const int weaktrack_no = blockDim.x * i + threadIdx.x;
-      if (weaktrack_no < weaktracks_total){
-        // Load the tracks from the tracklets
-        t = tracklets[weak_tracks[weaktrack_no]];
+  // Compute the three-hit tracks left
+  const int weaktracks_total = weaktracks_insertPointer[0];
+  for (int i=0; i<int(ceilf( ((float) weaktracks_total) / blockDim.x)); ++i) {
+    const int weaktrack_no = blockDim.x * i + threadIdx.x;
+    if (weaktrack_no < weaktracks_total){
+      // Load the tracks from the tracklets
+      t = tracklets[weak_tracks[weaktrack_no]];
 
-        // Store them in the tracks bag iff they
-        // are made out of three unused hits
-        if (!hit_used[t.hits[0]] &&
-            !hit_used[t.hits[1]] &&
-            !hit_used[t.hits[2]]){
-
-          const int trackno = atomicAdd(tracks_insertPointer, 1);
-          tracks[trackno] = t;
-        }
+      // Store them in the tracks bag iff they
+      // are made out of three unused hits
+      if (!hit_used[t.hits[0]] &&
+          !hit_used[t.hits[1]] &&
+          !hit_used[t.hits[2]]){
+        const int trackno = atomicAdd(tracks_insertPointer, 1);
+        tracks[trackno] = t;
       }
     }
   }
