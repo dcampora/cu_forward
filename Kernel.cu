@@ -382,6 +382,7 @@ __global__ void searchByTriplet(Track* tracks) {
     }
 
     // Process the last bunch of track_to_follows
+    const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
     for (int i=0; i<int(ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
       const int ttf_element = blockDim.x * i + threadIdx.x;
 
