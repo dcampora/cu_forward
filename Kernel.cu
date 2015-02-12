@@ -423,7 +423,7 @@ __global__ void searchByTriplet(Track* tracks) {
             !hit_used[t.hits[1]] &&
             !hit_used[t.hits[2]]){
 
-          trackno = atomicAdd(tracks_insertPointer, 1);
+          const int trackno = atomicAdd(tracks_insertPointer, 1);
           tracks[trackno] = t;
         }
       }
