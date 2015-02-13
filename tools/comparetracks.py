@@ -55,10 +55,8 @@ def compareTrack(trackA, tracks):
         print "Track ID", trackA['hits'][0]['hitid'], "are equal! :)"
 
 
-
-
-def readfiles(prpixel_filename, gpupixel_filename):
-    f = open(prpixel_filename)
+def read_prpixel_file(filename):
+    f = open(filename)
     s = ''.join(f.readlines())
     f.close()
 
@@ -81,9 +79,12 @@ def readfiles(prpixel_filename, gpupixel_filename):
             'nhits': i.group('nhits'),
             'hits': hits})
 
+    return prpixel_tracks
 
+
+def read_gpupixel_file(filename):
     # The same for gpupixel
-    f = open(gpupixel_filename)
+    f = open(filename)
     s = ''.join(f.readlines())
     f.close()
 
@@ -102,8 +103,14 @@ def readfiles(prpixel_filename, gpupixel_filename):
             'nhits': i.group('nhits'),
             'hits': hits})
 
-    return prpixel_tracks, gpupixel_tracks
+    return gpupixel_tracks
 
+
+def readfile(filename, type):
+    if type == "prpixel":
+        return read_prpixel_file(filename)
+    else:
+        return read_gpupixel_file(filename)
 
 # Print per track the compareTrack info and a space
 def main():
@@ -115,7 +122,8 @@ def main():
     try: inverse = sys.argv[3]
     except: pass
 
-    prpixel_tracks, gpupixel_tracks = readfiles(prpixel_filename, gpupixel_filename)
+    prpixel_tracks = readfile(prpixel_filename, "prpixel")
+    gpupixel_tracks = readfile(gpupixel_filename, "gpupixel")
 
     if inverse == "--inverse":
         for track in gpupixel_tracks:
