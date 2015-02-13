@@ -165,13 +165,13 @@ int main(int argc, char *argv[])
         size_t prevFound = 0;
         while(prevFound != std::string::npos){
             if (posFound == std::string::npos){
-                readFileIntoVector(filename.substr(prevFound, posFound), input[input_index]);
+                readFileIntoVector(filename.substr(prevFound, posFound-prevFound), input[input_index]);
                 prevFound = posFound;
             }
             else {
-                readFileIntoVector(filename.substr(prevFound, posFound), input[input_index]);
+                readFileIntoVector(filename.substr(prevFound, posFound-prevFound), input[input_index]);
                 prevFound = posFound + 1;
-                posFound = filename.find(delimiter, posFound+1);
+                posFound = filename.find(delimiter, posFound + 1);
             }
             input_index++;
         }

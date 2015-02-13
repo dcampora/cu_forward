@@ -169,6 +169,9 @@ __global__ void searchByTriplet(Track* tracks) {
   Sensor s0, s1, s2;
   Hit h0, h1, h2;
 
+  // __shared__ int shared_a [32];
+  // __shared__ int shared_b [32];
+
   float fit, best_fit;
   bool fit_is_better, accept_track;
   int best_hit_h1, best_hit_h2;
@@ -311,6 +314,8 @@ __global__ void searchByTriplet(Track* tracks) {
         }
       }
 
+      __syncthreads();
+
       // Iterate in all hits for current sensor
       // 2a. Seeding
       for (int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i) {
@@ -333,8 +338,8 @@ __global__ void searchByTriplet(Track* tracks) {
           best_fit = MAX_FLOAT;
           for (int j=0; j<s1.hitNums; ++j) {
             const int h1_index = s1.hitStart + j;
-            // const bool is_h1_used = hit_used[h1_index];
-            // if (!is_h1_used){
+            const bool is_h1_used = hit_used[h1_index];
+            if (!is_h1_used){
 
               h1.x = hit_Xs[h1_index];
               h1.y = hit_Ys[h1_index];
@@ -356,7 +361,7 @@ __global__ void searchByTriplet(Track* tracks) {
                   best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
                   best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
                 // }
-              // }
+              }
             }
           }
 
@@ -397,6 +402,8 @@ __global__ void searchByTriplet(Track* tracks) {
       first_sensor -= 2;
     }
 
+    __syncthreads();
+
     // Process the last bunch of track_to_follows
     const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
     for (int i=0; i<int(ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
@@ -416,6 +423,8 @@ __global__ void searchByTriplet(Track* tracks) {
       }
     }
   }
+
+  __syncthreads();
 
   // Compute the three-hit tracks left
   const int weaktracks_total = weaktracks_insertPointer[0];
