@@ -411,7 +411,7 @@ __global__ void searchByTriplet(Track* tracks) {
       const int ttf_element = blockDim.x * i + threadIdx.x;
 
       if (ttf_element < last_ttf_insertPointer) {
-        const int fulltrackno = prev_tracks_to_follow[ttf_element];
+        const int fulltrackno = tracks_to_follow[ttf_element];
         const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
         const int trackno = fulltrackno & 0x7FFFFFFF;
 
