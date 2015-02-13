@@ -21,9 +21,19 @@ def findTrack(trackSearched, tracks):
         print trackSearched
         raise
 
+# Compares two lists of tracks
+def compareTracks(tracks_list1, tracks_list2):
+    tracks_list = []
+    for track in tracks_list1:
+        if not track in track_list:
+            track_list.append(track)
+            compareTrack(track, tracks_list2)
+            print
+        else:
+            print "Track ", track['hits'][0]['hitid'], "appears repeated in the first list of tracks"
+
 # Compares two tracks
 def compareTrack(trackA, tracks):
-    
     trackB = findTrack(trackA, tracks)
     if trackB == None:
         print "Track ID", trackA['hits'][0]['hitid'], "has no corresponding track"
@@ -126,12 +136,8 @@ def main():
     gpupixel_tracks = readfile(gpupixel_filename, "gpupixel")
 
     if inverse == "--inverse":
-        for track in gpupixel_tracks:
-            compareTrack(track, prpixel_tracks)
-            print
+        compareTracks(gpupixel_tracks, prpixel_tracks)
     else:
-        for track in prpixel_tracks:
-            compareTrack(track, gpupixel_tracks)
-            print
+        compareTracks(prpixel_tracks, gpupixel_tracks)
 
 main()
