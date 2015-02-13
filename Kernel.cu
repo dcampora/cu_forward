@@ -210,6 +210,7 @@ __global__ void searchByTriplet(Track* tracks) {
       // Reset the ttf_insertPointer and synchronize. It's a bit sad we
       // have to synchronize twice.
       // TODO: This is ugly
+      __syncthreads();
       const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
       __syncthreads();
       if (threadIdx.x == 0)
