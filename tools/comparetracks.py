@@ -25,8 +25,8 @@ def findTrack(trackSearched, tracks):
 def compareTracks(tracks_list1, tracks_list2):
     tracks_list = []
     for track in tracks_list1:
-        if not track in track_list:
-            track_list.append(track)
+        if not track in tracks_list:
+            tracks_list.append(track)
             compareTrack(track, tracks_list2)
             print
         else:
