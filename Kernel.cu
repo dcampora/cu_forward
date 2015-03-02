@@ -181,6 +181,9 @@ __global__ void searchByTriplet(Track* tracks) {
   int* temp_tracks_to_follow;
 
   for (int i=0; i<2; ++i){
+    // TODO: The track following pointer keeps here from the odd on the
+    // even.
+
     // Deal with odd or even separately
     int first_sensor = 51 - i;
 
@@ -219,7 +222,7 @@ __global__ void searchByTriplet(Track* tracks) {
 
       // 2a. Track following
       for (int i=0; i<int(ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
-        const int ttf_element = blockDim.x * i + threadIdx.x;
+        const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
         if (ttf_element < last_ttf_insertPointer) {
           const int fulltrackno = prev_tracks_to_follow[ttf_element];
@@ -304,8 +307,7 @@ __global__ void searchByTriplet(Track* tracks) {
             tracks_to_follow[ttfP] = trackno;
           }
           // In the "else" case, we couldn't follow up the track,
-          // so we won't be track following it anymore.
-          
+          // so we won't be track following it anymore.          
           else if (track_flag){
             // If there are only three hits in this track,
             // mark it as "doubtful"
@@ -408,7 +410,7 @@ __global__ void searchByTriplet(Track* tracks) {
     // Process the last bunch of track_to_follows
     const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
     for (int i=0; i<int(ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
-      const int ttf_element = blockDim.x * i + threadIdx.x;
+      const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
       if (ttf_element < last_ttf_insertPointer) {
         const int fulltrackno = tracks_to_follow[ttf_element];
@@ -428,9 +430,9 @@ __global__ void searchByTriplet(Track* tracks) {
   __syncthreads();
 
   // Compute the three-hit tracks left
-  const int weaktracks_total = weaktracks_insertPointer[0];
+  const unsigned int weaktracks_total = weaktracks_insertPointer[0];
   for (int i=0; i<int(ceilf( ((float) weaktracks_total) / blockDim.x)); ++i) {
-    const int weaktrack_no = blockDim.x * i + threadIdx.x;
+    const unsigned int weaktrack_no = blockDim.x * i + threadIdx.x;
     if (weaktrack_no < weaktracks_total){
       // Load the tracks from the tracklets
       t = tracklets[weak_tracks[weaktrack_no]];
@@ -440,7 +442,7 @@ __global__ void searchByTriplet(Track* tracks) {
       if (!hit_used[t.hits[0]] &&
           !hit_used[t.hits[1]] &&
           !hit_used[t.hits[2]]){
-        const int trackno = atomicAdd(tracks_insertPointer, 1);
+        const unsigned int trackno = atomicAdd(tracks_insertPointer, 1);
         tracks[trackno] = t;
       }
     }
