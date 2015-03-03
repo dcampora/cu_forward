@@ -47,7 +47,7 @@ int gpuPixelSearchByTripletInvocation(
 
   // For each event, we will execute 64 threads.
   // Call a kernel for each event, let CUDA engine decide when to issue the kernels.
-  dim3 numBlocks(1), numThreads(512);
+  dim3 numBlocks(1, 2, 1), numThreads(64);
 
   // In principle, each execution will return a different output
   output.resize(input.size());

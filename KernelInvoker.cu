@@ -44,15 +44,14 @@ cudaError_t invokeParallelSearch(
 
   // int* h_prevs, *h_nexts;
   // Histo histo;
-
+  Track** dev_tracks             = 0;
   char*  dev_input               = 0;
-  Track* dev_tracks              = 0;
-  Track* dev_tracklets           = 0;
-  int*   dev_weak_tracks         = 0;
-  bool*  dev_hit_used            = 0;
   int*   dev_tracks_to_follow_q1 = 0;
   int*   dev_tracks_to_follow_q2 = 0;
+  bool*  dev_hit_used            = 0;
   int*   dev_atomicsStorage      = 0;
+  Track* dev_tracklets           = 0;
+  int*   dev_weak_tracks         = 0;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   cudaCheck( cudaSetDevice(0) );
@@ -63,7 +62,11 @@ cudaError_t invokeParallelSearch(
   int* h_atomics = (int*) malloc(10 * sizeof(int));
 
   // Allocate GPU buffers
-  cudaCheck(cudaMalloc((void**)&dev_tracks, MAX_TRACKS * sizeof(Track)));
+  const int events_to_process = 1;
+  cudaCheck(cudaMalloc((void**)&dev_tracks, events_to_process * sizeof(Track*)));
+  for (int i=0; i<events_to_process; ++i){
+    cudaCheck(cudaMalloc((void**)&dev_tracks[i], MAX_TRACKS * sizeof(Track)));
+  }
   cudaCheck(cudaMalloc((void**)&dev_tracklets, MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_weak_tracks, MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q1, MAX_TRACKS * sizeof(int)));
@@ -75,9 +78,9 @@ cudaError_t invokeParallelSearch(
   // Copy input file from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_input, &(input[0]), input.size(), cudaMemcpyHostToDevice));
 
-  // Launch a kernel on the GPU with one thread for each element.
-  prepareData<<<1, 1>>>(dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2, dev_hit_used,
-    dev_atomicsStorage, dev_tracklets, dev_weak_tracks);  
+  // Zero what we need
+  cudaCheck(cudaMemset(dev_hit_used, false, h_no_hits[0] * sizeof(bool)));
+  cudaCheck(cudaMemset(dev_atomicsStorage, 0, 10 * sizeof(int)));
 
   // searchByTriplet
   DEBUG << "Now, on your favourite GPU: searchByTriplet..." << std::endl;
@@ -89,7 +92,8 @@ cudaError_t invokeParallelSearch(
 
   cudaEventRecord(start_searchByTriplet, 0 );
 
-  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks);
+  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
+    dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks);
 
   cudaEventRecord( stop_searchByTriplet, 0 );
   cudaEventSynchronize( stop_searchByTriplet );
@@ -101,8 +105,8 @@ cudaError_t invokeParallelSearch(
   DEBUG << "Done!" << std::endl;
 
   // Get results
-  cudaCheck(cudaMemcpy(h_atomics, dev_atomicsStorage, 10 * sizeof(int), cudaMemcpyDeviceToHost));
-  const int numberOfTracks = h_atomics[1];
+  cudaCheck(cudaMemcpy(h_atomics, dev_atomicsStorage, sizeof(int), cudaMemcpyDeviceToHost));
+  const int numberOfTracks = h_atomics[0];
 
   cudaCheck(cudaMemcpy(tracks, dev_tracks, numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
 

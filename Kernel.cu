@@ -1,66 +1,5 @@
 ﻿#include "Kernel.cuh"
 
-__device__ int* no_sensors;
-__device__ int* no_hits;
-__device__ int* sensor_Zs;
-__device__ int* sensor_hitStarts;
-__device__ int* sensor_hitNums;
-__device__ unsigned int* hit_IDs;
-__device__ float* hit_Xs;
-__device__ float* hit_Ys;
-__device__ float* hit_Zs;
-
-__device__ bool* hit_used;
-__device__ int* prevs;
-__device__ int* nexts;
-
-__device__ int* tracks_to_follow_q1;
-__device__ int* tracks_to_follow_q2;
-__device__ int* atomicsStorage;
-__device__ unsigned int* ttf_insertPointer;
-__device__ unsigned int* tracks_insertPointer;
-__device__ unsigned int* weaktracks_insertPointer;
-__device__ unsigned int* tracklets_insertPointer;
-
-__device__ Track* tracklets;
-__device__ int* weak_tracks; // Tracks with only three hits
-
-
-__global__ void prepareData(char* input, int* _tracks_to_follow_q1, int* _tracks_to_follow_q2,
-    bool* used, int* _atomicsStorage, Track* dev_tracklets, int* dev_weak_tracks) {
-  no_sensors = (int*) &input[0];
-  no_hits = (int*) (no_sensors + 1);
-  sensor_Zs = (int*) (no_hits + 1);
-  sensor_hitStarts = (int*) (sensor_Zs + no_sensors[0]);
-  sensor_hitNums = (int*) (sensor_hitStarts + no_sensors[0]);
-  hit_IDs = (unsigned int*) (sensor_hitNums + no_sensors[0]);
-  hit_Xs = (float*) (hit_IDs + no_hits[0]);
-  hit_Ys = (float*) (hit_Xs + no_hits[0]);
-  hit_Zs = (float*) (hit_Ys + no_hits[0]);
-
-  hit_used = used;
-  tracks_to_follow_q1 = _tracks_to_follow_q1;
-  tracks_to_follow_q2 = _tracks_to_follow_q2;
-
-  tracklets = dev_tracklets;
-  weak_tracks = dev_weak_tracks;
-  
-  atomicsStorage = _atomicsStorage;
-  ttf_insertPointer = (unsigned int*) &atomicsStorage[0];
-  tracks_insertPointer = (unsigned int*) &atomicsStorage[1];
-  weaktracks_insertPointer = (unsigned int*) &atomicsStorage[2];
-  tracklets_insertPointer = (unsigned int*) &atomicsStorage[3];
-
-  // TODO: We can do a calloc or memcpy a calloc
-  for (int i=0; i<*no_hits; ++i){
-    hit_used[i] = false;
-  }
-
-  for (int i=0; i<10; ++i){
-    atomicsStorage[i] = 0;
-  }
-}
-
 /** fitHits, gives the fit between h0 and h1.
 
 The accept condition requires dxmax and dymax to be in a range.
@@ -164,7 +103,55 @@ For this, simply use the table with all created tracks (postProcess):
 
 */
 
-__global__ void searchByTriplet(Track* tracks) {
+__global__ void searchByTriplet(Track** dev_tracks, char* dev_input, int* dev_tracks_to_follow_q1, int* dev_tracks_to_follow_q2,
+  bool* dev_hit_used, int* dev_atomicsStorage, Track* dev_tracklets, int* dev_weak_tracks) {
+  /* Data initialization */
+
+  // Each event is treated with two blocks, one for each side.
+  const int event_number = blockIdx.x;
+  const int sensor_side = blockIdx.y;
+  const int events_under_process = gridDim.x;
+
+  const int tracks_offset = event_number * MAX_TRACKS;
+
+  // Pointers to data within the event
+  // TODO: We need a per-event offset prepared from the host side
+  // const int data_offset = event_offset[event_number];
+  const int data_offset = 0;
+  const int* no_sensors = (const int*) &dev_input[data_offset];
+  const int* no_hits = (const int*) (no_sensors + 1);
+  const int* sensor_Zs = (const int*) (no_hits + 1);
+  const int* sensor_hitStarts = (const int*) (sensor_Zs + no_sensors[0]);
+  const int* sensor_hitNums = (const int*) (sensor_hitStarts + no_sensors[0]);
+  const unsigned int* hit_IDs = (const unsigned int*) (sensor_hitNums + no_sensors[0]);
+  const float* hit_Xs = (const float*) (hit_IDs + no_hits[0]);
+  const float* hit_Ys = (const float*) (hit_Xs + no_hits[0]);
+  const float* hit_Zs = (const float*) (hit_Ys + no_hits[0]);
+
+  // Per event datatypes
+  Track* tracks = dev_tracks[event_number];
+  unsigned int* tracks_insertPointer = (unsigned int*) &dev_atomicsStorage[event_number];
+
+  // Per side datatypes
+  // TODO: We need a per-event offset for the number of hits
+  // const int hit_offset = hit_offsets[event_number];
+  const int hit_offset = 0;
+  bool* hit_used = &dev_hit_used[hit_offset];
+  
+  int* tracks_to_follow_q1 = &dev_tracks_to_follow_q1[tracks_offset];
+  int* tracks_to_follow_q2 = &dev_tracks_to_follow_q2[tracks_offset];
+  int* weak_tracks = &dev_weak_tracks[tracks_offset];
+  Track* tracklets = &dev_tracklets[tracks_offset];
+
+  // Initialize variables according to event number and sensor side
+  // Insert pointers (atomics)
+  const int insertPointer_num = 3;
+  const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
+  unsigned int* ttf_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 1];
+  unsigned int* weaktracks_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 2];
+  unsigned int* tracklets_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 3];
+
+  /* The fun begins */
   Track t;
   Sensor s0, s1, s2;
   Hit h0, h1, h2;
@@ -180,249 +167,245 @@ __global__ void searchByTriplet(Track* tracks) {
   int* prev_tracks_to_follow = tracks_to_follow_q2;
   int* temp_tracks_to_follow;
 
-  for (int i=0; i<2; ++i){
-    // TODO: The track following pointer keeps here from the odd on the
-    // even.
+  // Side we are dealing with
+  // Deal with odd or even separately
+  int first_sensor = 51 - sensor_side;
 
-    // Deal with odd or even separately
-    int first_sensor = 51 - i;
+  // Prepare s1 and s2 for the first iteration
+  const int second_sensor = first_sensor - 2;
 
-    // Prepare s1 and s2 for the first iteration
-    const int second_sensor = first_sensor - 2;
+  s1.hitStart = sensor_hitStarts[first_sensor];
+  s1.hitNums = sensor_hitNums[first_sensor];
+  s2.hitStart = sensor_hitStarts[second_sensor];
+  s2.hitNums = sensor_hitNums[second_sensor];
 
-    s1.hitStart = sensor_hitStarts[first_sensor];
-    s1.hitNums = sensor_hitNums[first_sensor];
-    s2.hitStart = sensor_hitStarts[second_sensor];
-    s2.hitNums = sensor_hitNums[second_sensor];
+  while (first_sensor >= 4) {
+    // Iterate in sensors
+    // Reuse the info from last sensors
+    s0 = s1;
+    s1 = s2;
 
-    while (first_sensor >= 4) {
-      // Iterate in sensors
-      // Reuse the info from last sensors
-      s0 = s1;
-      s1 = s2;
+    const int third_sensor = first_sensor - 4;
+    s2.hitStart = sensor_hitStarts[third_sensor];
+    s2.hitNums = sensor_hitNums[third_sensor];
 
-      const int third_sensor = first_sensor - 4;
-      s2.hitStart = sensor_hitStarts[third_sensor];
-      s2.hitNums = sensor_hitNums[third_sensor];
+    // Exchange track_to_follow's
+    temp_tracks_to_follow = prev_tracks_to_follow;
+    prev_tracks_to_follow = tracks_to_follow;
+    tracks_to_follow = temp_tracks_to_follow;
 
-      // Exchange track_to_follow's
-      temp_tracks_to_follow = prev_tracks_to_follow;
-      prev_tracks_to_follow = tracks_to_follow;
-      tracks_to_follow = temp_tracks_to_follow;
-
-      // Reset the ttf_insertPointer and synchronize. It's a bit sad we
-      // have to synchronize twice.
-      // TODO: This is ugly
-      __syncthreads();
-      const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
-      __syncthreads();
-      if (threadIdx.x == 0)
-        ttf_insertPointer[0] = 0;
-      __syncthreads();
-
-      // 2a. Track following
-      for (int i=0; i<int(ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
-        const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
-
-        if (ttf_element < last_ttf_insertPointer) {
-          const int fulltrackno = prev_tracks_to_follow[ttf_element];
-          const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-          int trackno = fulltrackno & 0x7FFFFFFF;
-
-          const Track* track_pointer = track_flag ? tracklets : tracks;
-          t = track_pointer[trackno];
-
-          // Load last two hits in h0, h1
-          const int t_hitsNum = t.hitsNum;
-          const int h0_num = t.hits[t_hitsNum - 2];
-          const int h1_num = t.hits[t_hitsNum - 1];
-
-          h0.x = hit_Xs[h0_num];
-          h0.y = hit_Ys[h0_num];
-          h0.z = hit_Zs[h0_num];
-
-          h1.x = hit_Xs[h1_num];
-          h1.y = hit_Ys[h1_num];
-          h1.z = hit_Zs[h1_num];
-
-          // Track following over t, for all hits in the next module
-          // Line calculations
-          const float td = 1.0f / (h1.z - h0.z);
-          const float txn = (h1.x - h0.x);
-          const float tyn = (h1.y - h0.y);
-          const float tx = txn * td;
-          const float ty = tyn * td;
-
-          // Find a best fit
-          best_fit = MAX_FLOAT;
-          for (int k=0; k<s2.hitNums; ++k) {
-            const int h2_index = s2.hitStart + k;
-            h2.x = hit_Xs[h2_index];
-            h2.y = hit_Ys[h2_index];
-            h2.z = hit_Zs[h2_index];
-
-            fit = fitHitToTrack(tx, ty, h0, h1.z, h2);
-            fit_is_better = fit < best_fit;
-
-            best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-            best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
-          }
-
-          // We have a best fit!
-          // Fill in t, ONLY in case the best fit is acceptable
-          if (best_fit != MAX_FLOAT) {
-            // Reload h2
-            h2.x = hit_Xs[best_hit_h2];
-            h2.y = hit_Ys[best_hit_h2];
-            h2.z = hit_Zs[best_hit_h2];
-
-            // Mark h2 as used
-            hit_used[best_hit_h2] = true;
-            
-            // Update the tracks to follow, we'll have to follow up
-            // this track on the next iteration :)
-            // updateTrack(t, tfit, h2, best_hit_h2);
-            t.hits[t.hitsNum++] = best_hit_h2;
-
-            // Update the track in the bag
-            if (t.hitsNum > 4){
-              // If it is a track made out of *strictly* more than four hits,
-              // the trackno refers to the tracks location.
-              tracks[trackno] = t;
-            }
-            else {
-              // Otherwise, we have to allocate it in the tracks,
-              // and update trackno
-              trackno = atomicAdd(tracks_insertPointer, 1);
-              tracks[trackno] = t;
-
-              // Also mark the first three as used
-              hit_used[t.hits[0]] = true;
-              hit_used[t.hits[1]] = true;
-              hit_used[t.hits[2]] = true;
-            }
-
-            // Add the tracks to the bag of tracks to_follow
-            const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
-            tracks_to_follow[ttfP] = trackno;
-          }
-          // In the "else" case, we couldn't follow up the track,
-          // so we won't be track following it anymore.          
-          else if (track_flag){
-            // If there are only three hits in this track,
-            // mark it as "doubtful"
-            const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-            weak_tracks[weakP] = trackno;
-          }
-        }
-      }
-
-      __syncthreads();
-
-      // Iterate in all hits for current sensor
-      // 2a. Seeding
-      for (int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i) {
-        const int first_hit = blockDim.x * i + threadIdx.x;
-        const int h0_index = s0.hitStart + first_hit;
-        const bool is_h0_used = hit_used[h0_index];
-
-        if (!is_h0_used && first_hit < s0.hitNums) {
-          h0.x = hit_Xs[h0_index];
-          h0.y = hit_Ys[h0_index];
-          h0.z = hit_Zs[h0_index];
-
-          // This is actually unnecessary, just a sanity check
-          // Initialize track
-          // for(int j=0; j<MAX_TRACK_SIZE; ++j) {
-          //   t.hits[j] = -1;
-          // }
-      
-          // TRACK CREATION
-          best_fit = MAX_FLOAT;
-          for (int j=0; j<s1.hitNums; ++j) {
-            const int h1_index = s1.hitStart + j;
-            const bool is_h1_used = hit_used[h1_index];
-            if (!is_h1_used){
-
-              h1.x = hit_Xs[h1_index];
-              h1.y = hit_Ys[h1_index];
-              h1.z = hit_Zs[h1_index];
-
-              // Iterate in the third! list of hits
-              for (int k=0; k<s2.hitNums; ++k) {
-                const int h2_index = s2.hitStart + k;
-                // const bool is_h2_used = hit_used[h2_index];
-                // if (!is_h2_used){
-                  h2.x = hit_Xs[h2_index];
-                  h2.y = hit_Ys[h2_index];
-                  h2.z = hit_Zs[h2_index];
-
-                  fit = fitHits(h0, h1, h2);
-                  fit_is_better = fit < best_fit;
-
-                  best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-                  best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
-                  best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
-                // }
-              }
-            }
-          }
-
-          // We have a best fit! - haven't we?
-          accept_track = best_fit != MAX_FLOAT;
-
-          if (accept_track) {
-            // Reload h1 and h2
-            h1.x = hit_Xs[best_hit_h1];
-            h1.y = hit_Ys[best_hit_h1];
-            h1.z = hit_Zs[best_hit_h1];
-
-            h2.x = hit_Xs[best_hit_h2];
-            h2.y = hit_Ys[best_hit_h2];
-            h2.z = hit_Zs[best_hit_h2];
-
-            // Fill in track information
-            // acceptTrack(t, tfit, h0, h1, s0.hitStart + first_hit, best_hit_h1);
-            // updateTrack(t, tfit, h2, best_hit_h2);
-            t.hitsNum = 3;
-            t.hits[0] = s0.hitStart + first_hit;
-            t.hits[1] = best_hit_h1;
-            t.hits[2] = best_hit_h2;
-
-            // Add the track to the bag of tracks
-            const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
-            tracklets[trackP] = t;
-
-            // Add the tracks to the bag of tracks to_follow
-            // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
-            // and hence it is stored in tracklets
-            const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
-            tracks_to_follow[ttfP] = 0x80000000 | trackP;
-          }
-        }
-      }
-
-      first_sensor -= 2;
-    }
-
+    // Reset the ttf_insertPointer and synchronize. It's a bit sad we
+    // have to synchronize three times.
+    // TODO: This is ugly
+    __syncthreads();
+    const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
+    __syncthreads();
+    if (threadIdx.x == 0)
+      ttf_insertPointer[0] = 0;
     __syncthreads();
 
-    // Process the last bunch of track_to_follows
-    const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
+    // 2a. Track following
     for (int i=0; i<int(ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
       const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
       if (ttf_element < last_ttf_insertPointer) {
-        const int fulltrackno = tracks_to_follow[ttf_element];
+        const int fulltrackno = prev_tracks_to_follow[ttf_element];
         const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-        const int trackno = fulltrackno & 0x7FFFFFFF;
+        int trackno = fulltrackno & 0x7FFFFFFF;
 
-        // Here we are only interested in three-hit tracks,
-        // to mark them as "doubtful"
-        if (track_flag) {
+        const Track* track_pointer = track_flag ? tracklets : tracks;
+        t = track_pointer[trackno];
+
+        // Load last two hits in h0, h1
+        const int t_hitsNum = t.hitsNum;
+        const int h0_num = t.hits[t_hitsNum - 2];
+        const int h1_num = t.hits[t_hitsNum - 1];
+
+        h0.x = hit_Xs[h0_num];
+        h0.y = hit_Ys[h0_num];
+        h0.z = hit_Zs[h0_num];
+
+        h1.x = hit_Xs[h1_num];
+        h1.y = hit_Ys[h1_num];
+        h1.z = hit_Zs[h1_num];
+
+        // Track following over t, for all hits in the next module
+        // Line calculations
+        const float td = 1.0f / (h1.z - h0.z);
+        const float txn = (h1.x - h0.x);
+        const float tyn = (h1.y - h0.y);
+        const float tx = txn * td;
+        const float ty = tyn * td;
+
+        // Find a best fit
+        best_fit = MAX_FLOAT;
+        for (int k=0; k<s2.hitNums; ++k) {
+          const int h2_index = s2.hitStart + k;
+          h2.x = hit_Xs[h2_index];
+          h2.y = hit_Ys[h2_index];
+          h2.z = hit_Zs[h2_index];
+
+          fit = fitHitToTrack(tx, ty, h0, h1.z, h2);
+          fit_is_better = fit < best_fit;
+
+          best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+          best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
+        }
+
+        // We have a best fit!
+        // Fill in t, ONLY in case the best fit is acceptable
+        if (best_fit != MAX_FLOAT) {
+          // Reload h2
+          h2.x = hit_Xs[best_hit_h2];
+          h2.y = hit_Ys[best_hit_h2];
+          h2.z = hit_Zs[best_hit_h2];
+
+          // Mark h2 as used
+          hit_used[best_hit_h2] = true;
+          
+          // Update the tracks to follow, we'll have to follow up
+          // this track on the next iteration :)
+          // updateTrack(t, tfit, h2, best_hit_h2);
+          t.hits[t.hitsNum++] = best_hit_h2;
+
+          // Update the track in the bag
+          if (t.hitsNum > 4){
+            // If it is a track made out of *strictly* more than four hits,
+            // the trackno refers to the tracks location.
+            tracks[trackno] = t;
+          }
+          else {
+            // Otherwise, we have to allocate it in the tracks,
+            // and update trackno
+            trackno = atomicAdd(tracks_insertPointer, 1);
+            tracks[trackno] = t;
+
+            // Also mark the first three as used
+            hit_used[t.hits[0]] = true;
+            hit_used[t.hits[1]] = true;
+            hit_used[t.hits[2]] = true;
+          }
+
+          // Add the tracks to the bag of tracks to_follow
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          tracks_to_follow[ttfP] = trackno;
+        }
+        // In the "else" case, we couldn't follow up the track,
+        // so we won't be track following it anymore.          
+        else if (track_flag){
+          // If there are only three hits in this track,
+          // mark it as "doubtful"
           const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
           weak_tracks[weakP] = trackno;
         }
+      }
+    }
+
+    __syncthreads();
+
+    // Iterate in all hits for current sensor
+    // 2a. Seeding
+    for (int i=0; i<int(ceilf( ((float) s0.hitNums) / blockDim.x)); ++i) {
+      const int first_hit = blockDim.x * i + threadIdx.x;
+      const int h0_index = s0.hitStart + first_hit;
+      const bool is_h0_used = hit_used[h0_index];
+
+      if (!is_h0_used && first_hit < s0.hitNums) {
+        h0.x = hit_Xs[h0_index];
+        h0.y = hit_Ys[h0_index];
+        h0.z = hit_Zs[h0_index];
+
+        // This is actually unnecessary, just a sanity check
+        // Initialize track
+        // for(int j=0; j<MAX_TRACK_SIZE; ++j) {
+        //   t.hits[j] = -1;
+        // }
+    
+        // TRACK CREATION
+        best_fit = MAX_FLOAT;
+        for (int j=0; j<s1.hitNums; ++j) {
+          const int h1_index = s1.hitStart + j;
+          const bool is_h1_used = hit_used[h1_index];
+          if (!is_h1_used){
+
+            h1.x = hit_Xs[h1_index];
+            h1.y = hit_Ys[h1_index];
+            h1.z = hit_Zs[h1_index];
+
+            // Iterate in the third! list of hits
+            for (int k=0; k<s2.hitNums; ++k) {
+              const int h2_index = s2.hitStart + k;
+              // const bool is_h2_used = hit_used[h2_index];
+              // if (!is_h2_used){
+                h2.x = hit_Xs[h2_index];
+                h2.y = hit_Ys[h2_index];
+                h2.z = hit_Zs[h2_index];
+
+                fit = fitHits(h0, h1, h2);
+                fit_is_better = fit < best_fit;
+
+                best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+                best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
+                best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+              // }
+            }
+          }
+        }
+
+        // We have a best fit! - haven't we?
+        accept_track = best_fit != MAX_FLOAT;
+
+        if (accept_track) {
+          // Reload h1 and h2
+          h1.x = hit_Xs[best_hit_h1];
+          h1.y = hit_Ys[best_hit_h1];
+          h1.z = hit_Zs[best_hit_h1];
+
+          h2.x = hit_Xs[best_hit_h2];
+          h2.y = hit_Ys[best_hit_h2];
+          h2.z = hit_Zs[best_hit_h2];
+
+          // Fill in track information
+          // acceptTrack(t, tfit, h0, h1, s0.hitStart + first_hit, best_hit_h1);
+          // updateTrack(t, tfit, h2, best_hit_h2);
+          t.hitsNum = 3;
+          t.hits[0] = s0.hitStart + first_hit;
+          t.hits[1] = best_hit_h1;
+          t.hits[2] = best_hit_h2;
+
+          // Add the track to the bag of tracks
+          const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
+          tracklets[trackP] = t;
+
+          // Add the tracks to the bag of tracks to_follow
+          // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
+          // and hence it is stored in tracklets
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          tracks_to_follow[ttfP] = 0x80000000 | trackP;
+        }
+      }
+    }
+
+    first_sensor -= 2;
+  }
+
+  __syncthreads();
+
+  // Process the last bunch of track_to_follows
+  const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
+  for (int i=0; i<int(ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
+    const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
+
+    if (ttf_element < last_ttf_insertPointer) {
+      const int fulltrackno = tracks_to_follow[ttf_element];
+      const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
+      const int trackno = fulltrackno & 0x7FFFFFFF;
+
+      // Here we are only interested in three-hit tracks,
+      // to mark them as "doubtful"
+      if (track_flag) {
+        const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
+        weak_tracks[weakP] = trackno;
       }
     }
   }
