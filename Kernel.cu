@@ -1,4 +1,5 @@
-﻿#include "Kernel.cuh"
+﻿
+#include "Kernel.cuh"
 
 /** fitHits, gives the fit between h0 and h1.
 
@@ -103,8 +104,8 @@ For this, simply use the table with all created tracks (postProcess):
 
 */
 
-__global__ void searchByTriplet(Track** dev_tracks, char* dev_input, int* dev_tracks_to_follow_q1, int* dev_tracks_to_follow_q2,
-  bool* dev_hit_used, int* dev_atomicsStorage, Track* dev_tracklets, int* dev_weak_tracks) {
+__global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tracks_to_follow_q1, int* dev_tracks_to_follow_q2,
+  bool* dev_hit_used, int* dev_atomicsStorage, Track* dev_tracklets, int* dev_weak_tracks, int* dev_event_offsets, int* dev_hit_offsets) {
   /* Data initialization */
 
   // Each event is treated with two blocks, one for each side.
@@ -113,40 +114,42 @@ __global__ void searchByTriplet(Track** dev_tracks, char* dev_input, int* dev_tr
   const int events_under_process = gridDim.x;
 
   const int tracks_offset = event_number * MAX_TRACKS;
+  const int tracks_sides_offset = 2 * event_number * MAX_TRACKS + sensor_side * MAX_TRACKS;
 
   // Pointers to data within the event
   // TODO: We need a per-event offset prepared from the host side
-  // const int data_offset = event_offset[event_number];
-  const int data_offset = 0;
+  const int data_offset = dev_event_offsets[event_number];
   const int* no_sensors = (const int*) &dev_input[data_offset];
   const int* no_hits = (const int*) (no_sensors + 1);
   const int* sensor_Zs = (const int*) (no_hits + 1);
-  const int* sensor_hitStarts = (const int*) (sensor_Zs + no_sensors[0]);
-  const int* sensor_hitNums = (const int*) (sensor_hitStarts + no_sensors[0]);
-  const unsigned int* hit_IDs = (const unsigned int*) (sensor_hitNums + no_sensors[0]);
-  const float* hit_Xs = (const float*) (hit_IDs + no_hits[0]);
-  const float* hit_Ys = (const float*) (hit_Xs + no_hits[0]);
-  const float* hit_Zs = (const float*) (hit_Ys + no_hits[0]);
+  const int number_of_sensors = no_sensors[0];
+  const int number_of_hits = no_hits[0];
+  const int* sensor_hitStarts = (const int*) (sensor_Zs + number_of_sensors);
+  const int* sensor_hitNums = (const int*) (sensor_hitStarts + number_of_sensors);
+  const unsigned int* hit_IDs = (const unsigned int*) (sensor_hitNums + number_of_sensors);
+  const float* hit_Xs = (const float*) (hit_IDs + number_of_hits);
+  const float* hit_Ys = (const float*) (hit_Xs + number_of_hits);
+  const float* hit_Zs = (const float*) (hit_Ys + number_of_hits);
 
   // Per event datatypes
-  Track* tracks = dev_tracks[event_number];
+  Track* tracks = &dev_tracks[tracks_offset];
   unsigned int* tracks_insertPointer = (unsigned int*) &dev_atomicsStorage[event_number];
 
   // Per side datatypes
   // TODO: We need a per-event offset for the number of hits
-  // const int hit_offset = hit_offsets[event_number];
-  const int hit_offset = 0;
+  const int hit_offset = dev_hit_offsets[event_number];
   bool* hit_used = &dev_hit_used[hit_offset];
   
-  int* tracks_to_follow_q1 = &dev_tracks_to_follow_q1[tracks_offset];
-  int* tracks_to_follow_q2 = &dev_tracks_to_follow_q2[tracks_offset];
-  int* weak_tracks = &dev_weak_tracks[tracks_offset];
-  Track* tracklets = &dev_tracklets[tracks_offset];
+  int* tracks_to_follow_q1 = &dev_tracks_to_follow_q1[tracks_sides_offset];
+  int* tracks_to_follow_q2 = &dev_tracks_to_follow_q2[tracks_sides_offset];
+  int* weak_tracks = &dev_weak_tracks[tracks_sides_offset];
+  Track* tracklets = &dev_tracklets[tracks_sides_offset];
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
   const int insertPointer_num = 3;
   const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
+  // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
   unsigned int* ttf_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 1];
   unsigned int* weaktracks_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 2];
   unsigned int* tracklets_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 3];

@@ -44,24 +44,21 @@ int gpuPixelSearchByTripletInvocation(
   DEBUG << "Invoking gpuPixelSearchByTriplet with " << input.size() << " events" << std::endl;
 
   // Define how many blocks / threads we need to deal with numberOfEvents
-
-  // For each event, we will execute 64 threads.
-  // Call a kernel for each event, let CUDA engine decide when to issue the kernels.
-  dim3 numBlocks(1, 2, 1), numThreads(64);
-
-  // In principle, each execution will return a different output
+  // Each execution will return a different output
   output.resize(input.size());
+  
+  // Execute maximum n number of events every time
+  const int max_events_to_process_per_kernel = 99;
 
-  // This should be done in streams (non-blocking)
-  for (int i=0; i<input.size(); ++i)
-    cudaCheck(invokeParallelSearch(numBlocks, numThreads, *(input[i]), output[i]));
+  for (int i=0; i<input.size(); i+=max_events_to_process_per_kernel){
+    int events_to_process = input.size() - i;
+    if (events_to_process > max_events_to_process_per_kernel)
+      events_to_process = max_events_to_process_per_kernel;
+
+    cudaCheck(invokeParallelSearch(i, events_to_process, input, output));
+  }
 
   cudaCheck(cudaDeviceReset());
-
-  // Deprecated:
-  // Merge all solutions!
-  // logger << "Merging solutions..." << endl;
-  // mergeSolutions(solutions, output);
 
   return 0;
 }

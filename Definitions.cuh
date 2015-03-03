@@ -34,7 +34,7 @@
 #define MAX_SCATTER 0.000016f
 
 struct Sensor {
-	int z;
+//	int z;
 	int hitStart;
 	int hitNums;
 };

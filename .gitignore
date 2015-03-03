@@ -3,3 +3,6 @@ gpupixel
 conditions.txt
 *log
 logs
+Debug
+.project
+.cproject

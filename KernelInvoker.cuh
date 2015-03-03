@@ -24,9 +24,14 @@ void printTrack(Track* tracks, const int trackNumber, const std::map<int, int>& 
 int findClosestModule(const int z, const std::map<int, int>& zhit_to_module);
 
 cudaError_t invokeParallelSearch(
-    dim3                         numBlocks,
-    dim3                         numThreads,
-    const std::vector<uint8_t> & input,
-    std::vector<uint8_t>       & solution);
+    const int startingEvent,
+    const int eventsToProcess,
+    const std::vector<const std::vector<uint8_t>* > & input,
+    std::vector<std::vector<uint8_t> > & output);
+
+struct EventBeginning {
+  int numberOfSensors;
+  int numberOfHits;
+};
 
 #endif
