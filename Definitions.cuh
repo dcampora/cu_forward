@@ -10,11 +10,9 @@
 
 #include <vector>
 
-#define MAX_TRACKS 10000
+#define MAX_TRACKS 8000
 #define MAX_TRACK_SIZE 24
 
-// Turn post processing on or off
-#define POST_PROCESSING false
 #define BUNCH_POST_TRACKS 32
 #define HITS_SHARED 32
 #define REQUIRED_UNIQUES 0.6f
@@ -34,7 +32,6 @@
 #define MAX_SCATTER 0.000016f
 
 struct Sensor {
-//	int z;
 	int hitStart;
 	int hitNums;
 };
@@ -54,35 +51,5 @@ struct Track { // 5 * 4 + 24 * 4 = 116 B
 	int hitsNum;
 	int hits[MAX_TRACK_SIZE];
 };
-
-struct TrackFit {
-	float s0;
-	float sx;
-	float sz;
-	float sxz;
-	float sz2;
-
-	float u0;
-	float uy;
-	float uz;
-	float uyz;
-	float uz2;
-};
-
-/*
-__device__ __constant__ float 	f_m_maxXSlope			= 0.4f;
-__device__ __constant__ float 	f_m_maxYSlope			= 0.3f;
-__device__ __constant__ float 	f_m_maxZForRBeamCut		= 200.0f;
-__device__ __constant__ float 	f_m_maxR2Beam			= 1.0f;
-__device__ __constant__ int 	f_m_maxMissed			= 4;
-__device__ __constant__ float 	f_m_extraTol			= 0.150f;
-__device__ __constant__ float 	f_m_maxChi2ToAdd		= 100.0f;
-__device__ __constant__ float 	f_m_maxChi2SameSensor	= 16.0f;
-__device__ __constant__ float   f_m_maxChi2Short		= 6.0f;
-__device__ __constant__ float   f_m_maxChi2PerHit		= 16.0f;
-__device__ __constant__ int 	f_m_sensNum				= 48;
-__device__ __constant__ float   f_w						= 0.0144338f; // 0.050 / sqrt( 12. )
-// max_scatter is 0.004
-*/
 
 #endif

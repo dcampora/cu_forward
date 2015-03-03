@@ -59,11 +59,11 @@ cudaError_t invokeParallelSearch(
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int module_sides = 2;
   cudaCheck( cudaSetDevice(0) );
-  dim3 numBlocks(eventsToProcess, module_sides), numThreads(32);
+  dim3 numBlocks(eventsToProcess, module_sides), numThreads(128);
 
   // Allocate memory
   // Allocate CPU buffers
-  int* h_atomics = (int*) malloc(eventsToProcess * 10 * sizeof(int));
+  int* atomics = (int*) malloc(eventsToProcess * 11 * sizeof(int));
 
   // Prepare event offset and hit offset
   std::vector<int> event_offsets;
@@ -81,12 +81,12 @@ cudaError_t invokeParallelSearch(
   }
 
   // Allocate GPU buffers
-  cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track*)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * module_sides * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q1, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q2, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * 10 * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * 11 * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
@@ -104,7 +104,7 @@ cudaError_t invokeParallelSearch(
 
   // Initialize what we need
   cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-  cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * 10 * sizeof(int)));
+  cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * 11 * sizeof(int)));
 
   // searchByTriplet
   DEBUG << "Now, on your favourite GPU: searchByTriplet with " << eventsToProcess << " event"
@@ -116,7 +116,7 @@ cudaError_t invokeParallelSearch(
   cudaEventCreate(&stop_searchByTriplet);
 
   cudaEventRecord(start_searchByTriplet, 0 );
-
+  
   searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
     dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
 
@@ -127,20 +127,25 @@ cudaError_t invokeParallelSearch(
   cudaEventDestroy( start_searchByTriplet );
   cudaEventDestroy( stop_searchByTriplet );
 
+  cudaCheck( cudaPeekAtLastError() );
+
   DEBUG << "Done!" << std::endl;
 
   // Get results
-  cudaCheck(cudaMemcpy(h_atomics, dev_atomicsStorage, eventsToProcess * 10 * sizeof(int), cudaMemcpyDeviceToHost));
+  DEBUG << "Number of tracks found per event:" << std::endl << " ";
+  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * 11 * sizeof(int), cudaMemcpyDeviceToHost));
   for (int i=0; i<eventsToProcess; ++i){
-    const int numberOfTracks = h_atomics[i * 10];
+    const int numberOfTracks = atomics[i];
+    DEBUG << numberOfTracks << ", ";
     
     output[startingEvent + i].resize(numberOfTracks * sizeof(Track));
     cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
   }
+  DEBUG << std::endl;
 
+  // Print info about the solution
   // const int numberOfTracks = output[0].size() / sizeof(Track);
   // Track* tracks_in_solution = (Track*) &(output[0])[0];
-
   // print debug info
   // if (logger::ll.verbosityLevel > 0){
   //   for(int i=0; i<numberOfTracks; ++i){
@@ -151,7 +156,7 @@ cudaError_t invokeParallelSearch(
   // DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
   DEBUG << "It took " << t0 << " milliseconds." << std::endl;
 
-  free(h_atomics);
+  free(atomics);
 
   // cudaError_t cudaStatus = cudaSuccess;
   return cudaSuccess;
