@@ -152,14 +152,11 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
   Track t;
   Sensor s0, s1, s2;
   Hit h0, h1, h2;
+  int best_hit_h1, best_hit_h2;
 
   __shared__ float sh_hit_x [96];
   __shared__ float sh_hit_y [96];
   __shared__ float sh_hit_z [96];
-
-  float fit, best_fit;
-  bool fit_is_better;
-  int best_hit_h1, best_hit_h2;
 
   int* tracks_to_follow      = tracks_to_follow_q1;
   int* prev_tracks_to_follow = tracks_to_follow_q2;
@@ -251,7 +248,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
       
       // Iterate in the third list of hits
       // Tiled memory access on h2
-      best_fit = MAX_FLOAT;
+      float best_fit = MAX_FLOAT;
       for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k){
         
         __syncthreads();
@@ -276,8 +273,8 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
             h2.y = sh_hit_y[sh_h2_index];
             h2.z = sh_hit_z[sh_h2_index];
 
-            fit = fitHitToTrack(tx, ty, h0, h1.z, h2);
-            fit_is_better = fit < best_fit;
+            const float fit = fitHitToTrack(tx, ty, h0, h1.z, h2);
+            const bool fit_is_better = fit < best_fit;
 
             best_fit = fit_is_better * fit + !fit_is_better * best_fit;
             best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
@@ -342,7 +339,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
       const int first_hit = blockDim.x * i + threadIdx.x;
       const int h0_index = s0.hitStart + first_hit;
       const bool is_h0_used = hit_used[h0_index];
-      best_fit = MAX_FLOAT;
+      float best_fit = MAX_FLOAT;
 
       // We repeat this here for performance reasons
       if (!is_h0_used && first_hit < s0.hitNums){
