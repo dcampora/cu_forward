@@ -43,10 +43,10 @@ struct Hit {
 };
 
 struct Track { // 5 * 4 + 24 * 4 = 116 B
-	float x0;
-	float tx;
-	float y0;
-	float ty;
+	// float x0;
+	// float tx;
+	// float y0;
+	// float ty;
 	
 	int hitsNum;
 	int hits[MAX_TRACK_SIZE];

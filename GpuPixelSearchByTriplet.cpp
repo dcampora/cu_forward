@@ -48,7 +48,7 @@ int gpuPixelSearchByTripletInvocation(
   output.resize(input.size());
   
   // Execute maximum n number of events every time
-  const int max_events_to_process_per_kernel = 200;
+  const int max_events_to_process_per_kernel = 1000;
 
   for (int i=0; i<input.size(); i+=max_events_to_process_per_kernel){
     int events_to_process = input.size() - i;
