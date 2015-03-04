@@ -45,16 +45,16 @@ cudaError_t invokeParallelSearch(
 
   // int* h_prevs, *h_nexts;
   // Histo histo;
-  Track* dev_tracks = 0;
-  char*  dev_input = 0;
-  int*   dev_tracks_to_follow_q1 = 0;
-  int*   dev_tracks_to_follow_q2 = 0;
-  bool*  dev_hit_used = 0;
-  int*   dev_atomicsStorage = 0;
-  Track* dev_tracklets = 0;
-  int*   dev_weak_tracks = 0;
-  int*   dev_event_offsets = 0;
-  int*   dev_hit_offsets = 0;
+  Track* dev_tracks;
+  char*  dev_input;
+  int*   dev_tracks_to_follow_q1;
+  int*   dev_tracks_to_follow_q2;
+  bool*  dev_hit_used;
+  int*   dev_atomicsStorage;
+  Track* dev_tracklets;
+  int*   dev_weak_tracks;
+  int*   dev_event_offsets;
+  int*   dev_hit_offsets;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int module_sides = 2;
