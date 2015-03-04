@@ -153,10 +153,9 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
   Sensor s0, s1, s2;
   Hit h0, h1, h2;
 
-  __shared__ float sh_hit_x [64];
-  __shared__ float sh_hit_y [64];
-  __shared__ float sh_hit_z [64];
-  __shared__ bool sh_hit_used [64];
+  __shared__ float sh_hit_x [96];
+  __shared__ float sh_hit_y [96];
+  __shared__ float sh_hit_z [96];
 
   float fit, best_fit;
   bool fit_is_better, accept_track;
@@ -210,10 +209,17 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
     for (int i=0; i<((int) ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
       const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
-      if (ttf_element < last_ttf_insertPointer) {
+      // These variables need to go here, shared memory and scope requirements
+      float tx, ty;
+      int trackno;
+      bool track_flag;
+
+      // The logic is broken in two parts for shared memory loading
+      const bool ttf_condition = ttf_element < last_ttf_insertPointer;
+      if (ttf_condition) {
         const int fulltrackno = prev_tracks_to_follow[ttf_element];
-        const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-        int trackno = fulltrackno & 0x7FFFFFFF;
+        track_flag = (fulltrackno & 0x80000000) == 0x80000000;
+        trackno = fulltrackno & 0x7FFFFFFF;
 
         const Track* track_pointer = track_flag ? tracklets : tracks;
         t = track_pointer[trackno];
@@ -236,11 +242,14 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
         const float td = 1.0f / (h1.z - h0.z);
         const float txn = (h1.x - h0.x);
         const float tyn = (h1.y - h0.y);
-        const float tx = txn * td;
-        const float ty = tyn * td;
+        tx = txn * td;
+        ty = tyn * td;
+      }
 
-        // Find a best fit
-        best_fit = MAX_FLOAT;
+      // Search for a best fit
+      // Load shared elements
+      best_fit = MAX_FLOAT;
+      if (ttf_condition) {
         for (int k=0; k<s2.hitNums; ++k) {
           const int h2_index = s2.hitStart + k;
           h2.x = hit_Xs[h2_index];
@@ -267,7 +276,6 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
           
           // Update the tracks to follow, we'll have to follow up
           // this track on the next iteration :)
-          // updateTrack(t, tfit, h2, best_hit_h2);
           t.hits[t.hitsNum++] = best_hit_h2;
 
           // Update the track in the bag
@@ -306,7 +314,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
     __syncthreads();
 
     // Iterate in all hits for current sensor
-    // 2a. Seeding
+    // 2a. Seeding - Track creation
     for (int i=0; i<((int) ceilf( ((float) s0.hitNums) / blockDim.x)); ++i) {
       const int first_hit = blockDim.x * i + threadIdx.x;
       const int h0_index = s0.hitStart + first_hit;
@@ -320,56 +328,82 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
           h0.z = hit_Zs[h0_index];
       }
     
-      // Load into shared hits the h2 in consideration
+      // Load into shared hits the hit_used
       for (int j=0; j<((int) ceilf( ((float) s1.hitNums) / blockDim.x)); ++j){
-        const int sh_hit_no = blockDim.x * j + threadIdx.x;
-        if (sh_hit_no < s1.hitNums){
-          const int h1_index = s1.hitStart + sh_hit_no;
+        // const int sh_hit_no = blockDim.x * j + threadIdx.x;
+        // if (sh_hit_no < s1.hitNums){
+          // const int h1_index = s1.hitStart + sh_hit_no;
 
           // Coalesced memory accesses
-          sh_hit_x[threadIdx.x] = hit_Xs[h1_index];
-          sh_hit_y[threadIdx.x] = hit_Ys[h1_index];
-          sh_hit_z[threadIdx.x] = hit_Zs[h1_index];
-          sh_hit_used[threadIdx.x] = hit_used[h1_index];
-        }
+          // sh_hit_x[threadIdx.x] = hit_Xs[h1_index];
+          // sh_hit_y[threadIdx.x] = hit_Ys[h1_index];
+          // sh_hit_z[threadIdx.x] = hit_Zs[h1_index];
+          // sh_hit_used[threadIdx.x] = hit_used[h1_index];
+        // }
 
-        __syncthreads();
+        // __syncthreads();
 
-        // The if clause has to go here
+        // The if clause has to go after the syncthreads
         // We cannot allow a syncthreads of a portion of the warp
 
         // Now iterate over all those and utilize the info we gathered
-        const int last_hit = min(blockDim.x * j + blockDim.x, s1.hitNums);
-        for (int jj=blockDim.x * j; jj<last_hit; ++jj){
-          const int sh_index = jj % blockDim.x; // Hm...
+        const int last_hit_h1 = min(blockDim.x * j + blockDim.x, s1.hitNums);
+        for (int jj=blockDim.x * j; jj<last_hit_h1; ++jj){
 
-          // Track creation
           const int h1_index = s1.hitStart + jj;
-          const bool is_h1_used = sh_hit_used[sh_index];
-          if (!is_h0_used && !is_h1_used && first_hit < s0.hitNums){
+          h1.x = hit_Xs[h1_index];
+          h1.y = hit_Ys[h1_index];
+          h1.z = hit_Zs[h1_index];
 
-            h1.x = sh_hit_x[sh_index];
-            h1.y = sh_hit_y[sh_index];
-            h1.z = sh_hit_z[sh_index];
+          // const int sh_index = jj % blockDim.x;
+          // h1.x = sh_hit_x[sh_index];
+          // h1.y = sh_hit_y[sh_index];
+          // h1.z = sh_hit_z[sh_index];
 
-            const float h_dist = fabs((float) ( h1.z - h0.z ));
-            const float dxmax = PARAM_MAXXSLOPE * h_dist;
-            const float dymax = PARAM_MAXYSLOPE * h_dist;
+          const float h_dist = fabs((float) ( h1.z - h0.z ));
+          const float dxmax = PARAM_MAXXSLOPE * h_dist;
+          const float dymax = PARAM_MAXYSLOPE * h_dist;
 
-            // Iterate in the third! list of hits
-            for (int k=0; k<s2.hitNums; ++k) {
-              const int h2_index = s2.hitStart + k;
+          // Iterate in the third list of hits
+          // Tiled memory access on h2
+          for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k){
+            const int sh_hit_no = blockDim.x * k + threadIdx.x;
+            if (sh_hit_no < s2.hitNums){
+              const int h2_index = s2.hitStart + sh_hit_no;
 
-              h2.x = hit_Xs[h2_index];
-              h2.y = hit_Ys[h2_index];
-              h2.z = hit_Zs[h2_index];
+              // Coalesced memory accesses
+              sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
+              sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
+              sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
+            }
 
-              fit = fitHits(h0, h1, h2, dxmax, dymax);
-              fit_is_better = fit < best_fit;
+            __syncthreads();
 
-              best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-              best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
-              best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+            // const int sh_h1_index = jj % blockDim.x;
+            // const bool is_h1_used = sh_hit_used[sh_h1_index];
+            const bool is_h1_used = hit_used[h1_index];
+            if (first_hit < s0.hitNums && !is_h0_used && !is_h1_used){
+
+              const int last_hit_h2 = min(blockDim.x * k + blockDim.x, s2.hitNums);
+              for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
+                
+                const int h2_index = s2.hitStart + kk;
+                // h2.x = hit_Xs[h2_index];
+                // h2.y = hit_Ys[h2_index];
+                // h2.z = hit_Zs[h2_index];
+
+                const int sh_h2_index = kk % blockDim.x;
+                h2.x = sh_hit_x[sh_h2_index];
+                h2.y = sh_hit_y[sh_h2_index];
+                h2.z = sh_hit_z[sh_h2_index];
+
+                fit = fitHits(h0, h1, h2, dxmax, dymax);
+                fit_is_better = fit < best_fit;
+
+                best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+                best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
+                best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+              }
             }
           }
         }
@@ -389,8 +423,6 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
         h2.z = hit_Zs[best_hit_h2];
 
         // Fill in track information
-        // acceptTrack(t, tfit, h0, h1, s0.hitStart + first_hit, best_hit_h1);
-        // updateTrack(t, tfit, h2, best_hit_h2);
         t.hitsNum = 3;
         t.hits[0] = s0.hitStart + first_hit;
         t.hits[1] = best_hit_h1;
