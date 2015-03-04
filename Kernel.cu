@@ -108,7 +108,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
 
   // Pointers to data within the event
   const int data_offset = dev_event_offsets[event_number];
-  const int* no_sensors = (const int*) dev_input + data_offset;
+  const int* no_sensors = (const int*) &dev_input[data_offset];
   const int* no_hits = (const int*) (no_sensors + 1);
   const int* sensor_Zs = (const int*) (no_hits + 1);
   const int number_of_sensors = no_sensors[0];
@@ -137,6 +137,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
   // Insert pointers (atomics)
   const int insertPointer_num = 4;
   const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
+  // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
   unsigned int* weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
@@ -153,8 +154,8 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
   Hit h0, h1, h2;
   int best_hit_h1, best_hit_h2;
 
-  __shared__ float sh_hit_x [96];
-  __shared__ float sh_hit_y [96];
+  __shared__ float sh_hit_x [64];
+  __shared__ float sh_hit_y [64];
 
   int* tracks_to_follow      = tracks_to_follow_q1;
   int* prev_tracks_to_follow = tracks_to_follow_q2;
