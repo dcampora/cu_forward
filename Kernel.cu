@@ -16,7 +16,7 @@ __device__ float fitHits(Hit& h0, Hit& h1, Hit &h2, const float dxmax, const flo
 
   // First approximation -
   // With the sensor z, instead of the hit z
-  const float z2_tz = ((float) h2.z - h0.z) / ((float) (h1.z - h0.z));
+  const float z2_tz = (h2.z - h0.z) / (h1.z - h0.z);
   const float x = h0.x + (h1.x - h0.x) * z2_tz;
   const float y = h0.y + (h1.y - h0.y) * z2_tz;
 
@@ -122,26 +122,26 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
 
   // Per event datatypes
   Track* tracks = &dev_tracks[tracks_offset];
-  unsigned int* tracks_insertPointer = (unsigned int*) &dev_atomicsStorage[event_number];
+  unsigned int* tracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number;
 
   // Per side datatypes
   const int hit_offset = dev_hit_offsets[event_number];
-  bool* hit_used = &dev_hit_used[hit_offset];
+  bool* hit_used = dev_hit_used + hit_offset;
 
-  int* tracks_to_follow_q1 = &dev_tracks_to_follow_q1[tracks_sides_offset];
-  int* tracks_to_follow_q2 = &dev_tracks_to_follow_q2[tracks_sides_offset];
-  int* weak_tracks = &dev_weak_tracks[tracks_sides_offset];
-  Track* tracklets = &dev_tracklets[tracks_sides_offset];
+  int* tracks_to_follow_q1 = dev_tracks_to_follow_q1 + tracks_sides_offset;
+  int* tracks_to_follow_q2 = dev_tracks_to_follow_q2 + tracks_sides_offset;
+  int* weak_tracks = dev_weak_tracks + tracks_sides_offset;
+  Track* tracklets = dev_tracklets + tracks_sides_offset;
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
   const int insertPointer_num = 4;
   const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
   // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
-  unsigned int* weaktracks_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 1];
-  unsigned int* tracklets_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 2];
-  unsigned int* ttf_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 3];
-  unsigned int* next_ttf_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 4];
+  unsigned int* weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
+  unsigned int* tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
+  unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
+  unsigned int* next_ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
   unsigned int* temp_ttf_insertPointer; // Just a temp variable to make the exchange
 
   // Initialize the ttf_insertPointer
@@ -154,9 +154,9 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
   Hit h0, h1, h2;
   int best_hit_h1, best_hit_h2;
 
-  __shared__ float sh_hit_x [96];
-  __shared__ float sh_hit_y [96];
-  __shared__ float sh_hit_z [96];
+  __shared__ float sh_hit_x [64];
+  __shared__ float sh_hit_y [64];
+  __shared__ float sh_hit_z [64];
 
   int* tracks_to_follow      = tracks_to_follow_q1;
   int* prev_tracks_to_follow = tracks_to_follow_q2;

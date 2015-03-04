@@ -59,11 +59,12 @@ cudaError_t invokeParallelSearch(
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int module_sides = 2;
   cudaCheck( cudaSetDevice(0) );
-  dim3 numBlocks(eventsToProcess, module_sides), numThreads(96);
+  dim3 numBlocks(eventsToProcess, module_sides), numThreads(64);
 
   // Allocate memory
   // Allocate CPU buffers
-  int* atomics = (int*) malloc(eventsToProcess * 11 * sizeof(int));
+  const int num_atomics = 10;
+  int* atomics = (int*) malloc(eventsToProcess * num_atomics * sizeof(int));
 
   // Prepare event offset and hit offset
   std::vector<int> event_offsets;
@@ -86,7 +87,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q1, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q2, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * 11 * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
@@ -104,7 +105,7 @@ cudaError_t invokeParallelSearch(
 
   // Initialize what we need
   cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-  cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * 11 * sizeof(int)));
+  cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
 
   // searchByTriplet
   DEBUG << "Now, on your favourite GPU: searchByTriplet with " << eventsToProcess << " event"
@@ -133,7 +134,7 @@ cudaError_t invokeParallelSearch(
 
   // Get results
   DEBUG << "Number of tracks found per event:" << std::endl << " ";
-  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * 11 * sizeof(int), cudaMemcpyDeviceToHost));
+  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int), cudaMemcpyDeviceToHost));
   for (int i=0; i<eventsToProcess; ++i){
     const int numberOfTracks = atomics[i];
     DEBUG << numberOfTracks << ", ";
@@ -152,13 +153,12 @@ cudaError_t invokeParallelSearch(
   //     printTrack(tracks_in_solution, i, zhit_to_module);
   //   }
   // }
-
   // DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
+  
   DEBUG << "It took " << t0 << " milliseconds." << std::endl;
 
   free(atomics);
 
-  // cudaError_t cudaStatus = cudaSuccess;
   return cudaSuccess;
 }
 
