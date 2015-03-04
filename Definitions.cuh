@@ -34,12 +34,13 @@
 struct Sensor {
 	int hitStart;
 	int hitNums;
+	int z;
 };
 
 struct Hit {
 	float x;
 	float y;
-	float z;
+	int z;
 };
 
 struct Track { // 5 * 4 + 24 * 4 = 116 B

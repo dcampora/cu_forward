@@ -11,7 +11,7 @@
  * @param  h2 
  * @return    
  */
-__device__ float fitHits(Hit& h0, Hit& h1, Hit &h2, const float dxmax, const float dymax) {
+__device__ float fitHits(const Hit& h0, const Hit& h1, const Hit &h2, const float dxmax, const float dymax) {
   // Max dx, dy permissible over next hit
 
   // First approximation -
@@ -108,7 +108,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
 
   // Pointers to data within the event
   const int data_offset = dev_event_offsets[event_number];
-  const int* no_sensors = (const int*) &dev_input[data_offset];
+  const int* no_sensors = (const int*) dev_input + data_offset;
   const int* no_hits = (const int*) (no_sensors + 1);
   const int* sensor_Zs = (const int*) (no_hits + 1);
   const int number_of_sensors = no_sensors[0];
@@ -118,30 +118,29 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
   const unsigned int* hit_IDs = (const unsigned int*) (sensor_hitNums + number_of_sensors);
   const float* hit_Xs = (const float*) (hit_IDs + number_of_hits);
   const float* hit_Ys = (const float*) (hit_Xs + number_of_hits);
-  const float* hit_Zs = (const float*) (hit_Ys + number_of_hits);
+  // const float* hit_Zs = (const float*) (hit_Ys + number_of_hits);
 
   // Per event datatypes
   Track* tracks = &dev_tracks[tracks_offset];
-  unsigned int* tracks_insertPointer = (unsigned int*) &dev_atomicsStorage[event_number];
+  unsigned int* tracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number;
 
   // Per side datatypes
   const int hit_offset = dev_hit_offsets[event_number];
-  bool* hit_used = &dev_hit_used[hit_offset];
+  bool* hit_used = dev_hit_used + hit_offset;
 
-  int* tracks_to_follow_q1 = &dev_tracks_to_follow_q1[tracks_sides_offset];
-  int* tracks_to_follow_q2 = &dev_tracks_to_follow_q2[tracks_sides_offset];
-  int* weak_tracks = &dev_weak_tracks[tracks_sides_offset];
-  Track* tracklets = &dev_tracklets[tracks_sides_offset];
+  int* tracks_to_follow_q1 = dev_tracks_to_follow_q1 + tracks_sides_offset;
+  int* tracks_to_follow_q2 = dev_tracks_to_follow_q2 + tracks_sides_offset;
+  int* weak_tracks = dev_weak_tracks + tracks_sides_offset;
+  Track* tracklets = dev_tracklets + tracks_sides_offset;
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
   const int insertPointer_num = 4;
   const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
-  // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
-  unsigned int* weaktracks_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 1];
-  unsigned int* tracklets_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 2];
-  unsigned int* ttf_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 3];
-  unsigned int* next_ttf_insertPointer = (unsigned int*) &dev_atomicsStorage[ip_shift + 4];
+  unsigned int* weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
+  unsigned int* tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
+  unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
+  unsigned int* next_ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
   unsigned int* temp_ttf_insertPointer; // Just a temp variable to make the exchange
 
   // Initialize the ttf_insertPointer
@@ -156,7 +155,6 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
 
   __shared__ float sh_hit_x [96];
   __shared__ float sh_hit_y [96];
-  __shared__ float sh_hit_z [96];
 
   int* tracks_to_follow      = tracks_to_follow_q1;
   int* prev_tracks_to_follow = tracks_to_follow_q2;
@@ -170,8 +168,10 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
 
   s1.hitStart = sensor_hitStarts[first_sensor];
   s1.hitNums = sensor_hitNums[first_sensor];
+  s1.z = sensor_Zs[first_sensor];
   s2.hitStart = sensor_hitStarts[second_sensor];
   s2.hitNums = sensor_hitNums[second_sensor];
+  s2.z = sensor_Zs[second_sensor];
 
   while (first_sensor >= 4) {
     // Iterate in sensors
@@ -182,6 +182,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
     const int third_sensor = first_sensor - 4;
     s2.hitStart = sensor_hitStarts[third_sensor];
     s2.hitNums = sensor_hitNums[third_sensor];
+    s2.z = sensor_Zs[third_sensor];
 
     // Exchange track_to_follow s
     temp_tracks_to_follow = prev_tracks_to_follow;
@@ -228,11 +229,11 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
 
         h0.x = hit_Xs[h0_num];
         h0.y = hit_Ys[h0_num];
-        h0.z = hit_Zs[h0_num];
+        h0.z = s0.z;
 
         h1.x = hit_Xs[h1_num];
         h1.y = hit_Ys[h1_num];
-        h1.z = hit_Zs[h1_num];
+        h1.z = s1.z;
 
         // Track following over t, for all hits in the next module
         // Line calculations
@@ -259,7 +260,6 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
           // Coalesced memory accesses
           sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
           sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
-          sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
         }
         __syncthreads();
 
@@ -271,7 +271,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
             const int sh_h2_index = kk % blockDim.x;
             h2.x = sh_hit_x[sh_h2_index];
             h2.y = sh_hit_y[sh_h2_index];
-            h2.z = sh_hit_z[sh_h2_index];
+            h2.z = s2.z;
 
             const float fit = fitHitToTrack(tx, ty, h0, h1.z, h2);
             const bool fit_is_better = fit < best_fit;
@@ -289,7 +289,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
           // Reload h2
           h2.x = hit_Xs[best_hit_h2];
           h2.y = hit_Ys[best_hit_h2];
-          h2.z = hit_Zs[best_hit_h2];
+          h2.z = s2.z;
 
           // Mark h2 as used
           hit_used[best_hit_h2] = true;
@@ -345,7 +345,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
       if (!is_h0_used && first_hit < s0.hitNums){
           h0.x = hit_Xs[h0_index];
           h0.y = hit_Ys[h0_index];
-          h0.z = hit_Zs[h0_index];
+          h0.z = s0.z;
       }
 
       for (int j=0; j<s1.hitNums; ++j) {
@@ -356,7 +356,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
         if (first_hit < s0.hitNums && !is_h0_used && !is_h1_used){
           h1.x = hit_Xs[h1_index];
           h1.y = hit_Ys[h1_index];
-          h1.z = hit_Zs[h1_index];
+          h1.z = s1.z;
 
           const float h_dist = fabs((float) ( h1.z - h0.z ));
           dxmax = PARAM_MAXXSLOPE * h_dist;
@@ -375,7 +375,6 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
             // Coalesced memory accesses
             sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
             sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
-            sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
           }
           __syncthreads();
 
@@ -388,7 +387,7 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
               const int sh_h2_index = kk % blockDim.x;
               h2.x = sh_hit_x[sh_h2_index];
               h2.y = sh_hit_y[sh_h2_index];
-              h2.z = sh_hit_z[sh_h2_index];
+              h2.z = s2.z;
 
               const float fit = fitHits(h0, h1, h2, dxmax, dymax);
               const bool fit_is_better = fit < best_fit;
@@ -408,11 +407,11 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
         // Reload h1 and h2
         h1.x = hit_Xs[best_hit_h1];
         h1.y = hit_Ys[best_hit_h1];
-        h1.z = hit_Zs[best_hit_h1];
+        h1.z = s1.z;
 
         h2.x = hit_Xs[best_hit_h2];
         h2.y = hit_Ys[best_hit_h2];
-        h2.z = hit_Zs[best_hit_h2];
+        h2.z = s2.z;
 
         // Fill in track information
         t.hitsNum = 3;
