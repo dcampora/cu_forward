@@ -253,6 +253,8 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
       // Tiled memory access on h2
       best_fit = MAX_FLOAT;
       for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k){
+        
+        __syncthreads();
         const int sh_hit_no = blockDim.x * k + threadIdx.x;
         if (sh_hit_no < s2.hitNums){
           const int h2_index = s2.hitStart + sh_hit_no;
@@ -262,7 +264,6 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
           sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
           sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
         }
-
         __syncthreads();
 
         if (ttf_condition){
@@ -286,48 +287,50 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
 
       // We have a best fit!
       // Fill in t, ONLY in case the best fit is acceptable
-      if (best_fit != MAX_FLOAT) {
-        // Reload h2
-        h2.x = hit_Xs[best_hit_h2];
-        h2.y = hit_Ys[best_hit_h2];
-        h2.z = hit_Zs[best_hit_h2];
+      if (ttf_condition) {
+        if (best_fit != MAX_FLOAT) {
+          // Reload h2
+          h2.x = hit_Xs[best_hit_h2];
+          h2.y = hit_Ys[best_hit_h2];
+          h2.z = hit_Zs[best_hit_h2];
 
-        // Mark h2 as used
-        hit_used[best_hit_h2] = true;
-        
-        // Update the tracks to follow, we'll have to follow up
-        // this track on the next iteration :)
-        t.hits[t.hitsNum++] = best_hit_h2;
+          // Mark h2 as used
+          hit_used[best_hit_h2] = true;
+          
+          // Update the tracks to follow, we'll have to follow up
+          // this track on the next iteration :)
+          t.hits[t.hitsNum++] = best_hit_h2;
 
-        // Update the track in the bag
-        if (t.hitsNum > 4){
-          // If it is a track made out of *strictly* more than four hits,
-          // the trackno refers to the tracks location.
-          tracks[trackno] = t;
+          // Update the track in the bag
+          if (t.hitsNum > 4){
+            // If it is a track made out of *strictly* more than four hits,
+            // the trackno refers to the tracks location.
+            tracks[trackno] = t;
+          }
+          else {
+            // Otherwise, we have to allocate it in the tracks,
+            // and update trackno
+            trackno = atomicAdd(tracks_insertPointer, 1);
+            tracks[trackno] = t;
+
+            // Also mark the first three as used
+            hit_used[t.hits[0]] = true;
+            hit_used[t.hits[1]] = true;
+            hit_used[t.hits[2]] = true;
+          }
+
+          // Add the tracks to the bag of tracks to_follow
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          tracks_to_follow[ttfP] = trackno;
         }
-        else {
-          // Otherwise, we have to allocate it in the tracks,
-          // and update trackno
-          trackno = atomicAdd(tracks_insertPointer, 1);
-          tracks[trackno] = t;
-
-          // Also mark the first three as used
-          hit_used[t.hits[0]] = true;
-          hit_used[t.hits[1]] = true;
-          hit_used[t.hits[2]] = true;
+        // In the "else" case, we couldn't follow up the track,
+        // so we won't be track following it anymore.
+        else if (track_flag){
+          // If there are only three hits in this track,
+          // mark it as "doubtful"
+          const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
+          weak_tracks[weakP] = trackno;
         }
-
-        // Add the tracks to the bag of tracks to_follow
-        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
-        tracks_to_follow[ttfP] = trackno;
-      }
-      // In the "else" case, we couldn't follow up the track,
-      // so we won't be track following it anymore.
-      else if (track_flag){
-        // If there are only three hits in this track,
-        // mark it as "doubtful"
-        const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-        weak_tracks[weakP] = trackno;
       }
     }
 
@@ -366,6 +369,8 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
         // Iterate in the third list of hits
         // Tiled memory access on h2
         for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k){
+          
+          __syncthreads();
           const int sh_hit_no = blockDim.x * k + threadIdx.x;
           if (sh_hit_no < s2.hitNums){
             const int h2_index = s2.hitStart + sh_hit_no;
@@ -375,7 +380,6 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
             sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
             sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
           }
-
           __syncthreads();
 
           if (first_hit < s0.hitNums && !is_h0_used && !is_h1_used){
@@ -389,8 +393,8 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
               h2.y = sh_hit_y[sh_h2_index];
               h2.z = sh_hit_z[sh_h2_index];
 
-              fit = fitHits(h0, h1, h2, dxmax, dymax);
-              fit_is_better = fit < best_fit;
+              const float fit = fitHits(h0, h1, h2, dxmax, dymax);
+              const bool fit_is_better = fit < best_fit;
 
               best_fit = fit_is_better * fit + !fit_is_better * best_fit;
               best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
