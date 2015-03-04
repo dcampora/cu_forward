@@ -57,9 +57,9 @@ cudaError_t invokeParallelSearch(
   int*   dev_hit_offsets = 0;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
-  const int module_sides = 2;
+  const int module_sides = 1;
   cudaCheck( cudaSetDevice(0) );
-  dim3 numBlocks(eventsToProcess, module_sides), numThreads(64);
+  dim3 numBlocks(eventsToProcess, module_sides), numThreads(128);
 
   // Allocate memory
   // Allocate CPU buffers
