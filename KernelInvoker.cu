@@ -45,16 +45,19 @@ cudaError_t invokeParallelSearch(
 
   // int* h_prevs, *h_nexts;
   // Histo histo;
-  Track* dev_tracks;
-  char*  dev_input;
-  int*   dev_tracks_to_follow_q1;
-  int*   dev_tracks_to_follow_q2;
-  bool*  dev_hit_used;
-  int*   dev_atomicsStorage;
-  Track* dev_tracklets;
-  int*   dev_weak_tracks;
-  int*   dev_event_offsets;
-  int*   dev_hit_offsets;
+  const int concurrent_kernels = 4;
+  cudaStream_t cuda_streams[concurrent_kernels];
+
+  Track* dev_tracks[concurrent_kernels];
+  char*  dev_input[concurrent_kernels];
+  int*   dev_tracks_to_follow_q1[concurrent_kernels];
+  int*   dev_tracks_to_follow_q2[concurrent_kernels];
+  bool*  dev_hit_used[concurrent_kernels];
+  int*   dev_atomicsStorage[concurrent_kernels];
+  Track* dev_tracklets[concurrent_kernels];
+  int*   dev_weak_tracks[concurrent_kernels];
+  int*   dev_event_offsets[concurrent_kernels];
+  int*   dev_hit_offsets[concurrent_kernels];
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int module_sides = 2;
@@ -81,31 +84,33 @@ cudaError_t invokeParallelSearch(
     acc_hits += event->numberOfHits;
   }
 
-  // Allocate GPU buffers
-  cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * module_sides * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q1, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q2, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
-  cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
+  for (int i=0; i<concurrent_kernels; ++i){
+    // Allocate GPU buffers
+    cudaCheck(cudaMalloc((void**)&dev_tracks[i], eventsToProcess * MAX_TRACKS * sizeof(Track)));
+    cudaCheck(cudaMalloc((void**)&dev_tracklets[i], eventsToProcess * module_sides * MAX_TRACKS * sizeof(Track)));
+    cudaCheck(cudaMalloc((void**)&dev_weak_tracks[i], eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
+    cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q1[i], eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
+    cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q2[i], eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
+    cudaCheck(cudaMalloc((void**)&dev_atomicsStorage[i], eventsToProcess * num_atomics * sizeof(int)));
+    cudaCheck(cudaMalloc((void**)&dev_event_offsets[i], event_offsets.size() * sizeof(int)));
+    cudaCheck(cudaMalloc((void**)&dev_hit_offsets[i], hit_offsets.size() * sizeof(int)));
+    cudaCheck(cudaMalloc((void**)&dev_hit_used[i], acc_hits * sizeof(bool)));
+    cudaCheck(cudaMalloc((void**)&dev_input[i], acc_size));
 
-  // Copy stuff from host memory to GPU buffers
-  cudaCheck(cudaMemcpy(dev_event_offsets, &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
-  cudaCheck(cudaMemcpy(dev_hit_offsets, &hit_offsets[0], hit_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
+    // Copy stuff from host memory to GPU buffers
+    cudaCheck(cudaMemcpy(dev_event_offsets[i], &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
+    cudaCheck(cudaMemcpy(dev_hit_offsets[i], &hit_offsets[0], hit_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
 
-  acc_size = 0;
-  for (int i=0; i<eventsToProcess; ++i){
-    cudaCheck(cudaMemcpy(&dev_input[acc_size], &(*(input[startingEvent + i]))[0], input[startingEvent + i]->size(), cudaMemcpyHostToDevice));
-    acc_size += input[startingEvent + i]->size();
+    acc_size = 0;
+    for (int j=0; j<eventsToProcess; ++j){
+      cudaCheck(cudaMemcpy(&dev_input[i][acc_size], &(*(input[startingEvent + j]))[0], input[startingEvent + j]->size(), cudaMemcpyHostToDevice));
+      acc_size += input[startingEvent + j]->size();
+    }
+
+    // Initialize what we need
+    cudaCheck(cudaMemset(dev_hit_used[i], false, acc_hits * sizeof(bool)));
+    cudaCheck(cudaMemset(dev_atomicsStorage[i], 0, eventsToProcess * num_atomics * sizeof(int)));
   }
-
-  // Initialize what we need
-  cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-  cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
 
   // searchByTriplet
   DEBUG << "Now, on your favourite GPU: searchByTriplet with " << eventsToProcess << " event"
@@ -118,8 +123,11 @@ cudaError_t invokeParallelSearch(
 
   cudaEventRecord(start_searchByTriplet, 0 );
   
-  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
-    dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
+  // Execute several kernels in parallel streams
+  for (int i=0; i<concurrent_kernels; ++i){
+    searchByTriplet<<<numBlocks, numThreads, 0, cuda_streams[i]>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
+      dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
+  }
 
   cudaEventRecord( stop_searchByTriplet, 0 );
   cudaEventSynchronize( stop_searchByTriplet );
@@ -134,13 +142,13 @@ cudaError_t invokeParallelSearch(
 
   // Get results
   DEBUG << "Number of tracks found per event:" << std::endl << " ";
-  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int), cudaMemcpyDeviceToHost));
+  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage[0], eventsToProcess * num_atomics * sizeof(int), cudaMemcpyDeviceToHost));
   for (int i=0; i<eventsToProcess; ++i){
     const int numberOfTracks = atomics[i];
     DEBUG << numberOfTracks << ", ";
     
     output[startingEvent + i].resize(numberOfTracks * sizeof(Track));
-    cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[0][i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
   }
   DEBUG << std::endl;
 
