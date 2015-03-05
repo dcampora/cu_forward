@@ -124,9 +124,9 @@ cudaError_t invokeParallelSearch(
   cudaEventRecord(start_searchByTriplet, 0 );
   
   // Execute several kernels in parallel streams
-  for (int i=0; i<concurrent_kernels; ++i){
-    searchByTriplet<<<numBlocks, numThreads, 0, cuda_streams[i]>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
-      dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
+  for (int i=0; i<concurrent_kernels/2; ++i){
+    searchByTriplet<<<numBlocks, numThreads, 0, cuda_streams[i]>>>(dev_tracks[i], dev_input[i], dev_tracks_to_follow_q1[i], dev_tracks_to_follow_q2[i],
+      dev_hit_used[i], dev_atomicsStorage[i], dev_tracklets[i], dev_weak_tracks[i], dev_event_offsets[i], dev_hit_offsets[i]);
   }
 
   cudaEventRecord( stop_searchByTriplet, 0 );
