@@ -125,7 +125,8 @@ cudaError_t invokeParallelSearch(
 
   cudaEventRecord(start_searchByTriplet, 0 );
   
-  searchByTriplet<<<numBlocks, numThreads, 3 * numThreads.x * sizeof(float)>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
+  // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
+  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
     dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
 
   cudaEventRecord( stop_searchByTriplet, 0 );

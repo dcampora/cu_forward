@@ -154,11 +154,14 @@ __global__ void searchByTriplet(Track* dev_tracks, char* dev_input, int* dev_tra
   Hit h0, h1, h2;
   int best_hit_h1, best_hit_h2;
 
-  extern __shared__ float sh_hits [];
-
-  float* sh_hit_x = sh_hits;
-  float* sh_hit_y = sh_hit_x + blockDim.x;
-  float* sh_hit_z = sh_hit_y + blockDim.x;
+  // extern __shared__ float sh_hits [];
+  // float* sh_hit_x = sh_hits;
+  // float* sh_hit_y = sh_hit_x + blockDim.x;
+  // float* sh_hit_z = sh_hit_y + blockDim.x;
+  
+  __shared__ float sh_hit_x [64];
+  __shared__ float sh_hit_y [64];
+  __shared__ float sh_hit_z [64];
 
   int* tracks_to_follow      = tracks_to_follow_q1;
   int* prev_tracks_to_follow = tracks_to_follow_q2;
