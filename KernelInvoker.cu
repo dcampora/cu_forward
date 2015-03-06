@@ -58,8 +58,15 @@ cudaError_t invokeParallelSearch(
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int module_sides = 2;
-  cudaCheck( cudaSetDevice(0) );
-  dim3 numBlocks(eventsToProcess, module_sides), numThreads(64);
+  const int device_number = 0;
+  cudaCheck(cudaSetDevice(device_number));
+  cudaDeviceProp* device_properties = (cudaDeviceProp*)malloc(sizeof(cudaDeviceProp));
+  cudaGetDeviceProperties(device_properties, 0);
+
+  // Some startup settings
+  dim3 numBlocks(eventsToProcess, module_sides);
+  dim3 numThreads(64);
+  cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
 
   // Allocate memory
   // Allocate CPU buffers
@@ -108,7 +115,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
 
   // searchByTriplet
-  DEBUG << "Now, on your favourite GPU: searchByTriplet with " << eventsToProcess << " event"
+  DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event"
     << (eventsToProcess>1 ? "s" : "") << "..." << std::endl;
   cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
   float t0;
@@ -118,7 +125,7 @@ cudaError_t invokeParallelSearch(
 
   cudaEventRecord(start_searchByTriplet, 0 );
   
-  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
+  searchByTriplet<<<numBlocks, numThreads, 3 * numThreads.x * sizeof(float)>>>(dev_tracks, dev_input, dev_tracks_to_follow_q1, dev_tracks_to_follow_q2,
     dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
 
   cudaEventRecord( stop_searchByTriplet, 0 );

@@ -42,7 +42,7 @@ struct Hit {
 	float z;
 };
 
-struct Track { // 5 * 4 + 24 * 4 = 116 B
+struct Track { // 4 + 24 * 4 = 100 B
 	// float x0;
 	// float tx;
 	// float y0;
