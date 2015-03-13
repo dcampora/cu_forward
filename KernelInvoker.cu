@@ -90,6 +90,8 @@ cudaError_t invokeParallelSearch(
     acc_hits += event->numberOfHits;
   }
 
+  int* ttf_per_module = (int*) malloc(eventsToProcess * num_modules * sizeof(int));
+
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * module_sides * MAX_TRACKS * sizeof(Track)));
@@ -130,6 +132,14 @@ cudaError_t invokeParallelSearch(
   // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
   sbt_seeding<<<numBlocks, numThreads>>>((const char*) dev_input, dev_tracks_to_follow,
     dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_ttf_per_module);
+
+  cudaCheck(cudaMemcpy(ttf_per_module, dev_ttf_per_module, eventsToProcess * num_modules * sizeof(int), cudaMemcpyDeviceToHost));
+
+  DEBUG << "ttf_per_module: ";
+  for (int i=0; i<num_modules; ++i){
+    DEBUG << ttf_per_module[i] << ", ";
+  }
+  DEBUG << std::endl;
 
   sbt_forwarding<<<numBlocks, numThreads>>>((const char*) dev_input, dev_tracks, dev_tracks_to_follow, dev_hit_used,
     dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_ttf_per_module);
