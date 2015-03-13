@@ -236,7 +236,6 @@ __global__ void sbt_seeding (const char* const dev_input,
 
       // We have a best fit! - haven't we?
       const bool accept_track = best_fit != MAX_FLOAT;
-
       if (accept_track) {
         // Reload h1 and h2
         h1.x = hit_Xs[best_hit_h1];
@@ -351,6 +350,9 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
     // Tracks to follow from seeding stage
     const unsigned int prev_seedttf = (first_sensor == num_modules-1) ? 0 : ttf_per_module[first_sensor+1];
     const unsigned int last_seedttf = ttf_per_module[first_sensor];
+
+    assert(prev_seedttf >= 0 && prev_seedttf < ttf_insertPointer[0]);
+    assert(last_seedttf >= 0 && last_seedttf < ttf_insertPointer[0]);
 
     // New ttfs
     __syncthreads();

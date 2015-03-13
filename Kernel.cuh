@@ -3,6 +3,8 @@
 
 #include "Definitions.cuh"
 
+#include "assert.h"
+
 __device__ float fitHits(const Hit& h0, const Hit& h1, const Hit& h2, const float dxmax, const float dymax);
 __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, const float h1_z, const Hit& h2);
 
