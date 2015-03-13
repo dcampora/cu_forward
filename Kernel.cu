@@ -339,6 +339,7 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
   // Deal with odd or even separately
   int first_sensor = num_modules - sensor_side - 1;
   unsigned int last_ttf = ttf_insertPointer[0];
+  unsigned int last_seedttf = 0;
 
   while (first_sensor >= 4) {
     // Iterate in sensors
@@ -349,11 +350,10 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
 
     // Tracks to follow from seeding stage
     // const unsigned int prev_seedttf = (first_sensor == num_modules-1) ? 0 : ttf_per_module[first_sensor+1];
-    unsigned int prev_seedttf;
-    if (first_sensor == 51)
-      prev_seedttf = 0;
-    else
-      prev_seedttf = ttf_per_module[first_sensor+1];
+    // unsigned int prev_seedttf;
+    // if (first_sensor == 51) prev_seedttf = 0;
+    // else prev_seedttf = ttf_per_module[first_sensor+1];
+    const unsigned int prev_seedttf = last_seedttf;
     const unsigned int last_seedttf = ttf_per_module[first_sensor];
 
     // New ttfs
