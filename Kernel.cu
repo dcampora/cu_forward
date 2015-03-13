@@ -337,7 +337,7 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
   __shared__ float sh_hit_z [64];
 
   // Deal with odd or even separately
-  int first_sensor = 51 - sensor_side;
+  int first_sensor = num_modules - sensor_side - 1;
   unsigned int last_ttf = ttf_insertPointer[0];
 
   while (first_sensor >= 4) {
@@ -355,7 +355,7 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
     assert(first_sensor > 0);
 
     assert(prev_seedttf < ttf_insertPointer[0]);
-    assert(last_seedttf < ttf_insertPointer[0]);
+    assert(last_seedttf < ttf_insertPointer[0] && "last seed failed on sensor " + to_string(first_sensor) + ", last seed " + to_string(last_seedttf));
 
     // New ttfs
     __syncthreads();
