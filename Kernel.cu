@@ -337,7 +337,7 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
   __shared__ float sh_hit_z [64];
 
   // Deal with odd or even separately
-  int first_sensor = num_modules - sensor_side - 1;
+  int first_sensor = 51 - sensor_side;
   unsigned int last_ttf = ttf_insertPointer[0];
 
   while (first_sensor >= 4) {
