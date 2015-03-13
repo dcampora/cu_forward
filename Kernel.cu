@@ -351,6 +351,9 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
     const unsigned int prev_seedttf = (first_sensor == num_modules-1) ? 0 : ttf_per_module[first_sensor+1];
     const unsigned int last_seedttf = ttf_per_module[first_sensor];
 
+    assert(first_sensor < num_modules);
+    assert(first_sensor > 0);
+
     assert(prev_seedttf < ttf_insertPointer[0]);
     assert(last_seedttf < ttf_insertPointer[0]);
 
