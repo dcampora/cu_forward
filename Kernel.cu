@@ -271,7 +271,7 @@ __global__ void sbt_seeding (const char* const dev_input,
     if (threadIdx.x == 0)
       ttf_per_module[first_sensor] = ttf_insertPointer[0];
 
-    // __syncthreads(); // I don't think this is needed
+    __syncthreads(); // I don't think this is needed
 
     first_sensor -= 2;
   }
@@ -339,7 +339,6 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
 
   // Deal with odd or even separately
   int first_sensor = num_modules - sensor_side - 1;
-  unsigned int last_seedttf = 0;
   unsigned int last_ttf = ttf_insertPointer[0];
 
   while (first_sensor >= 4) {
@@ -350,8 +349,8 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
     s2.hitNums = sensor_hitNums[third_sensor];
 
     // Tracks to follow from seeding stage
-    const unsigned int prev_seedttf = last_seedttf;
-    last_seedttf = ttf_per_module[first_sensor];
+    const unsigned int prev_seedttf = (first_sensor == num_modules-1) ? 0 : ttf_per_module[first_sensor+1];
+    const unsigned int last_seedttf = ttf_per_module[first_sensor];
 
     // New ttfs
     __syncthreads();
@@ -453,49 +452,49 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
       // We have a best fit!
       // Fill in t, ONLY in case the best fit is acceptable
       if (ttf_condition) {
-        if (best_fit != MAX_FLOAT) {
-          // Reload h2
-          h2.x = hit_Xs[best_hit_h2];
-          h2.y = hit_Ys[best_hit_h2];
-          h2.z = hit_Zs[best_hit_h2];
+        // if (best_fit != MAX_FLOAT) {
+        //   // Reload h2
+        //   h2.x = hit_Xs[best_hit_h2];
+        //   h2.y = hit_Ys[best_hit_h2];
+        //   h2.z = hit_Zs[best_hit_h2];
 
-          // Mark h2 as used
-          hit_used[best_hit_h2] = true;
+        //   // Mark h2 as used
+        //   hit_used[best_hit_h2] = true;
           
-          // Update the tracks to follow, we'll have to follow up
-          // this track on the next iteration :)
-          t.hits[t.hitsNum++] = best_hit_h2;
+        //   // Update the tracks to follow, we'll have to follow up
+        //   // this track on the next iteration :)
+        //   t.hits[t.hitsNum++] = best_hit_h2;
 
-          // Update the track in the bag
-          if (t.hitsNum > 4){
-            // If it is a track made out of *strictly* more than four hits,
-            // the trackno refers to the tracks location.
-            tracks[trackno] = t;
-          }
-          else {
-            // Otherwise, we have to allocate it in the tracks,
-            // and update trackno
-            trackno = atomicAdd(tracks_insertPointer, 1);
-            tracks[trackno] = t;
+        //   // Update the track in the bag
+        //   if (t.hitsNum > 4){
+        //     // If it is a track made out of *strictly* more than four hits,
+        //     // the trackno refers to the tracks location.
+        //     tracks[trackno] = t;
+        //   }
+        //   else {
+        //     // Otherwise, we have to allocate it in the tracks,
+        //     // and update trackno
+        //     trackno = atomicAdd(tracks_insertPointer, 1);
+        //     tracks[trackno] = t;
 
-            // Also mark the first three as used
-            hit_used[t.hits[0]] = true;
-            hit_used[t.hits[1]] = true;
-            hit_used[t.hits[2]] = true;
-          }
+        //     // Also mark the first three as used
+        //     hit_used[t.hits[0]] = true;
+        //     hit_used[t.hits[1]] = true;
+        //     hit_used[t.hits[2]] = true;
+        //   }
 
-          // Add the tracks to the bag of tracks to_follow
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
-          tracks_to_follow[ttfP] = trackno;
-        }
-        // In the "else" case, we couldn't follow up the track,
-        // so we won't be track following it anymore.
-        else if (track_flag){
+        //   // Add the tracks to the bag of tracks to_follow
+        //   const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+        //   tracks_to_follow[ttfP] = trackno;
+        // }
+        // // In the "else" case, we couldn't follow up the track,
+        // // so we won't be track following it anymore.
+        // else if (track_flag){
           // If there are only three hits in this track,
           // mark it as "doubtful"
           const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
           weak_tracks[weakP] = trackno;
-        }
+        // }
       }
     }
 
