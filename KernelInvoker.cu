@@ -136,17 +136,6 @@ cudaError_t invokeParallelSearch(
   sbt_seeding<<<numBlocks, 128>>>((const char*) dev_input, dev_tracks_to_follow,
     dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_ttf_per_module);
 
-  // cudaCheck(cudaMemcpy(ttf_per_module, dev_ttf_per_module, eventsToProcess * num_modules * sizeof(int), cudaMemcpyDeviceToHost));
-
-  // DEBUG << "ttf_per_module: ";
-  // for (int i=0; i<num_modules; ++i){
-  //   DEBUG << ttf_per_module[i] << ", ";
-  // }
-  // DEBUG << std::endl;
-
-  sbt_forwarding<<<numBlocks, numThreads>>>((const char*) dev_input, dev_tracks, dev_tracks_to_follow, dev_hit_used,
-    dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_ttf_per_module);
-
   cudaEventRecord( stop_searchByTriplet, 0 );
   cudaEventSynchronize( stop_searchByTriplet );
   cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
@@ -155,6 +144,9 @@ cudaError_t invokeParallelSearch(
   cudaEventDestroy( stop_searchByTriplet );
 
   cudaCheck( cudaPeekAtLastError() );
+
+  sbt_forwarding<<<numBlocks, numThreads>>>((const char*) dev_input, dev_tracks, dev_tracks_to_follow, dev_hit_used,
+    dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_ttf_per_module);
 
   DEBUG << "Done!" << std::endl;
 

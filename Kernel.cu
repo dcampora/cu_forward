@@ -198,7 +198,7 @@ __global__ void sbt_seeding (const char* const dev_input,
 
         // Iterate in the third list of hits
         // Tiled memory access on h2
-        for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k){
+        for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k) {
           
           __syncthreads();
           const int sh_hit_no = blockDim.x * k + threadIdx.x;
@@ -269,8 +269,6 @@ __global__ void sbt_seeding (const char* const dev_input,
 
     if (threadIdx.x == 0)
       ttf_per_module[first_sensor] = ttf_insertPointer[0];
-
-    // __syncthreads(); // I don't think this is needed
 
     first_sensor -= 2;
   }
