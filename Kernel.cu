@@ -95,7 +95,7 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
  * @param dev_hit_offsets         
  */
 __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_input,
-  int* const dev_tracks_to_follow_q1, int* const dev_tracks_to_follow_q2,
+  int* const dev_tracks_to_follow,
   bool* const dev_hit_used, int* const dev_atomicsStorage, Track* const dev_tracklets,
   int* const dev_weak_tracks, int* const dev_event_offsets, int* const dev_hit_offsets) {
   
@@ -130,24 +130,21 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   const int hit_offset = dev_hit_offsets[event_number];
   bool* const hit_used = dev_hit_used + hit_offset;
 
-  int* const tracks_to_follow_q1 = dev_tracks_to_follow_q1 + tracks_sides_offset;
-  int* const tracks_to_follow_q2 = dev_tracks_to_follow_q2 + tracks_sides_offset;
+  int* const tracks_to_follow = dev_tracks_to_follow + tracks_sides_offset;
   int* const weak_tracks = dev_weak_tracks + tracks_sides_offset;
   Track* const tracklets = dev_tracklets + tracks_sides_offset;
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
-  const int insertPointer_num = 5;
+  const int insertPointer_num = 4;
   const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
   // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* next_ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
-  unsigned int* number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
-  unsigned int* temp_ttf_insertPointer; // Just a temp variable to make the exchange
+  unsigned int* number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
-  // Initialize the ttf_insertPointer
+  // TODO: Shouldn't be needed - Initialize the ttf_insertPointer
   if (threadIdx.x == 0)
     ttf_insertPointer[0] = 0;
 
@@ -167,10 +164,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_z [64];
   __shared__ unsigned int sh_hit_process [100];
 
-  int* tracks_to_follow      = tracks_to_follow_q1;
-  int* prev_tracks_to_follow = tracks_to_follow_q2;
-  int* temp_tracks_to_follow;
-
   // Deal with odd or even separately
   int first_sensor = 51 - sensor_side;
 
@@ -182,6 +175,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   s2.hitStart = sensor_hitStarts[second_sensor];
   s2.hitNums = sensor_hitNums[second_sensor];
 
+  unsigned int prev_ttf, last_ttf = 0;
+
   while (first_sensor >= 4) {
     // Iterate in sensors
     // Reuse the info from last sensors
@@ -192,27 +187,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     s2.hitStart = sensor_hitStarts[third_sensor];
     s2.hitNums = sensor_hitNums[third_sensor];
 
-    // Exchange track_to_follow s
-    temp_tracks_to_follow = prev_tracks_to_follow;
-    prev_tracks_to_follow = tracks_to_follow;
-    tracks_to_follow = temp_tracks_to_follow;
-
-    // Reset the ttf_insertPointer and synchronize
-    if (threadIdx.x == 0)
-      next_ttf_insertPointer[0] = 0;
-
-    // This syncthreads is required
     __syncthreads();
 
-    // Rotate the ttf pointers
-    // Use the same mechanism as in the tracks_to_follow
-    temp_ttf_insertPointer = ttf_insertPointer;
-    ttf_insertPointer = next_ttf_insertPointer;
-    next_ttf_insertPointer = temp_ttf_insertPointer;
-    const unsigned int last_ttf_insertPointer = temp_ttf_insertPointer[0];
+    prev_ttf = last_ttf;
+    last_ttf = ttf_insertPointer[0];
 
     // 2a. Track following
-    for (int i=0; i<((int) ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
+    for (int i=0; i<((int) ceilf( ((float) (last_ttf - prev_ttf)) / blockDim.x)); ++i) {
       const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
       // These variables need to go here, shared memory and scope requirements
@@ -221,9 +202,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       bool track_flag;
 
       // The logic is broken in two parts for shared memory loading
-      const bool ttf_condition = ttf_element < last_ttf_insertPointer;
+      const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
       if (ttf_condition) {
-        const int fulltrackno = prev_tracks_to_follow[ttf_element];
+        const int fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
         track_flag = (fulltrackno & 0x80000000) == 0x80000000;
         trackno = fulltrackno & 0x7FFFFFFF;
 
@@ -469,13 +450,15 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   __syncthreads();
 
+  prev_ttf = last_ttf;
+  last_ttf = ttf_insertPointer[0];
+
   // Process the last bunch of track_to_follows
-  const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
-  for (int i=0; i<((int) ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
+  for (int i=0; i<((int) ceilf( ((float) (last_ttf - prev_ttf)) / blockDim.x)); ++i) {
     const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
-    if (ttf_element < last_ttf_insertPointer) {
-      const int fulltrackno = tracks_to_follow[ttf_element];
+    if (ttf_element < (last_ttf - prev_ttf)) {
+      const int fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
       const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
       const int trackno = fulltrackno & 0x7FFFFFFF;
 
