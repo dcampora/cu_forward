@@ -270,7 +270,7 @@ __global__ void sbt_seeding (const char* const dev_input,
     if (threadIdx.x == 0)
       ttf_per_module[first_sensor] = ttf_insertPointer[0];
 
-    __syncthreads(); // I don't think this is needed
+    // __syncthreads(); // I don't think this is needed
 
     first_sensor -= 2;
   }
@@ -338,36 +338,33 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
 
   // Deal with odd or even separately
   int first_sensor = num_modules - sensor_side - 1;
-  unsigned int last_ttf = ttf_insertPointer[0];
+  unsigned int last_seedttf = 0;
 
-  while (first_sensor >= 4) {
+  // Preload prev_ttf and last_ttf
+  unsigned int last_ttf = ttf_insertPointer[0];
+  unsigned int prev_ttf = last_ttf;
+
+  __syncthreads();
+
+  while (first_sensor >= 6) {
     // Iterate in sensors
 
-    const int third_sensor = first_sensor - 4;
-    s2.hitStart = sensor_hitStarts[third_sensor];
-    s2.hitNums = sensor_hitNums[third_sensor];
+    const int forwarding_sensor = first_sensor - 6;
+    s2.hitStart = sensor_hitStarts[forwarding_sensor];
+    s2.hitNums = sensor_hitNums[forwarding_sensor];
 
     // Tracks to follow from seeding stage
-    const unsigned int prev_seedttf = (first_sensor == num_modules-1) ? 0 : ttf_per_module[first_sensor+1];
-    const unsigned int last_seedttf = ttf_per_module[first_sensor];
-
-    assert(first_sensor < num_modules);
-    assert(first_sensor > 0);
-
-    assert(prev_seedttf < ttf_insertPointer[0]);
-    assert(last_seedttf < ttf_insertPointer[0] && "last seed failed on sensor " + to_string(first_sensor) + ", last seed " + to_string(last_seedttf));
-
-    // New ttfs
-    __syncthreads();
-    const unsigned int prev_ttf = last_ttf;
-    last_ttf = ttf_insertPointer[0];
-    // __syncthreads(); // Probably we don't need this one
+    const unsigned int prev_seedttf = last_seedttf;
+    last_seedttf = ttf_per_module[first_sensor];
 
     // 2a. Track following
     const unsigned int total_ttfs = (last_seedttf - prev_seedttf) + (last_ttf - prev_ttf);
     for (int i=0; i<((int) ceilf( ((float) total_ttfs) / blockDim.x)); ++i) {
       const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
-      const unsigned int ttf_padding = (ttf_element < last_seedttf - prev_seedttf) ? prev_seedttf : prev_ttf;
+
+      const bool is_seed_ttf = (ttf_element < (last_seedttf - prev_seedttf));
+      const unsigned int ttf_padding = is_seed_ttf ? prev_seedttf : prev_ttf;
+      const unsigned int ttf_index = is_seed_ttf ? ttf_element : ttf_element - (last_seedttf - prev_seedttf);
 
       // These variables need to go here, shared memory and scope requirements
       float tx, ty;
@@ -377,7 +374,7 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
       // The logic is broken in two parts for shared memory loading
       bool ttf_condition = ttf_element < total_ttfs;
       if (ttf_condition) {
-        const int fulltrackno = tracks_to_follow[ttf_padding + ttf_element];
+        const int fulltrackno = tracks_to_follow[ttf_padding + ttf_index];
         track_flag = (fulltrackno & 0x80000000) == 0x80000000;
         trackno = fulltrackno & 0x7FFFFFFF;
 
@@ -385,16 +382,15 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
         t = track_pointer[trackno];
 
         // Load last two hits in h0, h1
-        const int t_hitsNum = t.hitsNum;
-        const int h0_num = t.hits[t_hitsNum - 2];
-        const int h1_num = t.hits[t_hitsNum - 1];
+        const int h0_num = t.hits[t.hitsNum - 2];
+        const int h1_num = t.hits[t.hitsNum - 1];
 
         const bool h0_used = hit_used[h0_num];
         const bool h1_used = hit_used[h1_num];
 
         // Update the condition with whether h0 and h1 are not used
-        ttf_condition &= !h0_used && !h1_used;
-        // ttf_condition = !h0_used && !h1_used; // &= is not needed here
+        ttf_condition &= (t.hitsNum > 3 || (!h0_used && !h1_used));
+        // ttf_condition = (t.hitsNum > 3 || (!h0_used && !h1_used)); // &= is not needed here
 
         if (ttf_condition) {
           h0.x = hit_Xs[h0_num];
@@ -457,73 +453,87 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
       // We have a best fit!
       // Fill in t, ONLY in case the best fit is acceptable
       if (ttf_condition) {
-        // if (best_fit != MAX_FLOAT) {
-        //   // Reload h2
-        //   h2.x = hit_Xs[best_hit_h2];
-        //   h2.y = hit_Ys[best_hit_h2];
-        //   h2.z = hit_Zs[best_hit_h2];
-
-        //   // Mark h2 as used
-        //   hit_used[best_hit_h2] = true;
+        if (best_fit != MAX_FLOAT) {
+          // Reload h2
+          h2.x = hit_Xs[best_hit_h2];
+          h2.y = hit_Ys[best_hit_h2];
+          h2.z = hit_Zs[best_hit_h2];
           
-        //   // Update the tracks to follow, we'll have to follow up
-        //   // this track on the next iteration :)
-        //   t.hits[t.hitsNum++] = best_hit_h2;
+          // Update the tracks to follow, we'll have to follow up
+          // this track on the next iteration :)
+          t.hits[t.hitsNum++] = best_hit_h2;
 
-        //   // Update the track in the bag
-        //   if (t.hitsNum > 4){
-        //     // If it is a track made out of *strictly* more than four hits,
-        //     // the trackno refers to the tracks location.
-        //     tracks[trackno] = t;
-        //   }
-        //   else {
-        //     // Otherwise, we have to allocate it in the tracks,
-        //     // and update trackno
-        //     trackno = atomicAdd(tracks_insertPointer, 1);
-        //     tracks[trackno] = t;
+          // Update the track in the bag
+          // If it is a track made out of *strictly* more than four hits,
+          // the trackno refers to the tracks location.
+          // Otherwise, we have to allocate it in the tracks,
+          // and update trackno
+          if (t.hitsNum == 4) {
+            trackno = atomicAdd(tracks_insertPointer, 1);
+          }
+          
+          tracks[trackno] = t;
 
-        //     // Also mark the first three as used
-        //     hit_used[t.hits[0]] = true;
-        //     hit_used[t.hits[1]] = true;
-        //     hit_used[t.hits[2]] = true;
-        //   }
-
-        //   // Add the tracks to the bag of tracks to_follow
-        //   const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
-        //   tracks_to_follow[ttfP] = trackno;
-        // }
-        // // In the "else" case, we couldn't follow up the track,
-        // // so we won't be track following it anymore.
-        // else if (track_flag){
+          // Add the tracks to the bag of tracks to_follow
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          tracks_to_follow[ttfP] = trackno;
+        }
+        // In the "else" case, we couldn't follow up the track,
+        // so we won't be track following it anymore.
+        else if (track_flag){
           // If there are only three hits in this track,
           // mark it as "doubtful"
           const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
           weak_tracks[weakP] = trackno;
-        // }
+        }
       }
     }
+
+    // New ttfs
+    __syncthreads();
+
+    prev_ttf = last_ttf;
+    last_ttf = ttf_insertPointer[0];
+
+    // For these, mark hits as used
+    for (int i=0; i<((int) ceilf( ((float) (last_ttf - prev_ttf)) / blockDim.x)); ++i) {
+      const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
+      const unsigned int ttf_padding = prev_ttf;
+
+      if (ttf_element < (last_ttf - prev_ttf)) {
+        const unsigned int trackno = tracks_to_follow[ttf_padding + ttf_element];
+        t = tracks[trackno]; // Here this works - we know it has at least four elements
+        
+        hit_used[t.hits[t.hitsNum-1]] = true;
+        
+        if (t.hitsNum == 4) {
+          hit_used[t.hits[0]] = true;
+          hit_used[t.hits[1]] = true;
+          hit_used[t.hits[2]] = true;
+        }
+      }
+    }
+
+    __syncthreads();
 
     first_sensor -= 2;
   }
 
-  __syncthreads();
-
   // Process the last bunch of track_to_follows
-  const unsigned int last_ttf_insertPointer = ttf_insertPointer[0];
-  for (int i=0; i<((int) ceilf( ((float) last_ttf_insertPointer) / blockDim.x)); ++i) {
+  // first_sensor points to either 4 or 5 here
+  const unsigned int prev_seedttf = last_seedttf;
+  last_seedttf = ttf_per_module[first_sensor];
+  for (int i=0; i<((int) ceilf( ((float) (last_seedttf - prev_seedttf)) / blockDim.x)); ++i) {
     const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
-    if (ttf_element < last_ttf_insertPointer) {
+    if (ttf_element < (last_seedttf - prev_seedttf)) {
       const int fulltrackno = tracks_to_follow[ttf_element];
-      const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
       const int trackno = fulltrackno & 0x7FFFFFFF;
 
       // Here we are only interested in three-hit tracks,
       // to mark them as "doubtful"
-      if (track_flag) {
-        const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-        weak_tracks[weakP] = trackno;
-      }
+      const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
+      weak_tracks[weakP] = trackno;
     }
   }
 

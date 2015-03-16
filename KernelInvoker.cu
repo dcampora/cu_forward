@@ -117,6 +117,9 @@ cudaError_t invokeParallelSearch(
   // Initialize what we need
   cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
   cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
+  
+  // TODO: There's no need for this when everything's understood
+  // cudaCheck(cudaMemset(dev_ttf_per_module, 0, eventsToProcess * num_modules * sizeof(int)));
 
   // searchByTriplet
   DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event"
@@ -127,7 +130,7 @@ cudaError_t invokeParallelSearch(
   cudaEventCreate(&start_searchByTriplet);
   cudaEventCreate(&stop_searchByTriplet);
 
-  cudaEventRecord(start_searchByTriplet, 0 );
+  cudaEventRecord(start_searchByTriplet, 0);
   
   // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
   sbt_seeding<<<numBlocks, numThreads>>>((const char*) dev_input, dev_tracks_to_follow,
