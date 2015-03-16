@@ -81,7 +81,7 @@ cudaError_t invokeParallelSearch(
 
   // Allocate memory
   // Allocate CPU buffers
-  const int num_atomics = 12;
+  const int num_atomics = 13;
   int* atomics = (int*) malloc(eventsToProcess * num_atomics * sizeof(int));
 
   // Prepare event offset and hit offset

@@ -137,14 +137,15 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
-  const int insertPointer_num = 5;
+  const int insertPointer_num = 6;
   const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
   // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
   unsigned int* next_ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
-  unsigned int* number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
+  unsigned int* nh0_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
+  unsigned int* nh1_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 6;
   unsigned int* temp_ttf_insertPointer; // Just a temp variable to make the exchange
 
   // Initialize the ttf_insertPointer
@@ -165,7 +166,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_x [64];
   __shared__ float sh_hit_y [64];
   __shared__ float sh_hit_z [64];
-  __shared__ unsigned int sh_hit_process [100];
+
+  // TODO: Easy to get better, we only need bools
+  __shared__ unsigned int sh_h0_process [100];
+  __shared__ unsigned int sh_h1_process [100];
 
   int* tracks_to_follow      = tracks_to_follow_q1;
   int* prev_tracks_to_follow = tracks_to_follow_q2;
@@ -340,8 +344,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       }
     }
 
-    if (threadIdx.x == 0)
-      number_hits_to_process[0] = 0;
+    if (threadIdx.x == 0) {
+      nh0_to_process[0] = 0;
+      nh1_to_process[0] = 0;
+    }
 
     __syncthreads();
 
@@ -357,35 +363,48 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         const bool is_h0_used = hit_used[h0_index];
 
         if (!is_h0_used) {
-          const unsigned int htp_pointer = atomicAdd(number_hits_to_process, 1);
-          sh_hit_process[htp_pointer] = h0_index;
+          const unsigned int htp_pointer = atomicAdd(nh0_to_process, 1);
+          sh_h0_process[htp_pointer] = h0_index;
+        }
+      }
+    }
+    
+    for (int i=0; i<((int) ceilf( ((float) s1.hitNums) / blockDim.x)); ++i) {
+      const int element = blockDim.x * i + threadIdx.x;
+      if (element < s1.hitNums) {
+        const int h1_index = s1.hitStart + element;
+        const bool is_h1_used = hit_used[h1_index];
+
+        if (!is_h1_used) {
+          const unsigned int htp_pointer = atomicAdd(nh1_to_process, 1);
+          sh_h1_process[htp_pointer] = h1_index;
         }
       }
     }
 
     __syncthreads();
 
-    const unsigned int nhits_to_process = number_hits_to_process[0];
+    const unsigned int number_h0_to_process = nh0_to_process[0];
+    const unsigned int number_h1_to_process = nh1_to_process[0];
     int h0_index;
 
-    for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
-      const int element = blockDim.x * i + threadIdx.x;
+    for (int i=0; i<((int) ceilf( ((float) number_h0_to_process) / blockDim.x)); ++i) {
+      const int h0_element = blockDim.x * i + threadIdx.x;
       float best_fit = MAX_FLOAT;
 
       // We repeat this here for performance reasons
-      if (element < nhits_to_process){
-        h0_index = sh_hit_process[element];
+      if (h0_element < number_h0_to_process){
+        h0_index = sh_h0_process[h0_element];
         h0.x = hit_Xs[h0_index];
         h0.y = hit_Ys[h0_index];
         h0.z = hit_Zs[h0_index];
       }
 
-      for (int j=0; j<s1.hitNums; ++j) {
+      for (int j=0; j<number_h1_to_process; ++j) {
         float dxmax, dymax;
 
-        const int h1_index = s1.hitStart + j;
-        const bool is_h1_used = hit_used[h1_index];
-        if (element < nhits_to_process && !is_h1_used){
+        const int h1_index = sh_h1_process[j];
+        if (h0_element < number_h0_to_process){
           h1.x = hit_Xs[h1_index];
           h1.y = hit_Ys[h1_index];
           h1.z = hit_Zs[h1_index];
@@ -411,7 +430,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           }
           __syncthreads();
 
-          if (element < nhits_to_process && !is_h1_used){
+          if (h0_element < number_h0_to_process){
 
             const int last_hit_h2 = min(blockDim.x * k + blockDim.x, s2.hitNums);
             for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
