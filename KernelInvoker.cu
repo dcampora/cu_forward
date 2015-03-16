@@ -43,6 +43,17 @@ cudaError_t invokeParallelSearch(
     }
   }
 
+  // int j = 0;
+  // for (int z=0; z<input.size(); ++z){
+  //   setHPointersFromInput((uint8_t*) &(*input[z])[0], input[z]->size());
+  //   for (int i=0; i<*h_no_sensors; ++i) {
+  //     if (h_sensor_hitNums[i] > j){
+  //       j = h_sensor_hitNums[i];
+  //     }
+  //   }
+  // }
+  // DEBUG << "Max hitnums in event: " << j << std::endl;
+
   // int* h_prevs, *h_nexts;
   // Histo histo;
   Track* dev_tracks;
@@ -70,7 +81,7 @@ cudaError_t invokeParallelSearch(
 
   // Allocate memory
   // Allocate CPU buffers
-  const int num_atomics = 10;
+  const int num_atomics = 12;
   int* atomics = (int*) malloc(eventsToProcess * num_atomics * sizeof(int));
 
   // Prepare event offset and hit offset

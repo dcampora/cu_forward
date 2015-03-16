@@ -137,13 +137,14 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
-  const int insertPointer_num = 4;
+  const int insertPointer_num = 5;
   const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
   // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
   unsigned int* next_ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
+  unsigned int* number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
   unsigned int* temp_ttf_insertPointer; // Just a temp variable to make the exchange
 
   // Initialize the ttf_insertPointer
@@ -164,6 +165,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_x [64];
   __shared__ float sh_hit_y [64];
   __shared__ float sh_hit_z [64];
+  __shared__ unsigned int sh_hit_process [100];
 
   int* tracks_to_follow      = tracks_to_follow_q1;
   int* prev_tracks_to_follow = tracks_to_follow_q2;
@@ -338,21 +340,44 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       }
     }
 
+    if (threadIdx.x == 0)
+      number_hits_to_process[0] = 0;
+
     __syncthreads();
 
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation
+    
+    // Pre-seeding 
+    // Get the hits we are going to iterate onto in sh_hit_process
     for (int i=0; i<((int) ceilf( ((float) s0.hitNums) / blockDim.x)); ++i) {
-      const int first_hit = blockDim.x * i + threadIdx.x;
-      const int h0_index = s0.hitStart + first_hit;
-      const bool is_h0_used = hit_used[h0_index];
+      const int element = blockDim.x * i + threadIdx.x;
+      if (element < s0.hitNums) {
+        const int h0_index = s0.hitStart + element;
+        const bool is_h0_used = hit_used[h0_index];
+
+        if (!is_h0_used) {
+          const unsigned int htp_pointer = atomicAdd(number_hits_to_process, 1);
+          sh_hit_process[htp_pointer] = h0_index;
+        }
+      }
+    }
+
+    __syncthreads();
+
+    const unsigned int nhits_to_process = number_hits_to_process[0];
+    int h0_index;
+
+    for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
+      const int element = blockDim.x * i + threadIdx.x;
       float best_fit = MAX_FLOAT;
 
       // We repeat this here for performance reasons
-      if (!is_h0_used && first_hit < s0.hitNums){
-          h0.x = hit_Xs[h0_index];
-          h0.y = hit_Ys[h0_index];
-          h0.z = hit_Zs[h0_index];
+      if (element < nhits_to_process){
+        h0_index = sh_hit_process[element];
+        h0.x = hit_Xs[h0_index];
+        h0.y = hit_Ys[h0_index];
+        h0.z = hit_Zs[h0_index];
       }
 
       for (int j=0; j<s1.hitNums; ++j) {
@@ -360,7 +385,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         const int h1_index = s1.hitStart + j;
         const bool is_h1_used = hit_used[h1_index];
-        if (first_hit < s0.hitNums && !is_h0_used && !is_h1_used){
+        if (element < nhits_to_process && !is_h1_used){
           h1.x = hit_Xs[h1_index];
           h1.y = hit_Ys[h1_index];
           h1.z = hit_Zs[h1_index];
@@ -386,7 +411,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           }
           __syncthreads();
 
-          if (first_hit < s0.hitNums && !is_h0_used && !is_h1_used){
+          if (element < nhits_to_process && !is_h1_used){
 
             const int last_hit_h2 = min(blockDim.x * k + blockDim.x, s2.hitNums);
             for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
@@ -423,7 +448,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // Fill in track information
         t.hitsNum = 3;
-        t.hits[0] = s0.hitStart + first_hit;
+        t.hits[0] = h0_index;
         t.hits[1] = best_hit_h1;
         t.hits[2] = best_hit_h2;
 
