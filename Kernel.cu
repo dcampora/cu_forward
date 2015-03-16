@@ -142,9 +142,9 @@ __global__ void sbt_seeding (const char* const dev_input,
   Hit h0, h1, h2;
   int best_hit_h1, best_hit_h2;
   
-  __shared__ float sh_hit_x [64];
-  __shared__ float sh_hit_y [64];
-  __shared__ float sh_hit_z [64];
+  __shared__ float sh_hit_x [128];
+  __shared__ float sh_hit_y [128];
+  __shared__ float sh_hit_z [128];
 
   // Deal with odd or even separately
   int first_sensor = num_modules - sensor_side - 1;
@@ -344,8 +344,6 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
   unsigned int last_ttf = ttf_insertPointer[0];
   unsigned int prev_ttf = last_ttf;
 
-  __syncthreads();
-
   while (first_sensor >= 6) {
     // Iterate in sensors
 
@@ -505,7 +503,7 @@ __global__ void sbt_forwarding(const char* const dev_input, Track* const dev_tra
         t = tracks[trackno]; // Here this works - we know it has at least four elements
         
         hit_used[t.hits[t.hitsNum-1]] = true;
-        
+
         if (t.hitsNum == 4) {
           hit_used[t.hits[0]] = true;
           hit_used[t.hits[1]] = true;
