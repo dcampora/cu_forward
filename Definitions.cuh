@@ -18,7 +18,7 @@
 #define REQUIRED_UNIQUES 0.6f
 #define MIN_HITS_TRACK 3
 #define MAX_FLOAT 100000000.0
-#define MAX_SKIPPED_MODULES 2
+#define MAX_SKIPPED_MODULES 3
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
@@ -44,10 +44,7 @@ struct Hit {
 };
 
 struct Track { // 4 + 24 * 4 = 100 B
-	// float x0;
-	// float tx;
-	// float y0;
-	// float ty;
+	// float x0, tx, y0, ty; // deprecated
 	
 	int hitsNum;
 	int hits[MAX_TRACK_SIZE];
