@@ -158,7 +158,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_x [64];
   __shared__ float sh_hit_y [64];
   __shared__ float sh_hit_z [64];
-  __shared__ unsigned int sh_hit_process [100];
+  __shared__ unsigned int sh_hit_process [200];
 
   // Deal with odd or even separately
   int first_sensor = 51;
