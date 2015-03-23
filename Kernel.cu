@@ -198,16 +198,16 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
       // These variables need to go here, shared memory and scope requirements
       float tx, ty;
-      int trackno, fulltrackno;
-      bool track_flag, skipped_module;
+      int trackno, fulltrackno, skipped_modules;
+      bool track_flag;
 
       // The logic is broken in two parts for shared memory loading
       const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
       if (ttf_condition) {
         fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
         track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-        skipped_module = (fulltrackno & 0x40000000) == 0x40000000;
-        trackno = fulltrackno & 0x3FFFFFFF;
+        skipped_modules = (fulltrackno & 0x70000000) >> 24;
+        trackno = fulltrackno & 0x0FFFFFFF;
 
         const Track* track_pointer = track_flag ? tracklets : tracks;
         t = track_pointer[trackno];
@@ -313,8 +313,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         }
         // A track just skipped a module
         // We keep it for another round
-        else if (!skipped_module) {
-          trackno = fulltrackno | 0x40000000;
+        else if (skipped_modules <= MAX_SKIPPED_MODULES) {
+          // TODO: In principle, the mask is not needed here
+          trackno = (((++skipped_modules) & 0x7) << 24) | fulltrackno;
 
           // Add the tracks to the bag of tracks to_follow
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
@@ -470,7 +471,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     if (ttf_element < (last_ttf - prev_ttf)) {
       const int fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
       const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-      const int trackno = fulltrackno & 0x3FFFFFFF;
+      const int trackno = fulltrackno & 0x0FFFFFFF;
 
       // Here we are only interested in three-hit tracks,
       // to mark them as "doubtful"
