@@ -18,7 +18,7 @@
 #define REQUIRED_UNIQUES 0.6f
 #define MIN_HITS_TRACK 3
 #define MAX_FLOAT 100000000.0
-#define MAX_SKIPPED_MODULES 2
+#define MAX_SKIPPED_MODULES 1
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
