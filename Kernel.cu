@@ -206,7 +206,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       if (ttf_condition) {
         fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
         track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-        skipped_modules = (fulltrackno & 0x70000000) >> 23;
+        skipped_modules = (fulltrackno & 0x70000000) >> 27;
         trackno = fulltrackno & 0x0FFFFFFF;
 
         const Track* track_pointer = track_flag ? tracklets : tracks;
@@ -315,7 +315,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // We keep it for another round
         else if (skipped_modules <= MAX_SKIPPED_MODULES) {
           // TODO: In principle, the mask is not needed here
-          trackno = (((++skipped_modules) & 0x7) << 23) | fulltrackno;
+          trackno = (((++skipped_modules) & 0x7) << 27) | fulltrackno;
 
           // Add the tracks to the bag of tracks to_follow
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
