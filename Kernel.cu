@@ -198,15 +198,16 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
       // These variables need to go here, shared memory and scope requirements
       float tx, ty;
-      int trackno;
-      bool track_flag;
+      int trackno, fulltrackno;
+      bool track_flag, skipped_module;
 
       // The logic is broken in two parts for shared memory loading
       const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
       if (ttf_condition) {
-        const int fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
+        fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
         track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-        trackno = fulltrackno & 0x7FFFFFFF;
+        skipped_module = (fulltrackno & 0x40000000) == 0x40000000;
+        trackno = fulltrackno & 0x3FFFFFFF;
 
         const Track* track_pointer = track_flag ? tracklets : tracks;
         t = track_pointer[trackno];
@@ -310,14 +311,23 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
           tracks_to_follow[ttfP] = trackno;
         }
-        // In the "else" case, we couldn't follow up the track,
-        // so we won't be track following it anymore.
-        else if (track_flag){
-          // If there are only three hits in this track,
-          // mark it as "doubtful"
+        // A track just skipped a module
+        // We keep it for another round
+        else if (!skipped_module) {
+          tracks[trackno] = fulltrackno | 0x40000000;
+
+          // Add the tracks to the bag of tracks to_follow
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          tracks_to_follow[ttfP] = trackno;
+        }
+        // If there are only three hits in this track,
+        // mark it as "doubtful"
+        else if (track_flag) {
           const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
           weak_tracks[weakP] = trackno;
         }
+        // In the "else" case, we couldn't follow up the track,
+        // so we won't be track following it anymore.
       }
     }
 
@@ -460,7 +470,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     if (ttf_element < (last_ttf - prev_ttf)) {
       const int fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
       const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-      const int trackno = fulltrackno & 0x7FFFFFFF;
+      const int trackno = fulltrackno & 0x3FFFFFFF;
 
       // Here we are only interested in three-hit tracks,
       // to mark them as "doubtful"
