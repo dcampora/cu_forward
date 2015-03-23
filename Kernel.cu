@@ -314,7 +314,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // A track just skipped a module
         // We keep it for another round
         else if (!skipped_module) {
-          tracks[trackno] = fulltrackno | 0x40000000;
+          trackno = fulltrackno | 0x40000000;
 
           // Add the tracks to the bag of tracks to_follow
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
