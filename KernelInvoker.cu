@@ -67,20 +67,19 @@ cudaError_t invokeParallelSearch(
   int*   dev_hit_offsets;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
-  const int module_sides = 2;
   const int device_number = 0;
   cudaCheck(cudaSetDevice(device_number));
-  cudaDeviceProp* device_properties = (cudaDeviceProp*)malloc(sizeof(cudaDeviceProp));
+  cudaDeviceProp* device_properties = (cudaDeviceProp*) malloc(sizeof(cudaDeviceProp));
   cudaGetDeviceProperties(device_properties, 0);
 
   // Some startup settings
   dim3 numBlocks(eventsToProcess);
-  dim3 numThreads(96);
+  dim3 numThreads(64);
   cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
 
   // Allocate memory
   // Allocate CPU buffers
-  const int num_atomics = 12;
+  const int num_atomics = 5;
   int* atomics = (int*) malloc(eventsToProcess * num_atomics * sizeof(int));
 
   // Prepare event offset and hit offset
@@ -100,9 +99,9 @@ cudaError_t invokeParallelSearch(
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * module_sides * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * MAX_TRACKS * sizeof(Track)));
+  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));

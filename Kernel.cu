@@ -102,11 +102,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   /* Data initialization */
   // Each event is treated with two blocks, one for each side.
   const int event_number = blockIdx.x;
-  const int sensor_side = blockIdx.y;
   const int events_under_process = gridDim.x;
-
   const int tracks_offset = event_number * MAX_TRACKS;
-  const int tracks_sides_offset = 2 * event_number * MAX_TRACKS + sensor_side * MAX_TRACKS;
 
   // Pointers to data within the event
   const int data_offset = dev_event_offsets[event_number];
@@ -130,23 +127,22 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   const int hit_offset = dev_hit_offsets[event_number];
   bool* const hit_used = dev_hit_used + hit_offset;
 
-  int* const tracks_to_follow = dev_tracks_to_follow + tracks_sides_offset;
-  int* const weak_tracks = dev_weak_tracks + tracks_sides_offset;
-  Track* const tracklets = dev_tracklets + tracks_sides_offset;
+  int* const tracks_to_follow = dev_tracks_to_follow + tracks_offset;
+  int* const weak_tracks = dev_weak_tracks + tracks_offset;
+  Track* const tracklets = dev_tracklets + tracks_offset;
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
   const int insertPointer_num = 4;
-  const int ip_shift = events_under_process + event_number * insertPointer_num * 2 + insertPointer_num * sensor_side;
-  // TODO: Maybe convert to dev_atomicsStorage + ip_shift + 1
+  const int ip_shift = events_under_process + event_number * insertPointer_num;
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
   unsigned int* number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
   // TODO: Shouldn't be needed - Initialize the ttf_insertPointer
-  if (threadIdx.x == 0)
-    ttf_insertPointer[0] = 0;
+  // if (threadIdx.x == 0)
+  //   ttf_insertPointer[0] = 0;
 
   /* The fun begins */
   Track t;
@@ -159,17 +155,15 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   // float* sh_hit_y = sh_hit_x + blockDim.x;
   // float* sh_hit_z = sh_hit_y + blockDim.x;
   
-  __shared__ float sh_hit_x [96];
-  __shared__ float sh_hit_y [96];
-  __shared__ float sh_hit_z [96];
+  __shared__ float sh_hit_x [64];
+  __shared__ float sh_hit_y [64];
+  __shared__ float sh_hit_z [64];
   __shared__ unsigned int sh_hit_process [100];
 
   // Deal with odd or even separately
   int first_sensor = 51;
 
   // Prepare s1 and s2 for the first iteration
-
-
   unsigned int prev_ttf, last_ttf = 0;
 
   while (first_sensor >= 4) {
@@ -287,22 +281,19 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           t.hits[t.hitsNum++] = best_hit_h2;
 
           // Update the track in the bag
-          if (t.hitsNum > 4){
-            // If it is a track made out of *strictly* more than four hits,
-            // the trackno refers to the tracks location.
-            tracks[trackno] = t;
-          }
-          else {
-            // Otherwise, we have to allocate it in the tracks,
-            // and update trackno
+          if (t.hitsNum <= 4){
+            // If it is a track made out of less than or equal than 4 hits,
+            // we have to allocate it in the tracks pointer
             trackno = atomicAdd(tracks_insertPointer, 1);
-            tracks[trackno] = t;
-
+            
             // Also mark the first three as used
             hit_used[t.hits[0]] = true;
             hit_used[t.hits[1]] = true;
             hit_used[t.hits[2]] = true;
           }
+
+          // In any case, update the track in tracks
+          tracks[trackno] = t;
 
           // Add the tracks to the bag of tracks to_follow
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
@@ -311,8 +302,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // A track just skipped a module
         // We keep it for another round
         else if (skipped_modules <= MAX_SKIPPED_MODULES) {
-          // TODO: In principle, the mask is not needed here
-          trackno = (((++skipped_modules) & 0x7) << 28) | fulltrackno;
+          // Form the new mask
+          trackno = ((skipped_modules + 1) << 28) | (fulltrackno & 0x8FFFFFFF);
 
           // Add the tracks to the bag of tracks to_follow
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
