@@ -206,7 +206,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       if (ttf_condition) {
         fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
         track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-        skipped_modules = (fulltrackno & 0x70000000) >> 27;
+        skipped_modules = (fulltrackno & 0x70000000) >> 28;
         trackno = fulltrackno & 0x0FFFFFFF;
 
         const Track* track_pointer = track_flag ? tracklets : tracks;
