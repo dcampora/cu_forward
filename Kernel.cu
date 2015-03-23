@@ -159,31 +159,28 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   // float* sh_hit_y = sh_hit_x + blockDim.x;
   // float* sh_hit_z = sh_hit_y + blockDim.x;
   
-  __shared__ float sh_hit_x [64];
-  __shared__ float sh_hit_y [64];
-  __shared__ float sh_hit_z [64];
+  __shared__ float sh_hit_x [96];
+  __shared__ float sh_hit_y [96];
+  __shared__ float sh_hit_z [96];
   __shared__ unsigned int sh_hit_process [100];
 
   // Deal with odd or even separately
-  int first_sensor = 51 - sensor_side;
+  int first_sensor = 51;
 
   // Prepare s1 and s2 for the first iteration
-  const int second_sensor = first_sensor - 2;
 
-  s1.hitStart = sensor_hitStarts[first_sensor];
-  s1.hitNums = sensor_hitNums[first_sensor];
-  s2.hitStart = sensor_hitStarts[second_sensor];
-  s2.hitNums = sensor_hitNums[second_sensor];
 
   unsigned int prev_ttf, last_ttf = 0;
 
   while (first_sensor >= 4) {
     // Iterate in sensors
-    // Reuse the info from last sensors
-    s0 = s1;
-    s1 = s2;
-
+    const int second_sensor = first_sensor - 2;
     const int third_sensor = first_sensor - 4;
+
+    s0.hitStart = sensor_hitStarts[first_sensor];
+    s0.hitNums = sensor_hitNums[first_sensor];
+    s1.hitStart = sensor_hitStarts[second_sensor];
+    s1.hitNums = sensor_hitNums[second_sensor];
     s2.hitStart = sensor_hitStarts[third_sensor];
     s2.hitNums = sensor_hitNums[third_sensor];
 
@@ -456,7 +453,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       }
     }
 
-    first_sensor -= 2;
+    first_sensor -= 1;
   }
 
   __syncthreads();

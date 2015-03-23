@@ -58,8 +58,7 @@ cudaError_t invokeParallelSearch(
   // Histo histo;
   Track* dev_tracks;
   char*  dev_input;
-  int*   dev_tracks_to_follow_q1;
-  int*   dev_tracks_to_follow_q2;
+  int*   dev_tracks_to_follow;
   bool*  dev_hit_used;
   int*   dev_atomicsStorage;
   Track* dev_tracklets;
@@ -75,8 +74,8 @@ cudaError_t invokeParallelSearch(
   cudaGetDeviceProperties(device_properties, 0);
 
   // Some startup settings
-  dim3 numBlocks(eventsToProcess, module_sides);
-  dim3 numThreads(64);
+  dim3 numBlocks(eventsToProcess);
+  dim3 numThreads(96);
   cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
 
   // Allocate memory
@@ -103,8 +102,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * module_sides * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q1, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow_q2, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * module_sides * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
@@ -137,7 +135,7 @@ cudaError_t invokeParallelSearch(
   cudaEventRecord(start_searchByTriplet, 0 );
   
   // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
-  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow_q1,
+  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
     dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
 
   cudaEventRecord( stop_searchByTriplet, 0 );
