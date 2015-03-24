@@ -35,19 +35,35 @@
 struct Sensor {
 	int hitStart;
 	int hitNums;
+
+    __device__ Sensor(){}
+    __device__ Sensor(const int _hitStart, const int _hitNums) : 
+        hitStart(_hitStart), hitNums(_hitNums) {}
 };
 
 struct Hit {
 	float x;
 	float y;
 	float z;
+
+    __device__ Hit(){}
+    __device__ Hit(const float _x, const float _y, const float _z) :
+        x(_x), y(_y), z(_z) {}
 };
 
 struct Track { // 4 + 24 * 4 = 100 B
 	// float x0, tx, y0, ty; // deprecated
-	
 	int hitsNum;
 	int hits[MAX_TRACK_SIZE];
+};
+
+struct Tracklet {
+    int hitsNum;
+    int h0, h1, h2;
+
+    __device__ Tracklet(){}
+    __device__ Tracklet(const int _hitsNum, int _h0, int _h1, int _h2) : 
+        hitsNum(_hitsNum), h0(_h0), h1(_h1), h2(_h2) {}
 };
 
 #endif

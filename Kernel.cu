@@ -145,10 +145,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   //   ttf_insertPointer[0] = 0;
 
   /* The fun begins */
-  Track t;
   Sensor s0, s1, s2;
-  Hit h0, h1, h2;
-  int best_hit_h1, best_hit_h2;
 
   // extern __shared__ float sh_hits [];
   // float* sh_hit_x = sh_hits;
@@ -158,7 +155,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_x [64];
   __shared__ float sh_hit_y [64];
   __shared__ float sh_hit_z [64];
-  __shared__ unsigned int sh_hit_process [100];
+  __shared__ unsigned int sh_hit_process [100]; // TODO: Fix this
 
   // Deal with odd or even separately
   int first_sensor = 51;
@@ -188,9 +185,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
       // These variables need to go here, shared memory and scope requirements
-      float tx, ty;
-      int trackno, fulltrackno, skipped_modules;
+      Hit h0;
+      float tx, ty, h1_z;
+      int trackno, fulltrackno, skipped_modules, best_hit_h2;
       bool track_flag;
+      Track* tp;
 
       // The logic is broken in two parts for shared memory loading
       const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
@@ -200,27 +199,27 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         skipped_modules = (fulltrackno & 0x70000000) >> 28;
         trackno = fulltrackno & 0x0FFFFFFF;
 
-        const Track* track_pointer = track_flag ? tracklets : tracks;
-        t = track_pointer[trackno];
+        Track* track_pointer = track_flag ? tracklets : tracks;
+        tp = track_pointer + trackno;
 
         // Load last two hits in h0, h1
-        const int t_hitsNum = t.hitsNum;
-        const int h0_num = t.hits[t_hitsNum - 2];
-        const int h1_num = t.hits[t_hitsNum - 1];
+        const int t_hitsNum = tp->hitsNum;
+        const int h0_num = tp->hits[t_hitsNum - 2];
+        const int h1_num = tp->hits[t_hitsNum - 1];
 
         h0.x = hit_Xs[h0_num];
         h0.y = hit_Ys[h0_num];
         h0.z = hit_Zs[h0_num];
 
-        h1.x = hit_Xs[h1_num];
-        h1.y = hit_Ys[h1_num];
-        h1.z = hit_Zs[h1_num];
+        const float h1_x = hit_Xs[h1_num];
+        const float h1_y = hit_Ys[h1_num];
+        h1_z = hit_Zs[h1_num];
 
         // Track following over t, for all hits in the next module
         // Line calculations
-        const float td = 1.0f / (h1.z - h0.z);
-        const float txn = (h1.x - h0.x);
-        const float tyn = (h1.y - h0.y);
+        const float td = 1.0f / (h1_z - h0.z);
+        const float txn = (h1_x - h0.x);
+        const float tyn = (h1_y - h0.y);
         tx = txn * td;
         ty = tyn * td;
       }
@@ -251,11 +250,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
             
             const int h2_index = s2.hitStart + kk;
             const int sh_h2_index = kk % blockDim.x;
-            h2.x = sh_hit_x[sh_h2_index];
-            h2.y = sh_hit_y[sh_h2_index];
-            h2.z = sh_hit_z[sh_h2_index];
+            const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
 
-            const float fit = fitHitToTrack(tx, ty, h0, h1.z, h2);
+            const float fit = fitHitToTrack(tx, ty, h0, h1_z, h2);
             const bool fit_is_better = fit < best_fit;
 
             best_fit = fit_is_better * fit + !fit_is_better * best_fit;
@@ -269,31 +266,34 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       if (ttf_condition) {
         if (best_fit != MAX_FLOAT) {
           // Reload h2
-          h2.x = hit_Xs[best_hit_h2];
-          h2.y = hit_Ys[best_hit_h2];
-          h2.z = hit_Zs[best_hit_h2];
+          // h2.x = hit_Xs[best_hit_h2];
+          // h2.y = hit_Ys[best_hit_h2];
+          // h2.z = hit_Zs[best_hit_h2];
 
           // Mark h2 as used
           hit_used[best_hit_h2] = true;
-          
+
           // Update the tracks to follow, we'll have to follow up
           // this track on the next iteration :)
-          t.hits[t.hitsNum++] = best_hit_h2;
+          tp->hits[tp->hitsNum++] = best_hit_h2;
 
           // Update the track in the bag
-          if (t.hitsNum <= 4){
+          if (tp->hitsNum <= 4){
             // If it is a track made out of less than or equal than 4 hits,
             // we have to allocate it in the tracks pointer
             trackno = atomicAdd(tracks_insertPointer, 1);
             
             // Also mark the first three as used
-            hit_used[t.hits[0]] = true;
-            hit_used[t.hits[1]] = true;
-            hit_used[t.hits[2]] = true;
+            hit_used[tp->hits[0]] = true;
+            hit_used[tp->hits[1]] = true;
+            hit_used[tp->hits[2]] = true;
+
+            // Copy the track into tracks
+            tracks[trackno] = *tp;
           }
 
           // In any case, update the track in tracks
-          tracks[trackno] = t;
+          // tracks[trackno] = t;
 
           // Add the tracks to the bag of tracks to_follow
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
@@ -346,15 +346,17 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     __syncthreads();
 
     const unsigned int nhits_to_process = number_hits_to_process[0];
-    int h0_index;
 
     for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
+
+      Hit h0, h1, h2;
+      int best_hit_h1, best_hit_h2;
       const int element = blockDim.x * i + threadIdx.x;
       float best_fit = MAX_FLOAT;
 
       // We repeat this here for performance reasons
       if (element < nhits_to_process){
-        h0_index = sh_hit_process[element];
+        const int h0_index = sh_hit_process[element];
         h0.x = hit_Xs[h0_index];
         h0.y = hit_Ys[h0_index];
         h0.z = hit_Zs[h0_index];
@@ -418,23 +420,21 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
       if (accept_track) {
         // Reload h1 and h2
-        h1.x = hit_Xs[best_hit_h1];
-        h1.y = hit_Ys[best_hit_h1];
-        h1.z = hit_Zs[best_hit_h1];
+        // h1.x = hit_Xs[best_hit_h1];
+        // h1.y = hit_Ys[best_hit_h1];
+        // h1.z = hit_Zs[best_hit_h1];
 
-        h2.x = hit_Xs[best_hit_h2];
-        h2.y = hit_Ys[best_hit_h2];
-        h2.z = hit_Zs[best_hit_h2];
+        // h2.x = hit_Xs[best_hit_h2];
+        // h2.y = hit_Ys[best_hit_h2];
+        // h2.z = hit_Zs[best_hit_h2];
 
         // Fill in track information
-        t.hitsNum = 3;
-        t.hits[0] = h0_index;
-        t.hits[1] = best_hit_h1;
-        t.hits[2] = best_hit_h2;
+        const Tracklet t {3, sh_hit_process[element], best_hit_h1, best_hit_h2};
 
         // Add the track to the bag of tracks
         const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
-        tracklets[trackP] = t;
+        const Tracklet* tp = (Tracklet*) (tracklets + trackP);
+        *tp = t;
 
         // Add the tracks to the bag of tracks to_follow
         // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
@@ -478,15 +478,15 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     const unsigned int weaktrack_no = blockDim.x * i + threadIdx.x;
     if (weaktrack_no < weaktracks_total){
       // Load the tracks from the tracklets
-      t = tracklets[weak_tracks[weaktrack_no]];
+      const Track* const tp = tracklets + weak_tracks[weaktrack_no];
 
       // Store them in the tracks bag iff they
       // are made out of three unused hits
-      if (!hit_used[t.hits[0]] &&
-          !hit_used[t.hits[1]] &&
-          !hit_used[t.hits[2]]){
+      if (!hit_used[tp->hits[0]] &&
+          !hit_used[tp->hits[1]] &&
+          !hit_used[tp->hits[2]]){
         const unsigned int trackno = atomicAdd(tracks_insertPointer, 1);
-        tracks[trackno] = t;
+        tracks[trackno] = *tp;
       }
     }
   }
