@@ -65,6 +65,7 @@ cudaError_t invokeParallelSearch(
   int*   dev_weak_tracks;
   int*   dev_event_offsets;
   int*   dev_hit_offsets;
+  float* dev_best_fits;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int device_number = 0;
@@ -74,7 +75,7 @@ cudaError_t invokeParallelSearch(
 
   // Some startup settings
   dim3 numBlocks(eventsToProcess);
-  dim3 numThreads(64);
+  dim3 numThreads(64, 4);
   cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
 
   // Allocate memory
@@ -107,6 +108,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
+  cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * numThreads.y * sizeof(float)));
 
   // Copy stuff from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_event_offsets, &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
@@ -135,7 +137,7 @@ cudaError_t invokeParallelSearch(
   
   // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
   searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
-    dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
+    dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits);
 
   cudaEventRecord( stop_searchByTriplet, 0 );
   cudaEventSynchronize( stop_searchByTriplet );
