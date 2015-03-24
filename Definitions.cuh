@@ -32,6 +32,8 @@
 
 #define MAX_SCATTER 0.000016f
 
+#define SENSOR_DATA_HITNUMS 3
+
 struct Sensor {
 	unsigned int hitStart;
 	unsigned int hitNums;

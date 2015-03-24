@@ -154,6 +154,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_y [64];
   __shared__ float sh_hit_z [64];
   __shared__ unsigned int sh_hit_process [100]; // TODO: Fix this
+  __shared__ int sensor_data [6];
 
   // Deal with odd or even separately
   int first_sensor = 51;
@@ -163,15 +164,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   while (first_sensor >= 4) {
     // Iterate in sensors
-    const int second_sensor = first_sensor - 2;
-    const int third_sensor = first_sensor - 4;
+    // Load in shared
+    if (threadIdx.x < 6 && threadIdx.y == 0) {
+      const int sensor_number = first_sensor - (threadIdx.x % 3) * 2;
+      const int* const sensor_pointer = threadIdx.x < 3 ? sensor_hitStarts : sensor_hitNums;
 
-    s0.hitStart = sensor_hitStarts[first_sensor];
-    s0.hitNums = sensor_hitNums[first_sensor];
-    s1.hitStart = sensor_hitStarts[second_sensor];
-    s1.hitNums = sensor_hitNums[second_sensor];
-    s2.hitStart = sensor_hitStarts[third_sensor];
-    s2.hitNums = sensor_hitNums[third_sensor];
+      sensor_data[threadIdx.x] = sensor_pointer[sensor_number];
+    }
 
     __syncthreads();
 
@@ -185,7 +184,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // These variables need to go here, shared memory and scope requirements
       float tx, ty, h1_z;
       unsigned int trackno, fulltrackno, skipped_modules, best_hit_h2;
-      bool track_flag;
       Track t;
       Hit h0;
 
@@ -193,7 +191,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
       if (ttf_condition) {
         fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
-        track_flag = (fulltrackno & 0x80000000) == 0x80000000;
+        const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
         skipped_modules = (fulltrackno & 0x70000000) >> 28;
         trackno = fulltrackno & 0x0FFFFFFF;
 
@@ -229,12 +227,12 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // Tiled memory access on h2
       // Only load for threadIdx.y == 0
       float best_fit = MAX_FLOAT;
-      for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k){
+      for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k){
         
         __syncthreads();
         const int sh_hit_no = blockDim.x * k + threadIdx.x;
-        if (sh_hit_no < s2.hitNums && threadIdx.y==0){
-          const int h2_index = s2.hitStart + sh_hit_no;
+        if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0){
+          const int h2_index = sensor_data[2] + sh_hit_no;
 
           // Coalesced memory accesses
     		  sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
@@ -244,10 +242,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         __syncthreads();
 
         if (ttf_condition){
-          const int last_hit_h2 = min(blockDim.x * (k + 1), s2.hitNums);
+          const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
           for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
             
-            const int h2_index = s2.hitStart + kk;
+            const int h2_index = sensor_data[2] + kk;
             const int sh_h2_index = kk % blockDim.x;
             const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
 
@@ -302,7 +300,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         }
         // If there are only three hits in this track,
         // mark it as "doubtful"
-        else if (track_flag) {
+        else if (t.hitsNum == 3) {
           const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
           weak_tracks[weakP] = trackno;
         }
@@ -321,10 +319,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     
     // Pre-seeding 
     // Get the hits we are going to iterate onto in sh_hit_process
-    for (int i=0; i<((int) ceilf( ((float) s0.hitNums) / blockDim_product)); ++i) {
+    for (int i=0; i<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS]) / blockDim_product)); ++i) {
       const int element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
-      if (element < s0.hitNums) {
-        const int h0_index = s0.hitStart + element;
+      if (element < sensor_data[SENSOR_DATA_HITNUMS]) {
+        const int h0_index = sensor_data[0] + element;
         const bool is_h0_used = hit_used[h0_index];
 
         if (!is_h0_used) {
@@ -353,14 +351,14 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         h0.z = hit_Zs[h0_index];
       }
 
-      // Iterate in the s1.hitNums with blockDim.y threads
-      for (int j=0; j<((int) ceilf(((float) s1.hitNums) / blockDim.y)); ++j) {
+      // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
+      for (int j=0; j<((int) ceilf(((float) sensor_data[SENSOR_DATA_HITNUMS + 1]) / blockDim.y)); ++j) {
         float dxmax, dymax;
 
         const int h1_element = blockDim.y * j + threadIdx.y;
-        const int h1_index = s1.hitStart + h1_element;
+        const int h1_index = sensor_data[1] + h1_element;
         bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
-        if (h1_element < s1.hitNums){
+        if (h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1]){
 
           is_h1_used = hit_used[h1_index];
           if (sh_hit_element < nhits_to_process && !is_h1_used){
@@ -377,12 +375,12 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // Iterate in the third list of hits
         // Tiled memory access on h2
-        for (int k=0; k<((int) ceilf( ((float) s2.hitNums) / blockDim.x)); ++k){
+        for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k){
           
           __syncthreads();
           const int sh_hit_no = blockDim.x * k + threadIdx.x;
-          if (sh_hit_no < s2.hitNums && threadIdx.y==0){
-            const int h2_index = s2.hitStart + sh_hit_no;
+          if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0){
+            const int h2_index = sensor_data[2] + sh_hit_no;
 
             // Coalesced memory accesses
             sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
@@ -391,12 +389,12 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           }
           __syncthreads();
 
-          if (sh_hit_element < nhits_to_process && h1_element < s1.hitNums && !is_h1_used){
+          if (sh_hit_element < nhits_to_process && h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1] && !is_h1_used){
 
-            const int last_hit_h2 = min(blockDim.x * (k + 1), s2.hitNums);
+            const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
             for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
               
-              const int h2_index = s2.hitStart + kk;
+              const int h2_index = sensor_data[2] + kk;
               const int sh_h2_index = kk % blockDim.x;
               h2.x = sh_hit_x[sh_h2_index];
               h2.y = sh_hit_y[sh_h2_index];
