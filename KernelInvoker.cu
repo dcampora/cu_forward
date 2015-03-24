@@ -120,35 +120,47 @@ cudaError_t invokeParallelSearch(
     acc_size += input[startingEvent + i]->size();
   }
 
-  // Initialize what we need
-  cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-  cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
 
-  // searchByTriplet
+  // Adding timing
+  // Timing calculation
+  const auto niterations = 10;
+  std::vector<float> time_values;
+  std::map<std::string, float> mresults;
+
   DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event"
-    << (eventsToProcess>1 ? "s" : "") << "..." << std::endl;
-  cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
-  float t0;
+    << (eventsToProcess>1 ? "s" : "") << " (" << niterations << " iterations)..." << std::endl;
 
-  cudaEventCreate(&start_searchByTriplet);
-  cudaEventCreate(&stop_searchByTriplet);
+  for (auto i=0; i<niterations; ++i){
+    // Initialize what we need
+    cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
+    cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
 
-  cudaEventRecord(start_searchByTriplet, 0 );
-  
-  // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
-  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
-    dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits);
+    // searchByTriplet
+    cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
+    float t0;
 
-  cudaEventRecord( stop_searchByTriplet, 0 );
-  cudaEventSynchronize( stop_searchByTriplet );
-  cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
+    cudaEventCreate(&start_searchByTriplet);
+    cudaEventCreate(&stop_searchByTriplet);
 
-  cudaEventDestroy( start_searchByTriplet );
-  cudaEventDestroy( stop_searchByTriplet );
+    cudaEventRecord(start_searchByTriplet, 0 );
+    
+    // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
+    searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
+      dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits);
 
-  cudaCheck( cudaPeekAtLastError() );
+    cudaEventRecord( stop_searchByTriplet, 0 );
+    cudaEventSynchronize( stop_searchByTriplet );
+    cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
 
-  DEBUG << "Done!" << std::endl;
+    cudaEventDestroy( start_searchByTriplet );
+    cudaEventDestroy( stop_searchByTriplet );
+
+    cudaCheck( cudaPeekAtLastError() );
+
+    time_values.push_back(t0);
+
+    // DEBUG << "Done!" << std::endl;
+  }
 
   // Get results
   DEBUG << "Number of tracks found per event:" << std::endl << " ";
@@ -172,8 +184,12 @@ cudaError_t invokeParallelSearch(
   //   }
   // }
   // DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
-  
-  DEBUG << "It took " << t0 << " milliseconds." << std::endl;
+
+  // DEBUG << "It took " << t0 << " milliseconds." << std::endl;
+
+  mresults = calcResults(time_values);
+  DEBUG << " Time average: " << mresults["mean"] << " milliseconds." << std::endl;
+  DEBUG << " Std deviation " << mresults["deviation"] << "." << std::endl;
 
   free(atomics);
 

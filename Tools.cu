@@ -68,3 +68,38 @@ void mergeSolutions(const std::vector<std::vector<char> >& solutions, std::vecto
         outputPointer += solutions[i].size();
     }
 }
+
+std::map<std::string, float> calcResults(std::vector<float> times){
+    // sqrt ( E( (X - m)2) )
+    std::map<std::string, float> results;
+    float deviation = 0.0, variance = 0.0, mean = 0.0, min = float_max(), max = 0.0;
+
+    int n = 0;
+    float seconds;
+    for(std::vector<float>::iterator it = times.begin(); it != times.end(); it++){
+        n++;
+        seconds = (*it);
+        mean = (mean * (n - 1) + seconds) / n;
+        variance += seconds * seconds;
+
+        if (seconds < min) min = seconds;
+        if (seconds > max) max = seconds;
+    }
+
+    variance = (variance - times.size() * mean * mean) / times.size();
+    deviation = sqrt(variance);
+
+    results["variance"] = variance;
+    results["deviation"] = deviation;
+    results["mean"] = mean;
+    results["min"] = min;
+    results["max"] = max;
+
+    return results;
+}
+
+float float_max() {
+    const int value = 0x7f800000;
+    const float* const fvalue = (const float*) &value;
+    return *(float*)& fvalue[0];
+}
