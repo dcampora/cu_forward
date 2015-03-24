@@ -189,7 +189,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       float tx, ty, h1_z;
       int trackno, fulltrackno, skipped_modules, best_hit_h2;
       bool track_flag;
-      Track* tp;
+      Track t;
 
       // The logic is broken in two parts for shared memory loading
       const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
@@ -199,13 +199,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         skipped_modules = (fulltrackno & 0x70000000) >> 28;
         trackno = fulltrackno & 0x0FFFFFFF;
 
-        Track* track_pointer = track_flag ? tracklets : tracks;
-        tp = track_pointer + trackno;
+        const Track* const track_pointer = track_flag ? tracklets : tracks;
+        t = track_pointer[trackno];
 
         // Load last two hits in h0, h1
-        const int t_hitsNum = tp->hitsNum;
-        const int h0_num = tp->hits[t_hitsNum - 2];
-        const int h1_num = tp->hits[t_hitsNum - 1];
+        const int t_hitsNum = t.hitsNum;
+        const int h0_num = t.hits[t_hitsNum - 2];
+        const int h1_num = t.hits[t_hitsNum - 1];
 
         h0.x = hit_Xs[h0_num];
         h0.y = hit_Ys[h0_num];
@@ -265,35 +265,27 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // Fill in t, ONLY in case the best fit is acceptable
       if (ttf_condition) {
         if (best_fit != MAX_FLOAT) {
-          // Reload h2
-          // h2.x = hit_Xs[best_hit_h2];
-          // h2.y = hit_Ys[best_hit_h2];
-          // h2.z = hit_Zs[best_hit_h2];
-
           // Mark h2 as used
           hit_used[best_hit_h2] = true;
 
           // Update the tracks to follow, we'll have to follow up
           // this track on the next iteration :)
-          tp->hits[tp->hitsNum++] = best_hit_h2;
+          t.hits[t.hitsNum++] = best_hit_h2;
 
           // Update the track in the bag
-          if (tp->hitsNum <= 4){
+          if (t.hitsNum <= 4){
             // If it is a track made out of less than or equal than 4 hits,
             // we have to allocate it in the tracks pointer
             trackno = atomicAdd(tracks_insertPointer, 1);
             
             // Also mark the first three as used
-            hit_used[tp->hits[0]] = true;
-            hit_used[tp->hits[1]] = true;
-            hit_used[tp->hits[2]] = true;
-
-            // Copy the track into tracks
-            tracks[trackno] = *tp;
+            hit_used[t.hits[0]] = true;
+            hit_used[t.hits[1]] = true;
+            hit_used[t.hits[2]] = true;
           }
 
-          // In any case, update the track in tracks
-          // tracks[trackno] = t;
+          // Copy the track into tracks
+          tracks[trackno] = t;
 
           // Add the tracks to the bag of tracks to_follow
           const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
@@ -419,21 +411,12 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const bool accept_track = best_fit != MAX_FLOAT;
 
       if (accept_track) {
-        // Reload h1 and h2
-        // h1.x = hit_Xs[best_hit_h1];
-        // h1.y = hit_Ys[best_hit_h1];
-        // h1.z = hit_Zs[best_hit_h1];
-
-        // h2.x = hit_Xs[best_hit_h2];
-        // h2.y = hit_Ys[best_hit_h2];
-        // h2.z = hit_Zs[best_hit_h2];
-
         // Fill in track information
         const Tracklet t {3, sh_hit_process[element], best_hit_h1, best_hit_h2};
 
         // Add the track to the bag of tracks
         const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
-        const Tracklet* tp = (Tracklet*) (tracklets + trackP);
+        Tracklet* const tp = (Tracklet*) (tracklets + trackP);
         *tp = t;
 
         // Add the tracks to the bag of tracks to_follow
@@ -478,15 +461,15 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     const unsigned int weaktrack_no = blockDim.x * i + threadIdx.x;
     if (weaktrack_no < weaktracks_total){
       // Load the tracks from the tracklets
-      const Track* const tp = tracklets + weak_tracks[weaktrack_no];
+      const Track t = tracklets[weak_tracks[weaktrack_no]];
 
       // Store them in the tracks bag iff they
       // are made out of three unused hits
-      if (!hit_used[tp->hits[0]] &&
-          !hit_used[tp->hits[1]] &&
-          !hit_used[tp->hits[2]]){
+      if (!hit_used[t.hits[0]] &&
+          !hit_used[t.hits[1]] &&
+          !hit_used[t.hits[2]]) {
         const unsigned int trackno = atomicAdd(tracks_insertPointer, 1);
-        tracks[trackno] = *tp;
+        tracks[trackno] = t;
       }
     }
   }
