@@ -78,7 +78,7 @@ else
   GCC ?= g++
 endif
 endif
-NVCC := $(CUDA_PATH)/bin/nvcc -ccbin $(GCC)
+NVCC := $(CUDA_PATH)/bin/nvcc -std=c++11 -ccbin $(GCC)
 
 # internal flags
 NVCCFLAGS   := -m${OS_SIZE} ${ARCH_FLAGS}

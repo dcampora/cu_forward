@@ -33,8 +33,8 @@
 #define MAX_SCATTER 0.000016f
 
 struct Sensor {
-	int hitStart;
-	int hitNums;
+	unsigned int hitStart;
+	unsigned int hitNums;
 
     __device__ Sensor(){}
     __device__ Sensor(const int _hitStart, const int _hitNums) : 
@@ -53,16 +53,16 @@ struct Hit {
 
 struct Track { // 4 + 24 * 4 = 100 B
 	// float x0, tx, y0, ty; // deprecated
-	int hitsNum;
-	int hits[MAX_TRACK_SIZE];
+	unsigned int hitsNum;
+	unsigned int hits[MAX_TRACK_SIZE];
 };
 
 struct Tracklet {
-    int hitsNum;
-    int h0, h1, h2;
+    unsigned int hitsNum;
+    unsigned int h0, h1, h2;
 
     __device__ Tracklet(){}
-    __device__ Tracklet(const int _hitsNum, int _h0, int _h1, int _h2) : 
+    __device__ Tracklet(const unsigned int _hitsNum, unsigned int _h0, unsigned int _h1, unsigned int _h2) : 
         hitsNum(_hitsNum), h0(_h0), h1(_h1), h2(_h2) {}
 };
 
