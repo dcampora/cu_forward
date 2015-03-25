@@ -312,6 +312,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       }
     }
 
+    __syncthreads();
+
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation
 
@@ -321,8 +323,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
     unsigned int sh_hit_prevPointer = 0;
     while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
-
-      __syncthreads();
 
       if (threadIdx.x == 0 && threadIdx.y == 0){
         sh_hit_insertPointer[0] = 0;
@@ -365,6 +365,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const unsigned int nhits_to_process = sh_hit_insertPointer[0];
       sh_hit_prevPointer = sh_hit_lastPointer[0];
 
+      __syncthreads();
+      
       // Track creation starts
       for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
 
