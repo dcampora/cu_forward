@@ -315,8 +315,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       }
     }
 
-    __syncthreads();
-
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation
 
@@ -325,7 +323,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     // in groups of max NUMTHREADS_X
 
     unsigned int sh_hit_prevPointer = 0;
-    unsigned int shift_lastPointer = NUMTHREADS_X;
+    // unsigned int shift_lastPointer = NUMTHREADS_X;
     while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
 
       __syncthreads();
@@ -338,16 +336,16 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         int h0_index = sensor_data[0] + sh_element;
         bool is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
 
-        // Find an unused element or exhaust the list,
-        // in case the hit is used
-        while (inside_bounds && is_h0_used) {
-          // Since it is used, find another element while we are
-          // inside bounds
-          sh_element = sh_hit_prevPointer + shift_lastPointer + atomicAdd(sh_hit_lastPointer, 1);
-          inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-          h0_index = sensor_data[0] + sh_element;
-          is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
-        }
+        // // Find an unused element or exhaust the list,
+        // // in case the hit is used
+        // while (inside_bounds && is_h0_used) {
+        //   // Since it is used, find another element while we are
+        //   // inside bounds
+        //   sh_element = sh_hit_prevPointer + shift_lastPointer + atomicAdd(sh_hit_lastPointer, 1);
+        //   inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
+        //   h0_index = sensor_data[0] + sh_element;
+        //   is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
+        // }
 
         // Fill in sh_hit_process with either the found hit or -1
         sh_hit_process[threadIdx.x] = (inside_bounds && !is_h0_used) ? h0_index : -1;
@@ -356,8 +354,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       __syncthreads();
 
       // Update the iteration condition
-      sh_hit_prevPointer = sh_hit_lastPointer[0] + shift_lastPointer;
-      shift_lastPointer += NUMTHREADS_X;
+      // sh_hit_prevPointer = sh_hit_lastPointer[0] + shift_lastPointer;
+      // shift_lastPointer += NUMTHREADS_X;
+      sh_hit_prevPointer += NUMTHREADS_X;
 
       // Track creation starts
       const bool process_h0 = sh_hit_process[threadIdx.x] != -1;
@@ -456,7 +455,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // Only go through the tracks on the selected thread
       if (accept_track) {
         // Fill in track information
-        const Tracklet t {3, sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};
+        const Tracklet t {3, (unsigned int) sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};
 
         // Add the track to the bag of tracks
         const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);

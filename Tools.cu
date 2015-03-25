@@ -77,16 +77,16 @@ std::map<std::string, float> calcResults(std::vector<float> times){
     int n = 0;
     float seconds;
     for(std::vector<float>::iterator it = times.begin(); it != times.end(); it++){
-        n++;
         seconds = (*it);
-        mean = (mean * (n - 1) + seconds) / n;
+        mean += seconds;
         variance += seconds * seconds;
 
         if (seconds < min) min = seconds;
         if (seconds > max) max = seconds;
     }
 
-    variance = (variance - times.size() * mean * mean) / times.size();
+    mean /= times.size();
+    variance = (variance / times.size()) - (mean * mean);
     deviation = std::sqrt(variance);
 
     results["variance"] = variance;
