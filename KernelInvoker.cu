@@ -134,6 +134,8 @@ cudaError_t invokeParallelSearch(
 
   for (auto i=0; i<nexperiments; ++i) {
 
+    DEBUG << i << ": " << std::flush;
+
     if (nexperiments!=1) numThreads.y = i+1;
 
     for (auto j=0; j<niterations; ++j) {
@@ -164,7 +166,11 @@ cudaError_t invokeParallelSearch(
       cudaCheck( cudaPeekAtLastError() );
 
       time_values[i].push_back(t0);
+
+      DEBUG << "." << std::flush;
     }
+
+    DEBUG << std::endl;
   }
 
   // Get results
