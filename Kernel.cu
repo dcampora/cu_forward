@@ -138,9 +138,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   const int ip_shift = events_under_process + event_number * NUM_ATOMICS;
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
-  unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* sh_hit_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
-  unsigned int* sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
+  unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
+  unsigned int* const sh_hit_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
+  unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
 
   /* The fun begins */
   Sensor s0, s1, s2;
@@ -308,8 +308,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // so we won't be track following it anymore.
       }
     }
-    
-    __syncthreads();
 
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation
@@ -323,6 +321,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
     while (sh_hit_iterate_condition) {
 
+      __syncthreads();
+      
       if (threadIdx.x == 0 && threadIdx.y == 0){
         sh_hit_insertPointer[0] = 0;
         sh_hit_lastPointer[0] = sh_hit_prevPointer + NUMTHREADS_X;
@@ -364,8 +364,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const unsigned int nhits_to_process = sh_hit_insertPointer[0];
       sh_hit_prevPointer = sh_hit_lastPointer[0];
       sh_hit_iterate_condition = sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS];
-
-      __syncthreads();
 
       // Track creation starts
       for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {

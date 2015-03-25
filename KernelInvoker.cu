@@ -80,7 +80,8 @@ cudaError_t invokeParallelSearch(
 
   // Allocate memory
   // Allocate CPU buffers
-  int* atomics = (int*) malloc(eventsToProcess * (NUM_ATOMICS + 1) * sizeof(int));
+  const int atomic_space = NUM_ATOMICS + 1;
+  int* atomics = (int*) malloc(eventsToProcess * atomic_space * sizeof(int));
 
   // Prepare event offset and hit offset
   std::vector<int> event_offsets;
@@ -102,7 +103,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * NUM_ATOMICS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
@@ -139,7 +140,7 @@ cudaError_t invokeParallelSearch(
     for (auto j=0; j<niterations; ++j) {
       // Initialize what we need
       cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-      cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * NUM_ATOMICS * sizeof(int)));
+      cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * atomic_space * sizeof(int)));
 
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
@@ -169,7 +170,7 @@ cudaError_t invokeParallelSearch(
 
   // Get results
   DEBUG << "Number of tracks found per event:" << std::endl << " ";
-  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * NUM_ATOMICS * sizeof(int), cudaMemcpyDeviceToHost));
+  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int), cudaMemcpyDeviceToHost));
   for (int i=0; i<eventsToProcess; ++i){
     const int numberOfTracks = atomics[i];
     DEBUG << numberOfTracks << ", ";
