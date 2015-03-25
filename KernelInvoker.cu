@@ -80,8 +80,7 @@ cudaError_t invokeParallelSearch(
 
   // Allocate memory
   // Allocate CPU buffers
-  const int num_atomics = 5;
-  int* atomics = (int*) malloc(eventsToProcess * num_atomics * sizeof(int));
+  int* atomics = (int*) malloc(eventsToProcess * (NUM_ATOMICS + 1) * sizeof(int));
 
   // Prepare event offset and hit offset
   std::vector<int> event_offsets;
@@ -103,7 +102,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * NUM_ATOMICS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
@@ -134,12 +133,13 @@ cudaError_t invokeParallelSearch(
 
   for (auto i=0; i<nexperiments; ++i) {
 
-    numThreads.y = i+1;
+    if (nexperiments==1) numThreads.y = 2;
+    else                 numThreads.y = i+1;
 
     for (auto j=0; j<niterations; ++j) {
       // Initialize what we need
       cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-      cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
+      cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * NUM_ATOMICS * sizeof(int)));
 
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
@@ -164,15 +164,12 @@ cudaError_t invokeParallelSearch(
       cudaCheck( cudaPeekAtLastError() );
 
       time_values[i].push_back(t0);
-
-      // DEBUG << "Done!" << std::endl;
     }
-
   }
 
   // Get results
   DEBUG << "Number of tracks found per event:" << std::endl << " ";
-  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int), cudaMemcpyDeviceToHost));
+  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * NUM_ATOMICS * sizeof(int), cudaMemcpyDeviceToHost));
   for (int i=0; i<eventsToProcess; ++i){
     const int numberOfTracks = atomics[i];
     DEBUG << numberOfTracks << ", ";

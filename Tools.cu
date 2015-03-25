@@ -72,7 +72,7 @@ void mergeSolutions(const std::vector<std::vector<char> >& solutions, std::vecto
 std::map<std::string, float> calcResults(std::vector<float> times){
     // sqrt ( E( (X - m)2) )
     std::map<std::string, float> results;
-    float deviation = 0.0, variance = 0.0, mean = 0.0, min = float_max(), max = 0.0;
+    float deviation = 0.0f, variance = 0.0f, mean = 0.0f, min = float_max(), max = 0.0f;
 
     int n = 0;
     float seconds;
@@ -87,7 +87,7 @@ std::map<std::string, float> calcResults(std::vector<float> times){
     }
 
     variance = (variance - times.size() * mean * mean) / times.size();
-    deviation = sqrt(variance);
+    deviation = std::sqrt(variance);
 
     results["variance"] = variance;
     results["deviation"] = deviation;
