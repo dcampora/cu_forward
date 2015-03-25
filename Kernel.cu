@@ -150,9 +150,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   // float* sh_hit_y = sh_hit_x + blockDim.x;
   // float* sh_hit_z = sh_hit_y + blockDim.x;
   
-  __shared__ float sh_hit_x [64];
-  __shared__ float sh_hit_y [64];
-  __shared__ float sh_hit_z [64];
+  __shared__ float sh_hit_x [NUMTHREADS_X];
+  __shared__ float sh_hit_y [NUMTHREADS_X];
+  __shared__ float sh_hit_z [NUMTHREADS_X];
   __shared__ unsigned int sh_hit_process [100]; // TODO: Fix this
   __shared__ int sensor_data [6];
 

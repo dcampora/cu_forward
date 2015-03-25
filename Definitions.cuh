@@ -10,11 +10,11 @@
 
 #include <vector>
 
+#define NUMTHREADS_X 64
+
 #define MAX_TRACKS 8000
 #define MAX_TRACK_SIZE 24
 
-#define BUNCH_POST_TRACKS 32
-#define HITS_SHARED 32
 #define REQUIRED_UNIQUES 0.6f
 #define MIN_HITS_TRACK 3
 #define MAX_FLOAT 100000000.0
@@ -31,7 +31,6 @@
 #define PARAM_TOLERANCE PARAM_TOLERANCE_EXTRA
 
 #define MAX_SCATTER 0.000016f
-
 #define SENSOR_DATA_HITNUMS 3
 
 struct Sensor {

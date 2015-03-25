@@ -75,7 +75,7 @@ cudaError_t invokeParallelSearch(
 
   // Some startup settings
   dim3 numBlocks(eventsToProcess);
-  dim3 numThreads(64, 4);
+  dim3 numThreads(NUMTHREADS_X, 2);
   cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
 
   // Allocate memory
@@ -120,46 +120,54 @@ cudaError_t invokeParallelSearch(
     acc_size += input[startingEvent + i]->size();
   }
 
-
   // Adding timing
   // Timing calculation
-  const auto niterations = 10;
-  std::vector<float> time_values;
-  std::map<std::string, float> mresults;
+  unsigned int niterations = 10;
+  unsigned int nexperiments = 8;
 
-  DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event"
-    << (eventsToProcess>1 ? "s" : "") << " (" << niterations << " iterations)..." << std::endl;
+  std::vector<std::vector<float>> time_values {nexperiments};
+  std::vector<std::map<std::string, float>> mresults {nexperiments};
+  // std::vector<std::string> exp_names {nexperiments};
 
-  for (auto i=0; i<niterations; ++i){
-    // Initialize what we need
-    cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-    cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
+  DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event" << (eventsToProcess>1 ? "s" : "") << std::endl 
+	  << " " << nexperiments << " experiments, " << niterations << " iterations" << std::endl;
 
-    // searchByTriplet
-    cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
-    float t0;
+  for (auto i=0; i<nexperiments; ++i) {
 
-    cudaEventCreate(&start_searchByTriplet);
-    cudaEventCreate(&stop_searchByTriplet);
+    numThreads.y = i+1;
 
-    cudaEventRecord(start_searchByTriplet, 0 );
-    
-    // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
-    searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
-      dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits);
+    for (auto j=0; j<niterations; ++j) {
+      // Initialize what we need
+      cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
+      cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
 
-    cudaEventRecord( stop_searchByTriplet, 0 );
-    cudaEventSynchronize( stop_searchByTriplet );
-    cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
+      // searchByTriplet
+      cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
+      float t0;
 
-    cudaEventDestroy( start_searchByTriplet );
-    cudaEventDestroy( stop_searchByTriplet );
+      cudaEventCreate(&start_searchByTriplet);
+      cudaEventCreate(&stop_searchByTriplet);
 
-    cudaCheck( cudaPeekAtLastError() );
+      cudaEventRecord(start_searchByTriplet, 0 );
+      
+      // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
+      searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
+        dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits);
 
-    time_values.push_back(t0);
+      cudaEventRecord( stop_searchByTriplet, 0 );
+      cudaEventSynchronize( stop_searchByTriplet );
+      cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
 
-    // DEBUG << "Done!" << std::endl;
+      cudaEventDestroy( start_searchByTriplet );
+      cudaEventDestroy( stop_searchByTriplet );
+
+      cudaCheck( cudaPeekAtLastError() );
+
+      time_values[i].push_back(t0);
+
+      // DEBUG << "Done!" << std::endl;
+    }
+
   }
 
   // Get results
@@ -187,9 +195,12 @@ cudaError_t invokeParallelSearch(
 
   // DEBUG << "It took " << t0 << " milliseconds." << std::endl;
 
-  mresults = calcResults(time_values);
-  DEBUG << " Time average: " << mresults["mean"] << " milliseconds." << std::endl;
-  DEBUG << " Std deviation " << mresults["deviation"] << "." << std::endl;
+  DEBUG << std::endl << "Time averages:" << std::endl;
+  for (auto i=0; i<nexperiments; ++i){
+    mresults[i] = calcResults(time_values[i]);
+    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << i+1 <<  "): " << mresults[i]["mean"]
+      << " ms (std dev " << mresults[i]["deviation"] << ")." << std::endl;
+  }
 
   free(atomics);
 
