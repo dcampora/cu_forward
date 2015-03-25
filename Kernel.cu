@@ -139,8 +139,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* const sh_hit_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
-  unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
+  unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
   /* The fun begins */
   Sensor s0, s1, s2;
@@ -153,7 +152,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_x [NUMTHREADS_X];
   __shared__ float sh_hit_y [NUMTHREADS_X];
   __shared__ float sh_hit_z [NUMTHREADS_X];
-  __shared__ unsigned int sh_hit_process [NUMTHREADS_X];
+  __shared__ int sh_hit_process [NUMTHREADS_X];
   __shared__ int sensor_data [6];
 
   // Deal with odd or even separately
@@ -173,6 +172,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const int* const sensor_pointer = threadIdx.x < 3 ? sensor_hitStarts : sensor_hitNums;
 
       sensor_data[threadIdx.x] = sensor_pointer[sensor_number];
+    }
+
+    if (threadIdx.x == 6 && threadIdx.y == 0) {
+      sh_hit_lastPointer[0] = 0;
     }
 
     __syncthreads();
@@ -322,12 +325,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     // in groups of max NUMTHREADS_X
 
     unsigned int sh_hit_prevPointer = 0;
+    unsigned int shift_lastPointer = NUMTHREADS_X;
     while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
-
-      if (threadIdx.x == 0 && threadIdx.y == 0){
-        sh_hit_insertPointer[0] = 0;
-        sh_hit_lastPointer[0] = sh_hit_prevPointer + NUMTHREADS_X;
-      }
 
       __syncthreads();
 
@@ -336,7 +335,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // shared elements, or exhaust the list
         int sh_element = sh_hit_prevPointer + threadIdx.x;
         bool inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-
         int h0_index = sensor_data[0] + sh_element;
         bool is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
 
@@ -345,109 +343,103 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         while (inside_bounds && is_h0_used) {
           // Since it is used, find another element while we are
           // inside bounds
-          sh_element = atomicAdd(sh_hit_lastPointer, 1);
+          sh_element = sh_hit_prevPointer + shift_lastPointer + atomicAdd(sh_hit_lastPointer, 1);
           inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-
           h0_index = sensor_data[0] + sh_element;
           is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
         }
 
-        // If it is not used, add it
-        if (inside_bounds && !is_h0_used) {
-          const unsigned int htp_pointer = atomicAdd(sh_hit_insertPointer, 1);
-          sh_hit_process[htp_pointer] = h0_index;
-        }
+        // Fill in sh_hit_process with either the found hit or -1
+        sh_hit_process[threadIdx.x] = (inside_bounds && !is_h0_used) ? h0_index : -1;
       }
 
       __syncthreads();
 
       // Update the iteration condition
-      const unsigned int nhits_to_process = sh_hit_insertPointer[0];
-      sh_hit_prevPointer = sh_hit_lastPointer[0];
+      sh_hit_prevPointer = sh_hit_lastPointer[0] + shift_lastPointer;
+      shift_lastPointer += NUMTHREADS_X;
+
+      // Track creation starts
+      const bool process_h0 = sh_hit_process[threadIdx.x] != -1;
+      Hit h0, h1, h2;
+      unsigned int best_hit_h1, best_hit_h2;
+      float best_fit = MAX_FLOAT;
+
+      // We will repeat this for performance reasons
+      if (process_h0) {
+        const int h0_index = sh_hit_process[threadIdx.x];
+        h0.x = hit_Xs[h0_index];
+        h0.y = hit_Ys[h0_index];
+        h0.z = hit_Zs[h0_index];
+      }
+
+      // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
+      for (int j=0; j<((int) ceilf(((float) sensor_data[SENSOR_DATA_HITNUMS + 1]) / blockDim.y)); ++j) {
+        float dxmax, dymax;
+
+        const int h1_element = blockDim.y * j + threadIdx.y;
+        const int h1_index = sensor_data[1] + h1_element;
+        bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
+        if (h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1]){
+
+          is_h1_used = hit_used[h1_index];
+          if (process_h0 && !is_h1_used){
+            h1.x = hit_Xs[h1_index];
+            h1.y = hit_Ys[h1_index];
+            h1.z = hit_Zs[h1_index];
+
+            const float h_dist = fabs((float) ( h1.z - h0.z ));
+            dxmax = PARAM_MAXXSLOPE * h_dist;
+            dymax = PARAM_MAXYSLOPE * h_dist;
+          }
+
+        }
+
+        // Iterate in the third list of hits
+        // Tiled memory access on h2
+        for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k){
+          
+          __syncthreads();
+          const int sh_hit_no = blockDim.x * k + threadIdx.x;
+          if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0){
+            const int h2_index = sensor_data[2] + sh_hit_no;
+
+            // Coalesced memory accesses
+            sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
+      			sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
+      			sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
+          }
+          __syncthreads();
+
+          if (process_h0 && h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1] && !is_h1_used){
+
+            const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
+            for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
+              
+              const int h2_index = sensor_data[2] + kk;
+              const int sh_h2_index = kk % blockDim.x;
+              h2.x = sh_hit_x[sh_h2_index];
+              h2.y = sh_hit_y[sh_h2_index];
+              h2.z = sh_hit_z[sh_h2_index];
+
+              const float fit = fitHits(h0, h1, h2, dxmax, dymax);
+              const bool fit_is_better = fit < best_fit;
+
+              best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+              best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
+              best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+            }
+          }
+        }
+      }
+
+      // Compare / Mix the results from the blockDim.y threads
+      best_fits[threadIdx.x * blockDim.y + threadIdx.y] = best_fit;
 
       __syncthreads();
-      
-      // Track creation starts
-      for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
 
-        Hit h0, h1, h2;
-        unsigned int best_hit_h1, best_hit_h2;
-        const int sh_hit_element = blockDim.x * i + threadIdx.x;
-        float best_fit = MAX_FLOAT;
-
-        // We repeat this here for performance reasons
-        if (sh_hit_element < nhits_to_process){
-          const int h0_index = sh_hit_process[sh_hit_element];
-          h0.x = hit_Xs[h0_index];
-          h0.y = hit_Ys[h0_index];
-          h0.z = hit_Zs[h0_index];
-        }
-
-        // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
-        for (int j=0; j<((int) ceilf(((float) sensor_data[SENSOR_DATA_HITNUMS + 1]) / blockDim.y)); ++j) {
-          float dxmax, dymax;
-
-          const int h1_element = blockDim.y * j + threadIdx.y;
-          const int h1_index = sensor_data[1] + h1_element;
-          bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
-          if (h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1]){
-
-            is_h1_used = hit_used[h1_index];
-            if (sh_hit_element < nhits_to_process && !is_h1_used){
-              h1.x = hit_Xs[h1_index];
-              h1.y = hit_Ys[h1_index];
-              h1.z = hit_Zs[h1_index];
-
-              const float h_dist = fabs((float) ( h1.z - h0.z ));
-              dxmax = PARAM_MAXXSLOPE * h_dist;
-              dymax = PARAM_MAXYSLOPE * h_dist;
-            }
-
-          }
-
-          // Iterate in the third list of hits
-          // Tiled memory access on h2
-          for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k){
-            
-            __syncthreads();
-            const int sh_hit_no = blockDim.x * k + threadIdx.x;
-            if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0){
-              const int h2_index = sensor_data[2] + sh_hit_no;
-
-              // Coalesced memory accesses
-              sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
-        			sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
-        			sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
-            }
-            __syncthreads();
-
-            if (sh_hit_element < nhits_to_process && h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1] && !is_h1_used){
-
-              const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
-              for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
-                
-                const int h2_index = sensor_data[2] + kk;
-                const int sh_h2_index = kk % blockDim.x;
-                h2.x = sh_hit_x[sh_h2_index];
-                h2.y = sh_hit_y[sh_h2_index];
-                h2.z = sh_hit_z[sh_h2_index];
-
-                const float fit = fitHits(h0, h1, h2, dxmax, dymax);
-                const bool fit_is_better = fit < best_fit;
-
-                best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-                best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
-                best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
-              }
-            }
-          }
-        }
-
-        // Compare / Mix the results from the blockDim.y threads
-        best_fits[threadIdx.x * blockDim.y + threadIdx.y] = best_fit;
-
-        __syncthreads();
-
+      bool accept_track = false;
+      if (best_fit != MAX_FLOAT) {
         best_fit = MAX_FLOAT;
         int threadIdx_y_winner = -1;
         for (int i=0; i<blockDim.y; ++i){
@@ -457,25 +449,25 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
             threadIdx_y_winner = i;
           }
         }
-        const bool accept_track = threadIdx.y == threadIdx_y_winner;
+        accept_track = threadIdx.y == threadIdx_y_winner;
+      }
 
-        // We have a best fit! - haven't we?
-        // Only go through the tracks on the selected thread
-        if (accept_track) {
-          // Fill in track information
-          const Tracklet t {3, sh_hit_process[sh_hit_element], best_hit_h1, best_hit_h2};
+      // We have a best fit! - haven't we?
+      // Only go through the tracks on the selected thread
+      if (accept_track) {
+        // Fill in track information
+        const Tracklet t {3, sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};
 
-          // Add the track to the bag of tracks
-          const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
-          Tracklet* const tp = (Tracklet*) (tracklets + trackP);
-          *tp = t;
+        // Add the track to the bag of tracks
+        const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
+        Tracklet* const tp = (Tracklet*) (tracklets + trackP);
+        *tp = t;
 
-          // Add the tracks to the bag of tracks to_follow
-          // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
-          // and hence it is stored in tracklets
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
-          tracks_to_follow[ttfP] = 0x80000000 | trackP;
-        }
+        // Add the tracks to the bag of tracks to_follow
+        // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
+        // and hence it is stored in tracklets
+        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+        tracks_to_follow[ttfP] = 0x80000000 | trackP;
       }
     }
 
