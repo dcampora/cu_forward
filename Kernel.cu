@@ -308,6 +308,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // so we won't be track following it anymore.
       }
     }
+    
+    __syncthreads();
 
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation
@@ -328,28 +330,29 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
       __syncthreads();
 
-      // Each loads an element, if not used
-      const int sh_element = sh_hit_prevPointer + threadIdx.x;
-      bool inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-      if (inside_bounds && threadIdx.y == 0) {
+      if (threadIdx.y == 0) {
+        // All threads in this context will add a hit to the 
+        // shared elements, or exhaust the list
+        int sh_element = sh_hit_prevPointer + threadIdx.x;
+        bool inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
 
-        // Check their element
         int h0_index = sensor_data[0] + sh_element;
-        bool is_h0_used = hit_used[h0_index];
+        bool is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
 
-        // Find an unused element
-        while (is_h0_used && inside_bounds) {
+        // Find an unused element or exhaust the list,
+        // in case the hit is used
+        while (inside_bounds && is_h0_used) {
           // Since it is used, find another element while we are
           // inside bounds
-          const unsigned int sh_next = atomicAdd(sh_hit_lastPointer, 1);
-          h0_index = sensor_data[0] + sh_next;
+          sh_element = atomicAdd(sh_hit_lastPointer, 1);
+          inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
 
-          inside_bounds = sh_next < sensor_data[SENSOR_DATA_HITNUMS];
-          if (inside_bounds) is_h0_used = hit_used[h0_index];
+          h0_index = sensor_data[0] + sh_element;
+          is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
         }
 
         // If it is not used, add it
-        if (!is_h0_used && inside_bounds) {
+        if (inside_bounds && !is_h0_used) {
           const unsigned int htp_pointer = atomicAdd(sh_hit_insertPointer, 1);
           sh_hit_process[htp_pointer] = h0_index;
         }
