@@ -11,6 +11,7 @@
 #include <vector>
 
 #define NUMTHREADS_X 64
+#define MAX_NUMTHREADS_Y 8
 #define NUM_ATOMICS 5
 
 #define MAX_TRACKS 8000
