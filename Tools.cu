@@ -74,10 +74,8 @@ std::map<std::string, float> calcResults(std::vector<float> times){
     std::map<std::string, float> results;
     float deviation = 0.0f, variance = 0.0f, mean = 0.0f, min = float_max(), max = 0.0f;
 
-    int n = 0;
-    float seconds;
-    for(std::vector<float>::iterator it = times.begin(); it != times.end(); it++){
-        seconds = (*it);
+    for(auto it = times.begin(); it != times.end(); it++){
+        const float seconds = (*it);
         mean += seconds;
         variance += seconds * seconds;
 
