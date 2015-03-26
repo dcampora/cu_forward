@@ -139,7 +139,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
+  unsigned int* const number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
   /* The fun begins */
   Sensor s0, s1, s2;
@@ -152,7 +152,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_x [NUMTHREADS_X];
   __shared__ float sh_hit_y [NUMTHREADS_X];
   __shared__ float sh_hit_z [NUMTHREADS_X];
-  __shared__ int sh_hit_process [NUMTHREADS_X];
+  __shared__ int sh_hit_process [100];
   __shared__ int sensor_data [6];
 
   // Deal with odd or even separately
@@ -163,8 +163,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   while (first_sensor >= 4) {
 
-    __syncthreads();
-    
     // Iterate in sensors
     // Load in shared
     if (threadIdx.x < 6 && threadIdx.y == 0) {
@@ -172,10 +170,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const int* const sensor_pointer = threadIdx.x < 3 ? sensor_hitStarts : sensor_hitNums;
 
       sensor_data[threadIdx.x] = sensor_pointer[sensor_number];
-    }
-
-    if (threadIdx.x == 6 && threadIdx.y == 0) {
-      sh_hit_lastPointer[0] = 0;
     }
 
     __syncthreads();
@@ -322,50 +316,45 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     // Get the hits we are going to iterate onto in sh_hit_process,
     // in groups of max NUMTHREADS_X
 
-    unsigned int sh_hit_prevPointer = 0;
-    unsigned int shift_lastPointer = blockDim.x;
-    while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
+    if (threadIdx.x == 0)
+      number_hits_to_process[0] = 0;
 
-      __syncthreads();
+    __syncthreads();
 
-      if (threadIdx.y == 0) {
-        // All threads in this context will add a hit to the 
-        // shared elements, or exhaust the list
-        int sh_element = sh_hit_prevPointer + threadIdx.x;
-        bool inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-        int h0_index = sensor_data[0] + sh_element;
-        bool is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
+    // Iterate in all hits for current sensor
+    // 2a. Seeding - Track creation
+    
+    // Pre-seeding 
+    // Get the hits we are going to iterate onto in sh_hit_process
+    for (int i=0; i<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS]) / blockDim_product)); ++i) {
+      const int element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
+      if (element < sensor_data[SENSOR_DATA_HITNUMS]) {
+        const int h0_index = sensor_data[0] + element;
+        const bool is_h0_used = hit_used[h0_index];
 
-        // Find an unused element or exhaust the list,
-        // in case the hit is used
-        while (inside_bounds && is_h0_used) {
-          // Since it is used, find another element while we are inside bounds
-          // This is a simple gather for those elements
-          sh_element = sh_hit_prevPointer + shift_lastPointer + atomicAdd(sh_hit_lastPointer, 1);
-          inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-          h0_index = sensor_data[0] + sh_element;
-          is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
+        if (!is_h0_used) {
+          const unsigned int htp_pointer = atomicAdd(number_hits_to_process, 1);
+          sh_hit_process[htp_pointer] = h0_index;
         }
-
-        // Fill in sh_hit_process with either the found hit or -1
-        sh_hit_process[threadIdx.x] = (inside_bounds && !is_h0_used) ? h0_index : -1;
       }
+    }
 
-      __syncthreads();
+    __syncthreads();
 
-      // Update the iteration condition
-      sh_hit_prevPointer = sh_hit_lastPointer[0] + shift_lastPointer;
-      shift_lastPointer += blockDim.x;
+    const unsigned int nhits_to_process = number_hits_to_process[0];
+
+    for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
 
       // Track creation starts
-      const bool process_h0 = sh_hit_process[threadIdx.x] != -1;
+      const int sh_hit_element = blockDim.x * i + threadIdx.x;
+      const bool process_h0 = sh_hit_element < nhits_to_process;
       Hit h0, h1, h2;
       unsigned int best_hit_h1, best_hit_h2;
       float best_fit = MAX_FLOAT;
 
       // We will repeat this for performance reasons
       if (process_h0) {
-        const int h0_index = sh_hit_process[threadIdx.x];
+        const int h0_index = sh_hit_process[sh_hit_element];
         h0.x = hit_Xs[h0_index];
         h0.y = hit_Ys[h0_index];
         h0.z = hit_Zs[h0_index];
