@@ -202,7 +202,7 @@ cudaError_t invokeParallelSearch(
   for (auto i=0; i<nexperiments; ++i){
     mresults[i] = calcResults(time_values[i]);
     DEBUG << " nthreads (" << NUMTHREADS_X << ", " << (nexperiments==1 ? numThreads.y : i+1) <<  "): " << mresults[i]["mean"]
-      << " ms (std dev " << mresults[i]["deviation"] << ")." << std::endl;
+      << " ms (std dev " << mresults[i]["deviation"] << ")" << std::endl;
   }
 
   free(atomics);

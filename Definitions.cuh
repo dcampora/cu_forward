@@ -10,8 +10,8 @@
 
 #include <vector>
 
-#define NUMTHREADS_X 96
-#define MAX_NUMTHREADS_Y 8
+#define NUMTHREADS_X 64
+#define MAX_NUMTHREADS_Y 16
 #define NUM_ATOMICS 5
 
 #define MAX_TRACKS 8000
