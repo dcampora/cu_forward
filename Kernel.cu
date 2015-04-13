@@ -142,7 +142,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
   /* The fun begins */
-  Sensor s0, s1, s2;
 
   // extern __shared__ float sh_hits [];
   // float* sh_hit_x = sh_hits;
@@ -155,7 +154,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ int sh_hit_process [NUMTHREADS_X];
   __shared__ int sensor_data [6];
 
-  // Deal with odd or even separately
+  // Deal with odd or even in the same thread
   int first_sensor = 51;
 
   // Prepare s1 and s2 for the first iteration
@@ -390,7 +389,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
             dxmax = PARAM_MAXXSLOPE * h_dist;
             dymax = PARAM_MAXYSLOPE * h_dist;
           }
-
         }
 
         // Iterate in the third list of hits
