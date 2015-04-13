@@ -371,13 +371,41 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       }
 
       // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
-      for (int j=0; j<((int) ceilf(((float) sensor_data[SENSOR_DATA_HITNUMS + 1]) / blockDim.y)); ++j) {
+      
+      // Iterate only in the elements ranging from x0-dxMax to x0+dxMax
+      // Initialize
+      int h1_first = sensor_data[1];
+      int h1_last = sensor_data[1] + sensor_data[SENSOR_DATA_HITNUMS + 1];
+
+      // max and min x of next hit based on
+      // estimation of z value of next sensor
+      const float s1_z = hit_Zs[sensor_data[1]];
+      const float h_dist = fabs(s1_z - h0.z);
+      dxmax = PARAM_MAXXSLOPE * h_dist;
+      dymax = PARAM_MAXYSLOPE * h_dist;
+
+      // TODO: Tiling
+      bool h1_first_found = false;
+      for (int j=0; j<sensor_data[SENSOR_DATA_HITNUMS + 1]); ++j){
+        const int h1_index = sensor_data[1] + h1_element;
+        const float h1_x = hit_Xs[h1_index];
+        if (!h1_first_found && h1_x > h0.x - dxmax) {
+          h1_first = h1_index;
+        }
+        else if (h1_first_found && h1_x > h0.x + dxmax) {
+          h1_last = h1_index;
+          break;
+        }
+      }
+
+      // Only iterate from h1_first to h1_last :-)
+      for (int j=0; j<((int) ceilf(((float) (h1_last - h1_first)) / blockDim.y)); ++j) {
         float dxmax, dymax;
 
         const int h1_element = blockDim.y * j + threadIdx.y;
-        const int h1_index = sensor_data[1] + h1_element;
+        const int h1_index = h1_first + h1_element;
         bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
-        if (h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1]){
+        if (h1_element < (h1_last - h1_first)){
 
           is_h1_used = hit_used[h1_index];
           if (process_h0 && !is_h1_used){
@@ -385,7 +413,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
             h1.y = hit_Ys[h1_index];
             h1.z = hit_Zs[h1_index];
 
-            const float h_dist = fabs((float) ( h1.z - h0.z ));
+            const float h_dist = fabs(h1.z - h0.z);
             dxmax = PARAM_MAXXSLOPE * h_dist;
             dymax = PARAM_MAXYSLOPE * h_dist;
           }
