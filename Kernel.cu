@@ -383,8 +383,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // estimation of z value of next sensor
       const float s1_z = hit_Zs[sensor_data[1]];
       const float h_dist = fabs(s1_z - h0.z);
-      dxmax = PARAM_MAXXSLOPE * h_dist;
-      dymax = PARAM_MAXYSLOPE * h_dist;
+      const float dxmax = PARAM_MAXXSLOPE * h_dist;
+      const float dymax = PARAM_MAXYSLOPE * h_dist;
 
       // TODO: Tiling
       // Find the min and max x for h0
