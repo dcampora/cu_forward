@@ -24,7 +24,7 @@ cudaError_t invokeParallelSearch(
   setHPointersFromInput((uint8_t*) &(*startingEvent_input)[0], startingEvent_input->size());
   
   // Order the input vectors by h_hit_Xs natural order
-  quickSort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs);
+  quickSort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, 0, *h_no_hits);
   // printInfo();
 
   std::map<int, int> zhit_to_module;
