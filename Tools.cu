@@ -108,7 +108,7 @@ float float_max() {
  * @param first - The start of the sequence to be sorted.
  * @param last - The end of the sequence to be sorted.
 */
-void quickSort(float* a, float* b, float* c, int* d, int first, int last) 
+void quickSort(float* a, float* b, float* c, unsigned int* d, int first, int last) 
 {
     int pivotElement;
  
@@ -127,7 +127,7 @@ void quickSort(float* a, float* b, float* c, int* d, int first, int last)
  * @param last - The end of the sequence.
  * @return - the pivot element
 */
-int pivot(float* a, float* b, float* c, int* d, int first, int last)
+int pivot(float* a, float* b, float* c, unsigned int* d, int first, int last)
 {
     int  p = first;
     int pivotElement = a[first];
