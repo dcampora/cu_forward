@@ -24,7 +24,13 @@ cudaError_t invokeParallelSearch(
   setHPointersFromInput((uint8_t*) &(*startingEvent_input)[0], startingEvent_input->size());
   
   // Order the input vectors by h_hit_Xs natural order
-  quickSort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, 0, *h_no_hits);
+  // per sensor
+  int acc_hitnums = 0;
+  for (int i=0; i<*h_no_sensors; ++i){
+    const int hitnums = h_sensor_hitNums[i];
+    quickSort(&h_hit_Xs[acc_hitnums], &h_hit_Ys[acc_hitnums], &h_hit_Zs[acc_hitnums], &h_hit_IDs[acc_hitnums], 0, hitnums);
+    acc_hitnums += hitnums;
+  }
   // printInfo();
 
   std::map<int, int> zhit_to_module;
