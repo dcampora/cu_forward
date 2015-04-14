@@ -414,8 +414,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
       // Only iterate from h1_first to h1_last :-)
       for (int j=0; j<((int) ceilf(((float) (h1_last - h1_first)) / blockDim.y)); ++j) {
-        float dxmax, dymax;
-
         const int h1_element = blockDim.y * j + threadIdx.y;
         const int h1_index = h1_first + h1_element;
         bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
@@ -426,10 +424,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
             h1.x = hit_Xs[h1_index];
             h1.y = hit_Ys[h1_index];
             h1.z = hit_Zs[h1_index];
-
-            const float h_dist = fabs(h1.z - h0.z);
-            dxmax = PARAM_MAXXSLOPE * h_dist;
-            dymax = PARAM_MAXYSLOPE * h_dist;
           }
         }
 
