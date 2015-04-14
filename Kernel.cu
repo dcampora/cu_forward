@@ -348,6 +348,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // Fill in sh_hit_process with either the found hit or -1
         sh_hit_process[threadIdx.x] = (inside_bounds && !is_h0_used) ? h0_index : -1;
+        sh_hit_x[threadIdx.x] = inside_bounds ? hit_Xs[h0_index] : 0;
       }
 
       __syncthreads();
@@ -365,7 +366,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // We will repeat this for performance reasons
       if (process_h0) {
         const int h0_index = sh_hit_process[threadIdx.x];
-        h0.x = hit_Xs[h0_index];
+        h0.x = sh_hit_x[threadIdx.x];
+        // h0.x = hit_Xs[h0_index];
         h0.y = hit_Ys[h0_index];
         h0.z = hit_Zs[h0_index];
       }
@@ -385,14 +387,26 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       dymax = PARAM_MAXYSLOPE * h_dist;
 
       // TODO: Tiling
+      // Find the min and max x for h0
+      float min_h0_x = MAX_FLOAT;
+      float max_h0_x = MIN_FLOAT;
+      for (int i=0; i<blockDim.x; ++i) {
+        if (sh_hit_process[i] != -1) {
+          // Update min_h0_x and max_h0_x
+          min_h0_x = min(sh_hit_x[i], min_h0_x);
+          max_h0_x = max(sh_hit_x[i], max_h0_x);
+        }
+      }
+
       bool h1_first_found = false;
-      for (int j=0; j<sensor_data[SENSOR_DATA_HITNUMS + 1]); ++j){
-        const int h1_index = sensor_data[1] + h1_element;
+      for (int j=0; j<sensor_data[SENSOR_DATA_HITNUMS + 1]); ++j) {
+        const int h1_index = sensor_data[1] + j;
         const float h1_x = hit_Xs[h1_index];
-        if (!h1_first_found && h1_x > h0.x - dxmax) {
+        if (!h1_first_found && h1_x > min_h0_x - dxmax) {
+          h1_first_found = true;
           h1_first = h1_index;
         }
-        else if (h1_first_found && h1_x > h0.x + dxmax) {
+        else if (h1_first_found && h1_x > max_h0_x + dxmax) {
           h1_last = h1_index;
           break;
         }

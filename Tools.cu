@@ -101,3 +101,67 @@ float float_max() {
     const float* const fvalue = (const float*) &value;
     return *(float*)& fvalue[0];
 }
+
+/**
+ * Quicksort.
+ * @param a - The array to be sorted.
+ * @param first - The start of the sequence to be sorted.
+ * @param last - The end of the sequence to be sorted.
+*/
+void quickSort(float* a, float* b, float* c, int* d, int first, int last) 
+{
+    int pivotElement;
+ 
+    if(first < last)
+    {
+        pivotElement = pivot(a, b, c, d, first, last);
+        quickSort(a, b, c, d, first, pivotElement-1);
+        quickSort(a, b, c, d, pivotElement+1, last);
+    }
+}
+ 
+/**
+ * Find and return the index of pivot element.
+ * @param a - The array.
+ * @param first - The start of the sequence.
+ * @param last - The end of the sequence.
+ * @return - the pivot element
+*/
+int pivot(float* a, float* b, float* c, int* d, int first, int last)
+{
+    int  p = first;
+    int pivotElement = a[first];
+ 
+    for(int i = first+1 ; i <= last ; i++)
+    {
+        if(a[i] <= pivotElement)
+        {
+            p++;
+            swap(a[i], a[p]);
+            swap(b[i], b[p]);
+            swap(c[i], c[p]);
+            swap(d[i], d[p]);
+        }
+    }
+ 
+    swap(a[p], a[first]);
+    swap(b[p], b[first]);
+    swap(c[p], c[first]);
+    swap(d[p], d[first]);
+ 
+    return p;
+}
+
+
+/**
+ * Swap the parameters.
+ * @param a - The first parameter.
+ * @param b - The second parameter.
+*/
+template<typename T>
+void swap(T& a, T& b)
+{
+    T temp = a;
+    a = b;
+    b = temp;
+}
