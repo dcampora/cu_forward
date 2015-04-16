@@ -28,7 +28,7 @@ cudaError_t invokeParallelSearch(
   int acc_hitnums = 0;
   for (int i=0; i<*h_no_sensors; ++i){
     const int hitnums = h_sensor_hitNums[i];
-    quickSort(&h_hit_Xs[acc_hitnums], &h_hit_Ys[acc_hitnums], &h_hit_Zs[acc_hitnums], &h_hit_IDs[acc_hitnums], 0, hitnums);
+    quicksort(&h_hit_Xs[acc_hitnums], &h_hit_Ys[acc_hitnums], &h_hit_Zs[acc_hitnums], &h_hit_IDs[acc_hitnums], 0, hitnums);
     acc_hitnums += hitnums;
   }
   printInfo(*h_no_sensors, *h_no_hits);
