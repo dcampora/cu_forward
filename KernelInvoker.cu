@@ -120,7 +120,7 @@ cudaError_t invokeParallelSearch(
 
   // Adding timing
   // Timing calculation
-  unsigned int niterations = 10;
+  unsigned int niterations = 2;
   unsigned int nexperiments = 4;
 
   std::vector<std::vector<float>> time_values {nexperiments};

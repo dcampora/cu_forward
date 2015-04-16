@@ -325,8 +325,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     unsigned int shift_lastPointer = blockDim.x;
     while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
 
-      __syncthreads();
-
       if (threadIdx.y == 0) {
         // All threads in this context will add a hit to the 
         // shared elements, or exhaust the list
@@ -356,6 +354,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // Update the iteration condition
       sh_hit_prevPointer = sh_hit_lastPointer[0] + shift_lastPointer;
       shift_lastPointer += blockDim.x;
+
+      __syncthreads();
 
       // Track creation starts
       const bool process_h0 = sh_hit_process[threadIdx.x] != -1;
@@ -404,7 +404,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       for (int j=0; j<sensor_data[SENSOR_DATA_HITNUMS + 1]; ++j) {
         const int h1_index = sensor_data[1] + j;
         const float h1_x = hit_Xs[h1_index];
-        
+
         if (!h1_first_found && h1_x > (min_h0_x - dxmax)) {
           h1_first_found = true;
           h1_first = h1_index;
