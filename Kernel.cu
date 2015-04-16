@@ -404,11 +404,12 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       for (int j=0; j<sensor_data[SENSOR_DATA_HITNUMS + 1]; ++j) {
         const int h1_index = sensor_data[1] + j;
         const float h1_x = hit_Xs[h1_index];
-        if (!h1_first_found && h1_x > min_h0_x - dxmax) {
+        
+        if (!h1_first_found && h1_x > (min_h0_x - dxmax)) {
           h1_first_found = true;
           h1_first = h1_index;
         }
-        else if (h1_first_found && h1_x > max_h0_x + dxmax) {
+        else if (h1_first_found && h1_x > (max_h0_x + dxmax)) {
           h1_last = h1_index;
           break;
         }

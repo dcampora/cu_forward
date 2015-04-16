@@ -31,7 +31,7 @@ cudaError_t invokeParallelSearch(
     quickSort(&h_hit_Xs[acc_hitnums], &h_hit_Ys[acc_hitnums], &h_hit_Zs[acc_hitnums], &h_hit_IDs[acc_hitnums], 0, hitnums);
     acc_hitnums += hitnums;
   }
-  // printInfo();
+  printInfo(*h_no_sensors, *h_no_hits);
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){
@@ -295,21 +295,23 @@ void printOutSensorHits(int sensorNumber, int* prevs, int* nexts){
   }
 }
 
-void printInfo() {
+void printInfo(int numberOfSensors, int numberOfHits) {
+  numberOfSensors = numberOfSensors>52 ? 52 : numberOfSensors;
+
   DEBUG << "Read info:" << std::endl
     << " no sensors: " << h_no_sensors[0] << std::endl
     << " no hits: " << h_no_hits[0] << std::endl
-    << "First 5 sensors: " << std::endl;
+    << numberOfSensors << " sensors: " << std::endl;
 
-  for (int i=0; i<5; ++i){
+  for (int i=0; i<numberOfSensors; ++i){
     DEBUG << " Zs: " << h_sensor_Zs[i] << std::endl
       << " hitStarts: " << h_sensor_hitStarts[i] << std::endl
       << " hitNums: " << h_sensor_hitNums[i] << std::endl << std::endl;
   }
 
-  DEBUG << "First 5 hits: " << std::endl;
+  DEBUG << numberOfHits << " hits: " << std::endl;
 
-  for (int i=0; i<5; ++i){
+  for (int i=0; i<numberOfHits; ++i){
     DEBUG << " hit_id: " << h_hit_IDs[i] << std::endl
       << " hit_X: " << h_hit_Xs[i] << std::endl
       << " hit_Y: " << h_hit_Ys[i] << std::endl
