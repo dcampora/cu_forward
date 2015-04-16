@@ -135,11 +135,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
-  const int ip_shift = events_under_process + event_number * NUM_ATOMICS;
-  unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
-  unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
-  unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
+  unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number + 1 * events_under_process;
+  unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + event_number + 2 * events_under_process;
+  unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + event_number + 3 * events_under_process;
+  unsigned int* const number_hits_to_process = (unsigned int*) dev_atomicsStorage + event_number + 4 * events_under_process;
 
   /* The fun begins */
   Sensor s0, s1, s2;
