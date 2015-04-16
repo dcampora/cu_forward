@@ -97,7 +97,8 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
 __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_input,
   int* const dev_tracks_to_follow,
   bool* const dev_hit_used, int* const dev_atomicsStorage, Track* const dev_tracklets,
-  int* const dev_weak_tracks, int* const dev_event_offsets, int* const dev_hit_offsets, float* const dev_best_fits) {
+  int* const dev_weak_tracks, int* const dev_event_offsets, int* const dev_hit_offsets, float* const dev_best_fits
+  int* const dev_misc) {
   
   /* Data initialization */
   // Each event is treated with two blocks, one for each side.
@@ -135,10 +136,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
-  unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number + 1 * events_under_process;
-  unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + event_number + 2 * events_under_process;
-  unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + event_number + 3 * events_under_process;
-  unsigned int* const number_hits_to_process = (unsigned int*) dev_atomicsStorage + event_number + 4 * events_under_process;
+  const int ip_shift = events_under_process + event_number * NUM_ATOMICS;
+  unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
+  unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
+  unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
+  unsigned int* const number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
   /* The fun begins */
   Sensor s0, s1, s2;
@@ -154,6 +156,16 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_z [NUMTHREADS_X];
   __shared__ unsigned int sh_hit_process [100];
   __shared__ int sensor_data [6];
+
+  // Populate dev_misc
+  dev_misc[event_number * 100 + 0] = (int) &weaktracks_insertPointer[0] & 0xFFFFFFFF;
+  dev_misc[event_number * 100 + 1] = (int) &tracklets_insertPointer[0] & 0xFFFFFFFF;
+  dev_misc[event_number * 100 + 2] = (int) &ttf_insertPointer[0] & 0xFFFFFFFF;
+  dev_misc[event_number * 100 + 3] = (int) &sh_hit_x & 0xFFFFFFFF;
+  dev_misc[event_number * 100 + 4] = (int) &sh_hit_y & 0xFFFFFFFF;
+  dev_misc[event_number * 100 + 5] = (int) &sh_hit_z & 0xFFFFFFFF;
+  dev_misc[event_number * 100 + 6] = (int) &sh_hit_process & 0xFFFFFFFF;
+  dev_misc[event_number * 100 + 7] = (int) &sensor_data & 0xFFFFFFFF;
 
   // Deal with odd or even separately
   int first_sensor = 51;

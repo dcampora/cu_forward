@@ -66,6 +66,7 @@ cudaError_t invokeParallelSearch(
   int*   dev_event_offsets;
   int*   dev_hit_offsets;
   float* dev_best_fits;
+  int*   dev_misc;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int device_number = 0;
@@ -80,8 +81,10 @@ cudaError_t invokeParallelSearch(
 
   // Allocate memory
   // Allocate CPU buffers
+  const int misc_elements = 100;
   const int atomic_space = NUM_ATOMICS + 1;
   int* atomics = (int*) malloc(eventsToProcess * atomic_space * sizeof(int));
+  int* misc = (int*) malloc(eventsToProcess * misc_elements * sizeof(int));
 
   // Prepare event offset and hit offset
   std::vector<int> event_offsets;
@@ -109,6 +112,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
   cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * MAX_NUMTHREADS_Y * sizeof(float)));
+  cudaCheck(cudaMalloc((void**)&dev_misc, eventsToProcess * misc_elements * sizeof(int)));
 
   // Copy stuff from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_event_offsets, &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
@@ -154,7 +158,8 @@ cudaError_t invokeParallelSearch(
       
       // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
       searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
-        dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits);
+        dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits,
+        dev_misc);
 
       cudaEventRecord( stop_searchByTriplet, 0 );
       cudaEventSynchronize( stop_searchByTriplet );
@@ -183,6 +188,17 @@ cudaError_t invokeParallelSearch(
     cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
   }
   // DEBUG << std::endl;
+
+  cudaCheck(cudaMemcpy(misc, dev_misc, eventsToProcess * misc_elements * sizeof(int), cudaMemcpyDeviceToHost));
+  DEBUG << std::hex;
+  for (int eventno=0; eventno<eventsToProcess; ++eventno) {
+    DEBUG << "Event " << eventno+1 << std::endl;
+    for (int i=0; i<8; ++i) {
+      DEBUG << " " << misc[i] << std::endl;
+    }
+    DEBUG << std::endl;
+  }
+  DEBUG << std::dec;
 
   // Print info about the solution
   // const int numberOfTracks = output[0].size() / sizeof(Track);
