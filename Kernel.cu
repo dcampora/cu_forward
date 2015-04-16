@@ -142,12 +142,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
   /* The fun begins */
-
-  // extern __shared__ float sh_hits [];
-  // float* sh_hit_x = sh_hits;
-  // float* sh_hit_y = sh_hit_x + blockDim.x;
-  // float* sh_hit_z = sh_hit_y + blockDim.x;
-  
   __shared__ float sh_hit_x [NUMTHREADS_X];
   __shared__ float sh_hit_y [NUMTHREADS_X];
   __shared__ float sh_hit_z [NUMTHREADS_X];
@@ -326,7 +320,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
 
       __syncthreads();
-      
+
       if (threadIdx.y == 0) {
         // All threads in this context will add a hit to the 
         // shared elements, or exhaust the list
