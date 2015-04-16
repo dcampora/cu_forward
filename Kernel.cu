@@ -138,8 +138,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   const int ip_shift = events_under_process + event_number * NUM_ATOMICS;
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
-  unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* const number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
+  unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
+  unsigned int* number_hits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
   /* The fun begins */
   Sensor s0, s1, s2;
@@ -149,10 +149,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   // float* sh_hit_y = sh_hit_x + blockDim.x;
   // float* sh_hit_z = sh_hit_y + blockDim.x;
   
+
   __shared__ float sh_hit_x [NUMTHREADS_X];
   __shared__ float sh_hit_y [NUMTHREADS_X];
   __shared__ float sh_hit_z [NUMTHREADS_X];
-  __shared__ int sh_hit_process [100];
+  __shared__ unsigned int sh_hit_process [100];
   __shared__ int sensor_data [6];
 
   // Deal with odd or even separately
@@ -345,15 +346,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
     for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
 
-      // Track creation starts
       const int sh_hit_element = blockDim.x * i + threadIdx.x;
-      const bool process_h0 = sh_hit_element < nhits_to_process;
       Hit h0, h1, h2;
       unsigned int best_hit_h1, best_hit_h2;
       float best_fit = MAX_FLOAT;
 
       // We will repeat this for performance reasons
-      if (process_h0) {
+      if (sh_hit_element < nhits_to_process) {
         const int h0_index = sh_hit_process[sh_hit_element];
         h0.x = hit_Xs[h0_index];
         h0.y = hit_Ys[h0_index];
@@ -370,7 +369,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         if (h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1]){
 
           is_h1_used = hit_used[h1_index];
-          if (process_h0 && !is_h1_used){
+          if (sh_hit_element < nhits_to_process && !is_h1_used){
             h1.x = hit_Xs[h1_index];
             h1.y = hit_Ys[h1_index];
             h1.z = hit_Zs[h1_index];
@@ -398,7 +397,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           }
           __syncthreads();
 
-          if (process_h0 && h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1] && !is_h1_used){
+          if (sh_hit_element < nhits_to_process && h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1] && !is_h1_used){
 
             const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
             for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
@@ -425,25 +424,22 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
       __syncthreads();
 
-      bool accept_track = false;
-      if (best_fit != MAX_FLOAT) {
-        best_fit = MAX_FLOAT;
-        int threadIdx_y_winner = -1;
-        for (int i=0; i<blockDim.y; ++i){
-          const float fit = best_fits[threadIdx.x * blockDim.y + i];
-          if (fit < best_fit) {
-            best_fit = fit;
-            threadIdx_y_winner = i;
-          }
+      best_fit = MAX_FLOAT;
+      int threadIdx_y_winner = -1;
+      for (int i=0; i<blockDim.y; ++i){
+        const float fit = best_fits[threadIdx.x * blockDim.y + i];
+        if (fit < best_fit) {
+          best_fit = fit;
+          threadIdx_y_winner = i;
         }
-        accept_track = threadIdx.y == threadIdx_y_winner;
       }
+      const bool accept_track = threadIdx.y == threadIdx_y_winner;
 
       // We have a best fit! - haven't we?
       // Only go through the tracks on the selected thread
       if (accept_track) {
         // Fill in track information
-        const Tracklet t {3, (unsigned int) sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};
+        const Tracklet t {3, sh_hit_process[sh_hit_element], best_hit_h1, best_hit_h2};
 
         // Add the track to the bag of tracks
         const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
