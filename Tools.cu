@@ -102,65 +102,50 @@ float float_max() {
     return *(float*)& fvalue[0];
 }
 
-/**
- * Quicksort.
- * @param a - The array to be sorted.
- * @param first - The start of the sequence to be sorted.
- * @param last - The end of the sequence to be sorted.
-*/
-void quickSort(float* a, float* b, float* c, unsigned int* d, int first, int last) 
-{
-    int pivotElement;
- 
-    if(first < last)
-    {
-        pivotElement = pivot(a, b, c, d, first, last);
-        quickSort(a, b, c, d, first, pivotElement-1);
-        quickSort(a, b, c, d, pivotElement+1, last);
+void quicksort (float* a, float* b, float* c, unsigned int* d, int start, int end) {
+    if (start < end) {
+        const int pivot = divide(a, b, c, d, start, end);
+        quicksort(a, b, c, d, start, pivot - 1);
+        quicksort(a, b, c, d, pivot + 1, end);
     }
 }
+
+int divide (float* a, float* b, float* c, unsigned int* d, int start, int end) {
+    int left;
+    int right;
+    float pivot;
  
-/**
- * Find and return the index of pivot element.
- * @param a - The array.
- * @param first - The start of the sequence.
- * @param last - The end of the sequence.
- * @return - the pivot element
-*/
-int pivot(float* a, float* b, float* c, unsigned int* d, int first, int last)
-{
-    int p = first;
-    float pivotElement = a[first];
+    pivot = a[start];
+    left = start;
+    right = end;
  
-    for(int i = first+1; i <= last; i++)
-    {
-        if(a[i] < pivotElement)
-        {
-            p++;
-            swap(a[i], a[p]);
-            swap(b[i], b[p]);
-            swap(c[i], c[p]);
-            swap(d[i], d[p]);
+    while (left < right) {
+        while (a[right] > pivot) {
+            right--;
+        }
+ 
+        while ((left < right) && (a[left] <= pivot)) {
+            left++;
+        }
+ 
+        if (left < right) {
+            swap(a[left], a[right]);
+            swap(b[left], b[right]);
+            swap(c[left], c[right]);
+            swap(d[left], d[right]);
         }
     }
  
-    swap(a[p], a[first]);
-    swap(b[p], b[first]);
-    swap(c[p], c[first]);
-    swap(d[p], d[first]);
+    swap(a[right], a[start]);
+    swap(b[right], b[start]);
+    swap(c[right], c[start]);
+    swap(d[right], d[start]);
  
-    return p;
+    return right;
 }
 
-
-/**
- * Swap the parameters.
- * @param a - The first parameter.
- * @param b - The second parameter.
-*/
 template<typename T>
-void swap(T& a, T& b)
-{
+void swap (T& a, T& b) {
     T temp = a;
     a = b;
     b = temp;
