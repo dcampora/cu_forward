@@ -357,31 +357,62 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // We will repeat this for performance reasons
       if (sh_hit_element < nhits_to_process) {
         const int h0_index = sh_hit_process[sh_hit_element];
-        h0.x = hit_Xs[h0_index];
+        h0.x = sh_hit_x[sh_hit_element];
         h0.y = hit_Ys[h0_index];
         h0.z = hit_Zs[h0_index];
       }
 
-      // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
-      for (int j=0; j<((int) ceilf(((float) sensor_data[SENSOR_DATA_HITNUMS + 1]) / blockDim.y)); ++j) {
-        float dxmax, dymax;
+      // max and min x of next hit based on
+      // estimation of z value of next sensor
+      // note: z is very similar for hits and sensors
+      const float s1_z = hit_Zs[sensor_data[1]];
+      const float h_dist = fabs(s1_z - h0.z);
+      const float dxmax = PARAM_MAXXSLOPE * h_dist;
+      const float dymax = PARAM_MAXYSLOPE * h_dist;
 
+      // TODO: Tiling
+      // Find the min and max x for h0
+      float min_h0_x = MAX_FLOAT;
+      float max_h0_x = MIN_FLOAT;
+      for (int i=0; i<blockDim.x; ++i) {
+        if (sh_hit_process[i] != -1) {
+          // Update min_h0_x and max_h0_x
+          min_h0_x = min(sh_hit_x[i], min_h0_x);
+          max_h0_x = max(sh_hit_x[i], max_h0_x);
+        }
+      }
+
+      // Initialize
+      int h1_first = sensor_data[1];
+      int h1_last = sensor_data[1] + sensor_data[SENSOR_DATA_HITNUMS + 1];
+      bool h1_first_found = false;
+
+      for (int j=0; j<sensor_data[SENSOR_DATA_HITNUMS + 1]; ++j) {
+        const int h1_index = sensor_data[1] + j;
+        const float h1_x = hit_Xs[h1_index];
+        
+        if (!h1_first_found && h1_x > (min_h0_x - dxmax)) {
+          h1_first_found = true;
+          h1_first = h1_index;
+        }
+        else if (h1_first_found && h1_x > (max_h0_x + dxmax)) {
+          h1_last = h1_index;
+          break;
+        }
+      }
+
+      // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
+      for (int j=0; j<((int) ceilf(((float) (h1_last - h1_first)) / blockDim.y)); ++j) {
         const int h1_element = blockDim.y * j + threadIdx.y;
         const int h1_index = sensor_data[1] + h1_element;
         bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
-        if (h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1]){
-
+        if (h1_index < h1_last){
           is_h1_used = hit_used[h1_index];
           if (sh_hit_element < nhits_to_process && !is_h1_used){
             h1.x = hit_Xs[h1_index];
             h1.y = hit_Ys[h1_index];
             h1.z = hit_Zs[h1_index];
-
-            const float h_dist = fabs((float) ( h1.z - h0.z ));
-            dxmax = PARAM_MAXXSLOPE * h_dist;
-            dymax = PARAM_MAXYSLOPE * h_dist;
           }
-
         }
 
         // Iterate in the third list of hits
@@ -400,7 +431,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           }
           __syncthreads();
 
-          if (sh_hit_element < nhits_to_process && h1_element < sensor_data[SENSOR_DATA_HITNUMS + 1] && !is_h1_used){
+          if (sh_hit_element < nhits_to_process && h1_index < h1_last && !is_h1_used){
 
             const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
             for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk){
