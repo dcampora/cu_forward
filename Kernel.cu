@@ -344,12 +344,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     __syncthreads();
 
     nhits_to_process = number_hits_to_process[0];
+    const unsigned int iteration_nhits_to_process = nhits_to_process - prev_nhits_to_process;
 
-    for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
+    for (int i=0; i<((int) ceilf( ((float) iteration_nhits_to_process) / blockDim.x)); ++i) {
 
       // Track creation starts
       const int sh_hit_element = blockDim.x * i + threadIdx.x;
-      const bool process_h0 = sh_hit_element < nhits_to_process;
+      const bool process_h0 = sh_hit_element < iteration_nhits_to_process;
       Hit h0, h1, h2;
       unsigned int best_hit_h1, best_hit_h2;
       float best_fit = MAX_FLOAT;
