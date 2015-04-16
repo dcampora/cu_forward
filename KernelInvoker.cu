@@ -25,16 +25,13 @@ cudaError_t invokeParallelSearch(
   
   // Order the input vectors by h_hit_Xs natural order
   // per sensor
-  std::cout << "Before: " << std::endl;
-  printInfo(10, 20);
   int acc_hitnums = 0;
   for (int i=0; i<*h_no_sensors; ++i){
     const int hitnums = h_sensor_hitNums[i];
     quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
     acc_hitnums += hitnums;
   }
-  std::cout << std::endl << "After: " << std::endl;
-  printInfo(10, 20);
+  // printInfo(10, 20);
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){
@@ -54,17 +51,6 @@ cudaError_t invokeParallelSearch(
       }
     }
   }
-
-  // int j = 0;
-  // for (int z=0; z<input.size(); ++z){
-  //   setHPointersFromInput((uint8_t*) &(*input[z])[0], input[z]->size());
-  //   for (int i=0; i<*h_no_sensors; ++i) {
-  //     if (h_sensor_hitNums[i] > j){
-  //       j = h_sensor_hitNums[i];
-  //     }
-  //   }
-  // }
-  // DEBUG << "Max hitnums in event: " << j << std::endl;
 
   // int* h_prevs, *h_nexts;
   // Histo histo;
