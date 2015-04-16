@@ -157,6 +157,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   // Deal with odd or even separately
   int first_sensor = 51;
+  unsigned int nhits_to_process = 0;
 
   // Prepare s1 and s2 for the first iteration
   unsigned int prev_ttf, last_ttf = 0;
@@ -316,10 +317,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     // Get the hits we are going to iterate onto in sh_hit_process,
     // in groups of max NUMTHREADS_X
 
-    if (threadIdx.x == 0)
-      number_hits_to_process[0] = 0;
+    // if (threadIdx.x == 0)
+    //   number_hits_to_process[0] = 0;
+    // __syncthreads();
 
-    __syncthreads();
+    const unsigned int prev_nhits_to_process = nhits_to_process;
 
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation
@@ -333,7 +335,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         const bool is_h0_used = hit_used[h0_index];
 
         if (!is_h0_used) {
-          const unsigned int htp_pointer = atomicAdd(number_hits_to_process, 1);
+          const unsigned int htp_pointer = atomicAdd(number_hits_to_process, 1) - prev_nhits_to_process;
           sh_hit_process[htp_pointer] = h0_index;
         }
       }
@@ -341,7 +343,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
     __syncthreads();
 
-    const unsigned int nhits_to_process = number_hits_to_process[0];
+    nhits_to_process = number_hits_to_process[0];
 
     for (int i=0; i<((int) ceilf( ((float) nhits_to_process) / blockDim.x)); ++i) {
 
