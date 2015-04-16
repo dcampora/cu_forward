@@ -43,4 +43,10 @@ void mergeSolutions(const std::vector<std::vector<char> >& solutions, std::vecto
 std::map<std::string, float> calcResults(std::vector<float> times);
 float float_max();
 
+// A non-efficient implementation that does what I need
+void quicksort (float* a, float* b, float* c, unsigned int* d, int start, int end);
+int divide (float* a, float* b, float* c, unsigned int* d, int first, int last);
+template<typename T> void swap (T& a, T& b);
+
+
 #endif
