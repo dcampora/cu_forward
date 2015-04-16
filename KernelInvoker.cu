@@ -175,14 +175,13 @@ cudaError_t invokeParallelSearch(
 
   // Get results
   // DEBUG << "Number of tracks found per event:" << std::endl << " ";
-  // cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int), cudaMemcpyDeviceToHost));
-  // for (int i=0; i<eventsToProcess; ++i){
-  //   const int numberOfTracks = atomics[i];
+  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int), cudaMemcpyDeviceToHost));
+  for (int i=0; i<eventsToProcess; ++i){
+    const int numberOfTracks = atomics[i];
   //   DEBUG << numberOfTracks << ", ";
-    
-  //   output[startingEvent + i].resize(numberOfTracks * sizeof(Track));
-  //   cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
-  // }
+    output[startingEvent + i].resize(numberOfTracks * sizeof(Track));
+    cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
+  }
   // DEBUG << std::endl;
 
   // Print info about the solution
@@ -195,7 +194,6 @@ cudaError_t invokeParallelSearch(
   //   }
   // }
   // DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
-
   // DEBUG << "It took " << t0 << " milliseconds." << std::endl;
 
   DEBUG << std::endl << "Time averages:" << std::endl;
