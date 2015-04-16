@@ -40,7 +40,7 @@ void setHPointersFromInput(uint8_t * input, size_t size);
 void mergeSolutions(const std::vector<std::vector<char> >& solutions, std::vector<char>& output);
 
 // A non-efficient implementation that does what I need
-void quickSort (float* a, float* b, float* c, unsigned int* d, int start, int end);
+void quicksort (float* a, float* b, float* c, unsigned int* d, int start, int end);
 int divide (float* a, float* b, float* c, unsigned int* d, int first, int last);
 template<typename T> void swap (T& a, T& b);
 
