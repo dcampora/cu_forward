@@ -19,7 +19,7 @@
 void getMaxNumberOfHits(char*& input, int& maxHits);
 void printOutSensorHits(int sensorNumber, int* prevs, int* nexts);
 void printOutAllSensorHits(int* prevs, int* nexts);
-void printInfo();
+void printInfo(int numberOfSensors, int numberOfHits);
 void printTrack(Track* tracks, const int trackNumber, const std::map<int, int>& zhit_to_module);
 int findClosestModule(const int z, const std::map<int, int>& zhit_to_module);
 
