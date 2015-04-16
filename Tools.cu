@@ -129,12 +129,12 @@ void quickSort(float* a, float* b, float* c, unsigned int* d, int first, int las
 */
 int pivot(float* a, float* b, float* c, unsigned int* d, int first, int last)
 {
-    int  p = first;
-    int pivotElement = a[first];
+    int p = first;
+    float pivotElement = a[first];
  
-    for(int i = first+1 ; i <= last ; i++)
+    for(int i = first+1; i <= last; i++)
     {
-        if(a[i] <= pivotElement)
+        if(a[i] < pivotElement)
         {
             p++;
             swap(a[i], a[p]);
