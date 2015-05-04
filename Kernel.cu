@@ -2,74 +2,6 @@
 #include "Kernel.cuh"
 
 /**
- * @brief Gives the fit between h0, h1 and h2
- * @details The result is given in a float. MAX_FLOAT is
- *          used as an upper limit. The lower it is, the better the fit is.
- *          
- * @param  h0 
- * @param  h1 
- * @param  h2 
- * @return    
- */
-__device__ float fitHits(const Hit& h0, const Hit& h1, const Hit &h2, const float dxmax, const float dymax) {
-  // Max dx, dy permissible over next hit
-
-  // First approximation -
-  // With the sensor z, instead of the hit z
-  const float z2_tz = (h2.z - h0.z) / (h1.z - h0.z);
-  const float x = h0.x + (h1.x - h0.x) * z2_tz;
-  const float y = h0.y + (h1.y - h0.y) * z2_tz;
-
-  const float dx = x - h2.x;
-  const float dy = y - h2.y;
-
-  // Scatter - Updated to last PrPixel
-  const float scatterNum = (dx * dx) + (dy * dy);
-  const float scatterDenom = 1.f / (h2.z - h1.z);
-  const float scatter = scatterNum * scatterDenom * scatterDenom;
-
-  const bool scatter_condition = scatter < MAX_SCATTER;
-  const bool condition = fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax && scatter_condition;
-
-  return condition * scatter + !condition * MAX_FLOAT;
-}
-
-/**
- * @brief Fits hits to tracks.
- * @details In case the tolerances constraints are met,
- *          returns the chi2 weight of the track. Otherwise,
- *          returns MAX_FLOAT.
- * 
- * @param tx 
- * @param ty 
- * @param h0 
- * @param h1_z
- * @param h2 
- * @return 
- */
-__device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, const float h1_z, const Hit& h2) {
-  // tolerances
-  const float dz = h2.z - h0.z;
-  const float x_prediction = h0.x + tx * dz;
-  const float dx = fabs(x_prediction - h2.x);
-  const bool tolx_condition = dx < PARAM_TOLERANCE;
-
-  const float y_prediction = h0.y + ty * dz;
-  const float dy = fabs(y_prediction - h2.y);
-  const bool toly_condition = dy < PARAM_TOLERANCE;
-
-  // Scatter - Updated to last PrPixel
-  const float scatterNum = (dx * dx) + (dy * dy);
-  const float scatterDenom = 1.f / (h2.z - h1_z);
-  const float scatter = scatterNum * scatterDenom * scatterDenom;
-
-  const bool scatter_condition = scatter < MAX_SCATTER;
-  const bool condition = tolx_condition && toly_condition && scatter_condition;
-
-  return condition * scatter + !condition * MAX_FLOAT;
-}
-
-/**
  * @brief Track following algorithm, loosely based on Pr/PrPixel.
  * @details It should be simplistic in its design, as is the Pixel VELO problem ;)
  *          Triplets are chosen based on a fit and forwarded using a typical track following algo.
@@ -96,7 +28,7 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
  */
 __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_input,
   int* const dev_tracks_to_follow,
-  bool* const dev_hit_used, int* const dev_atomicsStorage, Track* const dev_tracklets,
+  bool* const dev_hit_used, int* const dev_hit_candidates, int* const dev_atomicsStorage, Track* const dev_tracklets,
   int* const dev_weak_tracks, int* const dev_event_offsets, int* const dev_hit_offsets, float* const dev_best_fits) {
   
   /* Data initialization */
@@ -127,6 +59,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   // Per side datatypes
   const int hit_offset = dev_hit_offsets[event_number];
   bool* const hit_used = dev_hit_used + hit_offset;
+  int* const hit_candidates = dev_hit_candidates + hit_offset * NUM_MAX_CANDIDATES;
 
   int* const tracks_to_follow = dev_tracks_to_follow + tracks_offset;
   int* const weak_tracks = dev_weak_tracks + tracks_offset;
@@ -140,6 +73,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
   unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
+  unsigned int* const max_numhits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
 
   /* The fun begins */
   __shared__ float sh_hit_x [NUMTHREADS_X];
@@ -147,6 +81,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ float sh_hit_z [NUMTHREADS_X];
   __shared__ int sh_hit_process [NUMTHREADS_X];
   __shared__ int sensor_data [6];
+
+  // Startup candidates matrix :)
+  fillCandidates(hit_candidates, no_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
 
   // Deal with odd or even in the same thread
   int first_sensor = 51;
@@ -160,15 +97,19 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     
     // Iterate in sensors
     // Load in shared
-    if (threadIdx.x < 6 && threadIdx.y == 0) {
+    if (threadIdx.x < 8 && threadIdx.y == 0) {
       const int sensor_number = first_sensor - (threadIdx.x % 3) * 2;
       const int* const sensor_pointer = threadIdx.x < 3 ? sensor_hitStarts : sensor_hitNums;
 
       sensor_data[threadIdx.x] = sensor_pointer[sensor_number];
     }
 
-    if (threadIdx.x == 6 && threadIdx.y == 0) {
+    else if (threadIdx.x == 6 && threadIdx.y == 0) {
       sh_hit_lastPointer[0] = 0;
+    }
+
+    else if (threadIdx.x == 7 && threadIdx.y == 0) {
+      max_numhits_to_process[0] = 0;
     }
 
     __syncthreads();
@@ -342,7 +283,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // Fill in sh_hit_process with either the found hit or -1
         sh_hit_process[threadIdx.x] = (inside_bounds && !is_h0_used) ? h0_index : -1;
+        
+        // TODO: Check if this is actually faster, or comment otherwise
         sh_hit_x[threadIdx.x] = inside_bounds ? hit_Xs[h0_index] : 0;
+        sh_hit_y[threadIdx.x] = inside_bounds ? hit_Ys[h0_index] : 0;
+        sh_hit_z[threadIdx.x] = inside_bounds ? hit_Zs[h0_index] : 0;
       }
 
       __syncthreads();
@@ -352,69 +297,40 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       shift_lastPointer += blockDim.x;
 
       // Track creation starts
-      const bool process_h0 = sh_hit_process[threadIdx.x] != -1;
+      const int h0_index = sh_hit_process[threadIdx.x];
+      bool inside_bounds = h0_index != -1;
       Hit h0, h1, h2;
       unsigned int best_hit_h1, best_hit_h2;
       float best_fit = MAX_FLOAT;
 
       // We will repeat this for performance reasons
-      if (process_h0) {
-        const int h0_index = sh_hit_process[threadIdx.x];
+      if (inside_bounds) {
         h0.x = sh_hit_x[threadIdx.x];
+        h0.y = sh_hit_y[threadIdx.x];
+        h0.z = sh_hit_z[threadIdx.x];
         // h0.x = hit_Xs[h0_index];
-        h0.y = hit_Ys[h0_index];
-        h0.z = hit_Zs[h0_index];
+        // h0.y = hit_Ys[h0_index];
+        // h0.z = hit_Zs[h0_index];
       }
 
       // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
-      
-      // max and min x of next hit based on
-      // estimation of z value of next sensor
-      // note: z is very similar for hits and sensors
-      const float s1_z = hit_Zs[sensor_data[1]];
-      const float h_dist = fabs(s1_z - h0.z);
-      const float dxmax = PARAM_MAXXSLOPE * h_dist;
-      const float dymax = PARAM_MAXYSLOPE * h_dist;
 
-      // Iterate only in the elements ranging from x0-dxMax to x0+dxMax
+      // Only iterate in the hits indicated by hit_candidates :)
+      const int h0_shift = h0_index * NUM_MAX_CANDIDATES;
+      const int num_h1_to_process = hit_candidates[h0_shift];
+      atomicMax(max_numhits_to_process, num_h1_to_process);
 
-      // TODO: Tiling
-      // Find the min and max x for h0
-      float min_h0_x = MAX_FLOAT;
-      float max_h0_x = MIN_FLOAT;
-      for (int i=0; i<blockDim.x; ++i) {
-        if (sh_hit_process[i] != -1) {
-          // Update min_h0_x and max_h0_x
-          min_h0_x = min(sh_hit_x[i], min_h0_x);
-          max_h0_x = max(sh_hit_x[i], max_h0_x);
-        }
-      }
+      __syncthreads();
 
-      // Initialize
-      int h1_first = sensor_data[1];
-      int h1_last = sensor_data[1] + sensor_data[SENSOR_DATA_HITNUMS + 1];
-      bool h1_first_found = false;
-
-      for (int j=0; j<sensor_data[SENSOR_DATA_HITNUMS + 1]; ++j) {
-        const int h1_index = sensor_data[1] + j;
-        const float h1_x = hit_Xs[h1_index];
-
-        if (!h1_first_found && h1_x > (min_h0_x - dxmax)) {
-          h1_first_found = true;
-          h1_first = h1_index;
-        }
-        else if (h1_first_found && h1_x > (max_h0_x + dxmax)) {
-          h1_last = h1_index;
-          break;
-        }
-      }
-
-      // Only iterate from h1_first to h1_last :-)
-      for (int j=0; j<((int) ceilf(((float) (h1_last - h1_first)) / blockDim.y)); ++j) {
+      // Only iterate max_numhits_to_process[0] iterations (with blockDim.y threads) :D :D :D
+      for (int j=0; j<((int) ceilf(((float) (max_numhits_to_process[0])) / blockDim.y)); ++j) {
         const int h1_element = blockDim.y * j + threadIdx.y;
-        const int h1_index = h1_first + h1_element;
+        inside_bounds &= h1_element < num_h1_to_process;
         bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
-        if (process_h0 && h1_index < h1_last) {
+        int h1_index;
+
+        if (inside_bounds) {
+          h1_index = hit_candidates[h0_shift + 1 + h1_element];
           is_h1_used = hit_used[h1_index];
           if (!is_h1_used) {
             h1.x = hit_Xs[h1_index];
@@ -439,7 +355,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           }
           __syncthreads();
 
-          if (process_h0 && h1_index < h1_last && !is_h1_used) {
+          if (inside_bounds && !is_h1_used) {
 
             const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
             for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
@@ -450,7 +366,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
               h2.y = sh_hit_y[sh_h2_index];
               h2.z = sh_hit_z[sh_h2_index];
 
-              const float fit = fitHits(h0, h1, h2, dxmax, dymax);
+              const float fit = fitHits(h0, h1, h2);
               const bool fit_is_better = fit < best_fit;
 
               best_fit = fit_is_better * fit + !fit_is_better * best_fit;

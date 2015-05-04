@@ -23,6 +23,7 @@
 #define MAX_FLOAT FLT_MAX
 #define MIN_FLOAT -FLT_MAX
 #define MAX_SKIPPED_MODULES 3
+#define NUM_MAX_CANDIDATES 21
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
