@@ -195,9 +195,6 @@ endif
 Kernel.o:Kernel.cu
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-KernelFits.o:KernelFits.cu
-	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
-
 KernelInvoker.o:KernelInvoker.cu
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
@@ -213,13 +210,13 @@ IndependentEntrypoint.o:IndependentEntrypoint.cpp
 Logger.o:Logger.cpp
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
 
-gpupixel: Kernel.o KernelFits.o KernelInvoker.o Tools.o GpuPixelSearchByTriplet.o IndependentEntrypoint.o Logger.o
+gpupixel: Kernel.o KernelInvoker.o Tools.o GpuPixelSearchByTriplet.o IndependentEntrypoint.o Logger.o
 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
 
 run: build
 	$(EXEC) ./gpupixel
 
 clean:
-	rm -f gpupixel Kernel.o KernelFits.o KernelInvoker.o Tools.o GpuPixelSearchByTriplet.o IndependentEntrypoint.o Logger.o
+	rm -f gpupixel Kernel.o KernelInvoker.o Tools.o GpuPixelSearchByTriplet.o IndependentEntrypoint.o Logger.o
 
 clobber: clean
