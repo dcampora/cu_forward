@@ -83,7 +83,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ int sensor_data [6];
 
   // Startup candidates matrix :)
-  fillCandidates(hit_candidates, no_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
+  fillCandidates(hit_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
 
   // Deal with odd or even in the same thread
   int first_sensor = 51;

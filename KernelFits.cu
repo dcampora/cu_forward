@@ -115,7 +115,7 @@ __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
             const float dxmax = PARAM_MAXXSLOPE * h_dist;
             const float dymax = PARAM_MAXYSLOPE * h_dist;
             if (fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax) {
-              dev_hit_candidates[h0_index * NUM_MAX_CANDIDATES + hit_shift++] = h1_index;
+              hit_candidates[h0_index * NUM_MAX_CANDIDATES + hit_shift++] = h1_index;
             }
 
             if (hit_shift == NUM_MAX_CANDIDATES) {
@@ -128,7 +128,7 @@ __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
         }
 
         // The first element contains how many compatible hits are there
-        dev_hit_candidates[h0_index * NUM_MAX_CANDIDATES] = hit_shift - 1;
+        hit_candidates[h0_index * NUM_MAX_CANDIDATES] = hit_shift - 1;
       }
     }
 
