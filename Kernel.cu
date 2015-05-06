@@ -155,7 +155,7 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
           }
 
           // The first element contains how many compatible hits are there
-          hpointer[h0_index * NUM_MAX_CANDIDATES] = hit_shift - prev_hit_shift - 1;
+          hpointer[prev_hit_shift] = hit_shift - prev_hit_shift - 1;
           hit_candidate_pointer[h0_index] = prev_hit_shift;
         }
       }
