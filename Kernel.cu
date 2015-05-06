@@ -111,11 +111,13 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
   if (threadIdx.x==0 && threadIdx.y==0) {
 
     int* hpointer = hit_candidates;
+    int hit_shift = 0;
 
     // const int blockDim_product = blockDim.x * blockDim.y;
     int first_sensor = 51;
     while (first_sensor >= 4) {
       const int second_sensor = first_sensor - 2;
+
 
       // Optional: Do it with z from sensors
       // zs of both sensors
@@ -129,7 +131,8 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
         bool inside_bounds = h0_element < sensor_hitNums[first_sensor];
 
         if (inside_bounds) {
-          int hit_shift = 1;
+          int prev_hit_shift = hit_shift;
+          hit_shift++;
           const int h0_index = sensor_hitStarts[first_sensor] + h0_element;
           Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index], hit_Zs[h0_index]};
           
@@ -149,13 +152,11 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
                 hpointer[hit_shift++] = h1_index;
               }
             }
-
-            // The first element contains how many compatible hits are there
-            hpointer[h0_index * NUM_MAX_CANDIDATES] = hit_shift - 1;
           }
 
-          hit_candidate_pointer[h0_index] = hpointer;
-          hpointer += hit_shift;
+          // The first element contains how many compatible hits are there
+          hpointer[h0_index * NUM_MAX_CANDIDATES] = hit_shift - prev_hit_shift - 1;
+          hit_candidate_pointer[h0_index] = prev_hit_shift;
         }
       }
 
