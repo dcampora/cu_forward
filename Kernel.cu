@@ -110,7 +110,6 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
   // One per block of threads - in other words, one per event
   if (threadIdx.x==0 && threadIdx.y==0) {
 
-    int* hpointer = hit_candidates;
     int hit_shift = 0;
 
     // const int blockDim_product = blockDim.x * blockDim.y;
@@ -149,13 +148,13 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
               const float dxmax = PARAM_MAXXSLOPE * h_dist;
               const float dymax = PARAM_MAXYSLOPE * h_dist;
               if (fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax) {
-                hpointer[hit_shift++] = h1_index;
+                hit_candidates[hit_shift++] = h1_index;
               }
             }
           }
 
           // The first element contains how many compatible hits are there
-          hpointer[prev_hit_shift] = hit_shift - prev_hit_shift - 1;
+          hit_candidates[prev_hit_shift] = hit_shift - prev_hit_shift - 1;
           hit_candidate_pointer[h0_index] = prev_hit_shift;
         }
       }
