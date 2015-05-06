@@ -70,6 +70,8 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
 
 /**
  * @brief Fills dev_hit_candidates.
+ *
+ * At the moment, to evaluate its impact, it's done simply sequentially.
  * 
  * @param dev_hit_candidates 
  * @param no_sensors         
@@ -79,60 +81,84 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
  * @param hit_Ys             
  * @param hit_Zs             
  */
-__device__ void fillCandidates(int* const hit_candidates, const int no_sensors, 
-  const int* const sensor_hitStarts, const int* const sensor_hitNums,
-  const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs) {
+__global__ void fillCandidates(int* const dev_hit_candidate_pointer,
+  int* const dev_hit_candidates, const char* const dev_input, int* const dev_hit_offsets) {
 
-  const int blockDim_product = blockDim.x * blockDim.y;
-  int first_sensor = 51;
-  while (first_sensor >= 4) {
-    const int second_sensor = first_sensor - 2;
+  /* Data initialization */
+  const int event_number = blockIdx.x;
 
-    // Optional: Do it with z from sensors
-    // zs of both sensors
-    // const float z_first_sensor = ... ;
+  // Pointers to data within the event
+  const int data_offset = dev_event_offsets[event_number];
+  const int* const no_sensors = (const int*) &dev_input[data_offset];
+  const int* const no_hits = (const int*) (no_sensors + 1);
+  const int* const sensor_Zs = (const int*) (no_hits + 1);
+  const int number_of_sensors = no_sensors[0];
+  const int number_of_hits = no_hits[0];
+  const int* const sensor_hitStarts = (const int*) (sensor_Zs + number_of_sensors);
+  const int* const sensor_hitNums = (const int*) (sensor_hitStarts + number_of_sensors);
+  const unsigned int* const hit_IDs = (const unsigned int*) (sensor_hitNums + number_of_sensors);
+  const float* const hit_Xs = (const float*) (hit_IDs + number_of_hits);
+  const float* const hit_Ys = (const float*) (hit_Xs + number_of_hits);
+  const float* const hit_Zs = (const float*) (hit_Ys + number_of_hits);
 
-    // Iterate in all hits in z0
-    for (int i=0; i<((int) ceilf( ((float) sensor_hitNums[first_sensor]) / blockDim_product)); ++i) {
-      const int h0_element = blockDim.x * i + threadIdx.x * blockDim.y + threadIdx.y;
-      bool inside_bounds = h0_element < sensor_hitNums[first_sensor];
+  // Per side datatypes
+  const int hit_offset = dev_hit_offsets[event_number];
+  int* const hit_candidates = dev_hit_candidates + hit_offset * NUM_MAX_CANDIDATES;
 
-      if (inside_bounds) {
-        int hit_shift = 1;
-        const int h0_index = sensor_hitStarts[first_sensor] + h0_element;
-        Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index], hit_Zs[h0_index]};
-        
-        // Iterate in all hits in z1
-        for (int h1_element=0; h1_element<sensor_hitNums[second_sensor]; ++h1_element) {
-          inside_bounds = h1_element < sensor_hitNums[second_sensor];
+  // One per block of threads - in other words, one per event
+  if (threadIdx.x==0 && threadIdx.y==0) {
 
-          if (inside_bounds) {
-            const int h1_index = sensor_hitStarts[second_sensor] + h1_element;
-            Hit h1 {hit_Xs[h1_index], hit_Ys[h1_index], hit_Zs[h1_index]};
+    int* hpointer = hit_candidates;
 
-            // Check if h0 and h1 are compatible
-            const float h_dist = fabs(h1.z - h0.z);
-            const float dxmax = PARAM_MAXXSLOPE * h_dist;
-            const float dymax = PARAM_MAXYSLOPE * h_dist;
-            if (fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax) {
-              hit_candidates[h0_index * NUM_MAX_CANDIDATES + hit_shift++] = h1_index;
-            }
+    const int blockDim_product = blockDim.x * blockDim.y;
+    int first_sensor = 51;
+    while (first_sensor >= 4) {
+      const int second_sensor = first_sensor - 2;
 
-            if (hit_shift == NUM_MAX_CANDIDATES) {
-                // Ugly - Check if this happens
-                // NUM_MAX_CANDIDATES has to be higher, or it has to
-                // grow dinamically
-                break;
+      // Optional: Do it with z from sensors
+      // zs of both sensors
+      // const float z_first_sensor = ... ;
+
+      // Iterate in all hits in z0
+      // for (int i=0; i<((int) ceilf( ((float) sensor_hitNums[first_sensor]) / blockDim_product)); ++i) {
+      //   const int h0_element = blockDim.x * i + threadIdx.x * blockDim.y + threadIdx.y;
+      for (int i=0; i<sensor_hitNums[first_sensor]; ++i) {
+        const int h0_element = i;
+        bool inside_bounds = h0_element < sensor_hitNums[first_sensor];
+
+        if (inside_bounds) {
+          int hit_shift = 1;
+          const int h0_index = sensor_hitStarts[first_sensor] + h0_element;
+          Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index], hit_Zs[h0_index]};
+          
+          // Iterate in all hits in z1
+          for (int h1_element=0; h1_element<sensor_hitNums[second_sensor]; ++h1_element) {
+            inside_bounds = h1_element < sensor_hitNums[second_sensor];
+
+            if (inside_bounds) {
+              const int h1_index = sensor_hitStarts[second_sensor] + h1_element;
+              Hit h1 {hit_Xs[h1_index], hit_Ys[h1_index], hit_Zs[h1_index]};
+
+              // Check if h0 and h1 are compatible
+              const float h_dist = fabs(h1.z - h0.z);
+              const float dxmax = PARAM_MAXXSLOPE * h_dist;
+              const float dymax = PARAM_MAXYSLOPE * h_dist;
+              if (fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax) {
+                hpointer[hit_shift++] = h1_index;
+              }
             }
           }
+
+          // The first element contains how many compatible hits are there
+          hpointer[h0_index * NUM_MAX_CANDIDATES] = hit_shift - 1;
         }
 
-        // The first element contains how many compatible hits are there
-        hit_candidates[h0_index * NUM_MAX_CANDIDATES] = hit_shift - 1;
+        hit_candidate_pointer[h0_index] = hpointer;
+        hpointer += hit_shift;
       }
-    }
 
-    --first_sensor;
+      --first_sensor;
+    }
   }
 }
 
@@ -162,9 +188,9 @@ __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
  * @param dev_hit_offsets         
  */
 __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_input,
-  int* const dev_tracks_to_follow,
-  bool* const dev_hit_used, int* const dev_hit_candidates, int* const dev_atomicsStorage, Track* const dev_tracklets,
-  int* const dev_weak_tracks, int* const dev_event_offsets, int* const dev_hit_offsets, float* const dev_best_fits) {
+  int* const dev_tracks_to_follow, bool* const dev_hit_used, int* const dev_atomicsStorage, Track* const dev_tracklets,
+  int* const dev_weak_tracks, int* const dev_event_offsets, int* const dev_hit_offsets, float* const dev_best_fits,
+  int* const dev_hit_candidate_pointer, int* const dev_hit_candidates) {
   
   /* Data initialization */
   // Each event is treated with two blocks, one for each side.
@@ -195,6 +221,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   const int hit_offset = dev_hit_offsets[event_number];
   bool* const hit_used = dev_hit_used + hit_offset;
   int* const hit_candidates = dev_hit_candidates + hit_offset * NUM_MAX_CANDIDATES;
+  int* const hit_candidate_pointer = dev_hit_candidate_pointer + hit_offset;
 
   int* const tracks_to_follow = dev_tracks_to_follow + tracks_offset;
   int* const weak_tracks = dev_weak_tracks + tracks_offset;
@@ -217,8 +244,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ int sh_hit_process [NUMTHREADS_X];
   __shared__ int sensor_data [6];
 
-  // Startup candidates matrix :)
-  fillCandidates(hit_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
+  // fillCandidates
 
   // Deal with odd or even in the same thread
   int first_sensor = 51;
@@ -451,8 +477,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
 
       // Only iterate in the hits indicated by hit_candidates :)
-      const int h0_shift = h0_index * NUM_MAX_CANDIDATES;
-      const int num_h1_to_process = hit_candidates[h0_shift];
+      const int h0_candidate_pointer = hit_candidate_pointer[h0_index];
+      const int num_h1_to_process = hit_candidates[h0_candidate_pointer];
       atomicMax(max_numhits_to_process, num_h1_to_process);
 
       __syncthreads();
@@ -465,7 +491,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         int h1_index;
 
         if (inside_bounds) {
-          h1_index = hit_candidates[h0_shift + 1 + h1_element];
+          h1_index = hit_candidates[h0_candidate_pointer + 1 + h1_element];
           is_h1_used = hit_used[h1_index];
           if (!is_h1_used) {
             h1.x = hit_Xs[h1_index];
