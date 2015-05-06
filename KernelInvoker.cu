@@ -147,8 +147,8 @@ cudaError_t invokeParallelSearch(
       cudaCheck(cudaMemset(dev_hit_candidates, -1, acc_hits * NUM_MAX_CANDIDATES * sizeof(int)));
       cudaCheck(cudaMemset(dev_hit_candidate_pointer, -1, acc_hits * NUM_MAX_CANDIDATES * sizeof(int)));
 
-      fillCandidates<<<numBlocks, 1>>>(dev_hit_candidate_pointer, dev_hit_candidates,
-        dev_input, dev_hit_offsets);
+      fillCandidates<<<numBlocks, 1>>>(dev_hit_candidate_pointer,
+        dev_hit_candidates, dev_input, dev_event_offsets, dev_hit_offsets);
 
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;

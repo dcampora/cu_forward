@@ -82,7 +82,8 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
  * @param hit_Zs             
  */
 __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
-  int* const dev_hit_candidates, const char* const dev_input, int* const dev_hit_offsets) {
+  int* const dev_hit_candidates, const char* const dev_input,
+  int* const dev_event_offsets, int* const dev_hit_offsets) {
 
   /* Data initialization */
   const int event_number = blockIdx.x;
@@ -104,13 +105,14 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
   // Per side datatypes
   const int hit_offset = dev_hit_offsets[event_number];
   int* const hit_candidates = dev_hit_candidates + hit_offset * NUM_MAX_CANDIDATES;
+  int* const hit_candidate_pointer = dev_hit_candidate_pointer + hit_offset;
 
   // One per block of threads - in other words, one per event
   if (threadIdx.x==0 && threadIdx.y==0) {
 
     int* hpointer = hit_candidates;
 
-    const int blockDim_product = blockDim.x * blockDim.y;
+    // const int blockDim_product = blockDim.x * blockDim.y;
     int first_sensor = 51;
     while (first_sensor >= 4) {
       const int second_sensor = first_sensor - 2;
@@ -147,14 +149,14 @@ __global__ void fillCandidates(int* const dev_hit_candidate_pointer,
                 hpointer[hit_shift++] = h1_index;
               }
             }
+
+            // The first element contains how many compatible hits are there
+            hpointer[h0_index * NUM_MAX_CANDIDATES] = hit_shift - 1;
           }
 
-          // The first element contains how many compatible hits are there
-          hpointer[h0_index * NUM_MAX_CANDIDATES] = hit_shift - 1;
+          hit_candidate_pointer[h0_index] = hpointer;
+          hpointer += hit_shift;
         }
-
-        hit_candidate_pointer[h0_index] = hpointer;
-        hpointer += hit_shift;
       }
 
       --first_sensor;
