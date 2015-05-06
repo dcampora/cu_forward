@@ -61,11 +61,20 @@ struct Track { // 4 + 24 * 4 = 100 B
 	// float x0, tx, y0, ty; // deprecated
 	unsigned int hitsNum;
 	unsigned int hits[MAX_TRACK_SIZE];
+
+    __device__ Track(){}
+    __device__ Track(const unsigned int _hitsNum, unsigned int _h0, unsigned int _h1, unsigned int _h2) : 
+        hitsNum(_hitsNum) {
+        
+        hits[0] = _h0;
+        hits[1] = _h1;
+        hits[2] = _h2;
+    }
 };
 
 struct Tracklet {
     unsigned int hitsNum;
-    unsigned int h0, h1, h2;
+    unsigned int h0, h1, h2, hnext;
 
     __device__ Tracklet(){}
     __device__ Tracklet(const unsigned int _hitsNum, unsigned int _h0, unsigned int _h1, unsigned int _h2) : 

@@ -87,7 +87,6 @@ __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
   int first_sensor = 51;
   while (first_sensor >= 4) {
     const int second_sensor = first_sensor - 2;
-    int hit_shift = 1;
 
     // Optional: Do it with z from sensors
     // zs of both sensors
@@ -99,6 +98,7 @@ __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
       bool inside_bounds = h0_element < sensor_hitNums[first_sensor];
 
       if (inside_bounds) {
+        int hit_shift = 1;
         const int h0_index = sensor_hitStarts[first_sensor] + h0_element;
         Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index], hit_Zs[h0_index]};
         
