@@ -260,7 +260,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     
     // Iterate in sensors
     // Load in shared
-    if (threadIdx.x < 8 && threadIdx.y == 0) {
+    if (threadIdx.x < 6 && threadIdx.y == 0) {
       const int sensor_number = first_sensor - (threadIdx.x % 3) * 2;
       const int* const sensor_pointer = threadIdx.x < 3 ? sensor_hitStarts : sensor_hitNums;
 
