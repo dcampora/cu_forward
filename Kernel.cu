@@ -114,15 +114,15 @@ __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
             // Check if h0 and h1 are compatible
             const float h_dist = fabs(h1.z - h0.z);
             const float dxmax = PARAM_MAXXSLOPE * h_dist;
-            const float dymax = PARAM_MAXYSLOPE * h_dist;
+            const bool tol_condition = fabs(h1.x - h0.x) < dxmax;
             
             // Find the first one
-            if (!first_found && fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax) {
+            if (!first_found && tol_condition) {
               hit_candidates[2 * h0_index] = h1_index;
               first_found = true;
             }
             // The last one, only if the first one has already been found
-            else if (first_found && !(fabs(h1.x - h0.x) < dxmax && fabs(h1.y - h0.y) < dymax)) {
+            else if (first_found && !tol_condition) {
               // hit_candidates[2 * h0_index + 1] = h1_index;
               last_found = true;
               break;
