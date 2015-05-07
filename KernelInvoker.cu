@@ -78,9 +78,6 @@ cudaError_t invokeParallelSearch(
   cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
 
   // Allocate memory
-  // Allocate CPU buffers
-  const int atomic_space = NUM_ATOMICS + 1;
-  int* atomics = (int*) malloc(eventsToProcess * atomic_space * sizeof(int));
 
   // Prepare event offset and hit offset
   std::vector<int> event_offsets;
@@ -96,6 +93,11 @@ cudaError_t invokeParallelSearch(
     acc_size += event_size;
     acc_hits += event->numberOfHits;
   }
+
+  // Allocate CPU buffers
+  const int atomic_space = NUM_ATOMICS + 1;
+  int* atomics = (int*) malloc(eventsToProcess * atomic_space * sizeof(int));  
+  int* hit_candidates = (int*) malloc(2 * acc_hits * sizeof(int));
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
@@ -187,6 +189,15 @@ cudaError_t invokeParallelSearch(
     cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
   }
   DEBUG << std::endl;
+
+  cudaCheck(cudaMemcpy(hit_candidates, dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+  
+  std::ofstream hc0("hit_candidates.0");
+  std::ofstream hc1("hit_candidates.1");
+  for (int i=0; i<hit_offsets[1]; ++i) hc0.write(hit_candidates[i]);
+  for (int i=hit_offsets[1]; i<acc_hits; ++i) hc1.write(hit_candidates[i]);
+  hc0.close();
+  hc1.close();
 
   // Print info about the solution
   // const int numberOfTracks = output[0].size() / sizeof(Track);
