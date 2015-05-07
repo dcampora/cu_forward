@@ -438,12 +438,14 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       shift_lastPointer += blockDim.x;
 
       // Track creation starts
+      unsigned int best_hit_h1, best_hit_h2;
+      Hit h0, h1, h2;
+      int first_h1;
+      
       const int h0_index = sh_hit_process[threadIdx.x];
       bool inside_bounds = h0_index != -1;
-      Hit h0, h1, h2;
-      unsigned int best_hit_h1, best_hit_h2;
-      float best_fit = MAX_FLOAT;
       unsigned int num_h1_to_process = 0;
+      float best_fit = MAX_FLOAT;
 
       // We will repeat this for performance reasons
       if (inside_bounds) {
@@ -455,7 +457,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // h0.z = hit_Zs[h0_index];
         
         // Only iterate in the hits indicated by hit_candidates :)
-        const int first_h1 = hit_candidates[2 * h0_index];
+        first_h1 = hit_candidates[2 * h0_index];
         const int last_h1 = hit_candidates[2 * h0_index + 1];
         num_h1_to_process = last_h1 - first_h1;
         atomicMax(max_numhits_to_process, num_h1_to_process);
