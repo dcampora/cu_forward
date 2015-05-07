@@ -195,14 +195,13 @@ cudaError_t invokeParallelSearch(
   }
   DEBUG << std::endl;
 
-  cudaCheck(cudaMemcpy(hit_candidates, dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
-  
-  std::ofstream hc0("hit_candidates.0");
-  std::ofstream hc1("hit_candidates.1");
-  for (int i=0; i<hit_offsets[1] * 2; ++i) hc0 << hit_candidates[i] << std::endl;
-  for (int i=hit_offsets[1] * 2; i<acc_hits * 2; ++i) hc1 << hit_candidates[i] << std::endl;
-  hc0.close();
-  hc1.close();
+  // cudaCheck(cudaMemcpy(hit_candidates, dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+  // std::ofstream hc0("hit_candidates.0");
+  // std::ofstream hc1("hit_candidates.1");
+  // for (int i=0; i<hit_offsets[1] * 2; ++i) hc0 << hit_candidates[i] << std::endl;
+  // for (int i=hit_offsets[1] * 2; i<acc_hits * 2; ++i) hc1 << hit_candidates[i] << std::endl;
+  // hc0.close();
+  // hc1.close();
 
   // Print info about the solution
   // const int numberOfTracks = output[0].size() / sizeof(Track);
