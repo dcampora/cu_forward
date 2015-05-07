@@ -194,8 +194,8 @@ cudaError_t invokeParallelSearch(
   
   std::ofstream hc0("hit_candidates.0");
   std::ofstream hc1("hit_candidates.1");
-  for (int i=0; i<hit_offsets[1]; ++i) hc0.write(hit_candidates[i]);
-  for (int i=hit_offsets[1]; i<acc_hits; ++i) hc1.write(hit_candidates[i]);
+  for (int i=0; i<hit_offsets[1]; ++i) hc0 << hit_candidates[i];
+  for (int i=hit_offsets[1]; i<acc_hits; ++i) hc1 << hit_candidates[i];
   hc0.close();
   hc1.close();
 
