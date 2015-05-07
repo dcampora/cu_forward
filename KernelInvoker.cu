@@ -23,20 +23,25 @@ cudaError_t invokeParallelSearch(
   const std::vector<uint8_t>* startingEvent_input = input[startingEvent];
   setHPointersFromInput((uint8_t*) &(*startingEvent_input)[0], startingEvent_input->size());
   
-  // Order the input vectors by h_hit_Xs natural order
+  // Order *all* the input vectors by h_hit_Xs natural order
   // per sensor
-  int acc_hitnums = 0;
-  for (int i=0; i<*h_no_sensors; ++i){
-    const int hitnums = h_sensor_hitNums[i];
-    quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
-    acc_hitnums += hitnums;
+  int number_of_sensors = *h_no_sensors;
+  for (int i=0; i<eventsToProcess; ++i) {
+    int acc_hitnums = 0;
+    const std::vector<uint8_t>* event_input = input[i];
+    setHPointersFromInput((uint8_t*) &(*event_input)[0], event_input->size());
+
+    for (int j=0; j<number_of_sensors; j++) {
+      const int hitnums = h_sensor_hitNums[j];
+      quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
+      acc_hitnums += hitnums;
+    }
   }
-  // printInfo(10, 20);
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){
     // map to convert from z of hit to module
-    for(int i=0; i<*h_no_sensors; ++i){
+    for(int i=0; i<number_of_sensors; ++i){
       const int z = h_sensor_Zs[i];
       zhit_to_module[z] = i;
     }
