@@ -78,7 +78,7 @@ else
   GCC ?= g++
 endif
 endif
-NVCC := $(CUDA_PATH)/bin/nvcc -O2 --maxrregcount=16 -std=c++11 -ccbin $(GCC)
+NVCC := $(CUDA_PATH)/bin/nvcc -O2 -std=c++11 -ccbin $(GCC)
 
 # internal flags
 NVCCFLAGS   := -m${OS_SIZE} ${ARCH_FLAGS}
@@ -157,7 +157,7 @@ SMS ?= 20 30 32 35 37 50
 else
 SMS ?= 11 20 30 35 37 50
 endif
-SMS = 30
+SMS = 50
 ifeq ($(SMS),)
 $(info >>> WARNING - no SM architectures have been specified - waiving sample <<<)
 SAMPLE_ENABLED := 0

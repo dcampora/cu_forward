@@ -443,6 +443,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       Hit h0, h1, h2;
       unsigned int best_hit_h1, best_hit_h2;
       float best_fit = MAX_FLOAT;
+      unsigned int num_h1_to_process = 0;
 
       // We will repeat this for performance reasons
       if (inside_bounds) {
@@ -452,15 +453,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // h0.x = hit_Xs[h0_index];
         // h0.y = hit_Ys[h0_index];
         // h0.z = hit_Zs[h0_index];
+        
+        // Only iterate in the hits indicated by hit_candidates :)
+        const int first_h1 = hit_candidates[2 * h0_index];
+        const int last_h1 = hit_candidates[2 * h0_index + 1];
+        num_h1_to_process = last_h1 - first_h1;
+        atomicMax(max_numhits_to_process, num_h1_to_process);
       }
-
-      // Iterate in the sensor_data[SENSOR_DATA_HITNUMS + 1] with blockDim.y threads
-
-      // Only iterate in the hits indicated by hit_candidates :)
-      const int first_h1 = hit_candidates[2 * h0_index];
-      const int last_h1 = hit_candidates[2 * h0_index + 1];
-      const unsigned int num_h1_to_process = last_h1 - first_h1;
-      atomicMax(max_numhits_to_process, num_h1_to_process);
 
       __syncthreads();
 
