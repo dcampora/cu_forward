@@ -200,7 +200,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   // Per side datatypes
   const int hit_offset = dev_hit_offsets[event_number];
   bool* const hit_used = dev_hit_used + hit_offset;
-  int* const hit_candidates = dev_hit_candidates + hit_offset * NUM_MAX_CANDIDATES;
+  int* const hit_candidates = dev_hit_candidates + hit_offset * 2;
 
   int* const tracks_to_follow = dev_tracks_to_follow + tracks_offset;
   int* const weak_tracks = dev_weak_tracks + tracks_offset;
