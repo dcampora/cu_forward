@@ -11,7 +11,7 @@
  * @param  h2 
  * @return    
  */
-__device__ float fitHits(const Hit& h0, const Hit& h1, const Hit &h2) {
+__device__ float fitHits(const Hit& h0, const Hit& h1, const Hit &h2, const float dymax) {
   // Max dx, dy permissible over next hit
 
   // First approximation -
@@ -28,7 +28,8 @@ __device__ float fitHits(const Hit& h0, const Hit& h1, const Hit &h2) {
   const float scatterDenom = 1.f / (h2.z - h1.z);
   const float scatter = scatterNum * scatterDenom * scatterDenom;
 
-  const bool condition = scatter < MAX_SCATTER;
+  const bool scatter_condition = scatter < MAX_SCATTER;
+  const bool condition = fabs(h1.y - h0.y) < dymax && scatter_condition;
 
   return condition * scatter + !condition * MAX_FLOAT;
 }
@@ -100,7 +101,7 @@ __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
         bool first_found = false;
         bool last_found = false;
         const int h0_index = sensor_hitStarts[first_sensor] + h0_element;
-        int h1_index = -1;
+        int h1_index;
         Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index], hit_Zs[h0_index]};
         
         // Iterate in all hits in z1
@@ -223,8 +224,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ int sh_hit_process [NUMTHREADS_X];
   __shared__ int sensor_data [6];
 
-  fillCandidates(hit_candidates, number_of_sensors,
-    sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
+  fillCandidates(hit_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
 
   // Deal with odd or even in the same thread
   int first_sensor = 51;
@@ -441,7 +441,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       unsigned int best_hit_h1, best_hit_h2;
       Hit h0, h1, h2;
       int first_h1;
-      
+      float dymax;
+
       const int h0_index = sh_hit_process[threadIdx.x];
       bool inside_bounds = h0_index != -1;
       unsigned int num_h1_to_process = 0;
@@ -456,6 +457,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // h0.y = hit_Ys[h0_index];
         // h0.z = hit_Zs[h0_index];
         
+        // Calculate new dymax
+        const float s1_z = hit_Zs[sensor_data[1]];
+        const float h_dist = fabs(s1_z - h0.z);
+        dymax = PARAM_MAXYSLOPE * h_dist;
+
         // Only iterate in the hits indicated by hit_candidates :)
         first_h1 = hit_candidates[2 * h0_index];
         const int last_h1 = hit_candidates[2 * h0_index + 1];
@@ -509,7 +515,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
               h2.y = sh_hit_y[sh_h2_index];
               h2.z = sh_hit_z[sh_h2_index];
 
-              const float fit = fitHits(h0, h1, h2);
+              const float fit = fitHits(h0, h1, h2, dymax);
               const bool fit_is_better = fit < best_fit;
 
               best_fit = fit_is_better * fit + !fit_is_better * best_fit;
