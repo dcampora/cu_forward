@@ -151,6 +151,11 @@ cudaError_t invokeParallelSearch(
       cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * atomic_space * sizeof(int)));
       cudaCheck(cudaMemset(dev_hit_candidates, -1, 2 * acc_hits * sizeof(int)));
 
+      fillCandidates<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input,
+        dev_tracks_to_follow, dev_hit_used, dev_atomicsStorage, dev_tracklets,
+        dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits,
+        dev_hit_candidates);
+
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
       float t0;
