@@ -460,7 +460,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       const int first_h1 = hit_candidates[2 * h0_index];
       const int last_h1 = hit_candidates[2 * h0_index + 1];
       const int num_h1_to_process = last_h1 - first_h1;
-      const int a = atomicMax(max_numhits_to_process, num_h1_to_process);
+      atomicMax(max_numhits_to_process, num_h1_to_process);
 
       __syncthreads();
 
