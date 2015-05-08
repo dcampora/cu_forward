@@ -1,4 +1,4 @@
-== General strategy of the algorithm ==
+General strategy of the algorithm
 
 Triplets are chosen based on a fit and forwarded using a typical track following algo.
 
