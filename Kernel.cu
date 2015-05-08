@@ -82,13 +82,13 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
  * @param hit_Ys             
  * @param hit_Zs             
  */
-__device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
+__device__ void fillCandidates(int* const hit_candidates, const int number_of_sensors,
   const int* const sensor_hitStarts, const int* const sensor_hitNums,
   const float* const hit_Xs, const float* const hit_Ys,
   const float* const hit_Zs) {
 
   const int blockDim_product = blockDim.x * blockDim.y;
-  int first_sensor = 51;
+  int first_sensor = number_of_sensors - 1;
   while (first_sensor >= 4) {
     const int second_sensor = first_sensor - 2;
 
@@ -227,7 +227,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   fillCandidates(hit_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
 
   // Deal with odd or even in the same thread
-  int first_sensor = 51;
+  int first_sensor = number_of_sensors - 1;
 
   // Prepare s1 and s2 for the first iteration
   unsigned int prev_ttf, last_ttf = 0;
