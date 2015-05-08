@@ -1,19 +1,7 @@
-Memory required on the GPU at this point per event:
+== General strategy of the algorithm ==
 
+Triplets are chosen based on a fit and forwarded using a typical track following algo.
 
-Custom datatypes + input datafile in MiB:
+Ghosts are inherently out of the equation, as the algorithm considers all possible triplets and keeps the best. Upon following, if a hit is not found in the adjacent module, the track[let] is considered complete. Clones are removed based off a used-hit mechanism. A global array keeps track of used hits when forming tracks consist of 4 or more hits.
 
-(2 * 10000 * 116 + 3 * 10000 * 4 + 61 * 1024) / (1024.0 * 1024.0) = 2.4 MiB per event
-
----
-
-TODO:
-
-After the ameising conversation with D. Rohr :)
-
-- Do an array of neighbours to search from at the beginning, per hit.
-  This way, we'll have coalescence (!) when searching in the window of the hit :)
-  We don't even need a dynamic array for the hits - Since only the first two hits
-  are checked for the neighbours.
-
-That should be all :)
+The algorithm consists in two stages: Track following, and seeding. In each step [iteration], the track following is performed first, hits are marked as used, and then the seeding is performed, requiring the first two hits in the triplet to be unused.
