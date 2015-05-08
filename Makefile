@@ -157,7 +157,7 @@ SMS ?= 20 30 32 35 37 50
 else
 SMS ?= 11 20 30 35 37 50
 endif
-SMS = 50
+SMS = 30
 ifeq ($(SMS),)
 $(info >>> WARNING - no SM architectures have been specified - waiving sample <<<)
 SAMPLE_ENABLED := 0
