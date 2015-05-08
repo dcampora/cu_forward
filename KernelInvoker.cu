@@ -22,12 +22,26 @@ cudaError_t invokeParallelSearch(
   
   const std::vector<uint8_t>* startingEvent_input = input[startingEvent];
   setHPointersFromInput((uint8_t*) &(*startingEvent_input)[0], startingEvent_input->size());
-  // printInfo();
+  
+  // Order *all* the input vectors by h_hit_Xs natural order
+  // per sensor
+  int number_of_sensors = *h_no_sensors;
+  for (int i=0; i<eventsToProcess; ++i) {
+    int acc_hitnums = 0;
+    const std::vector<uint8_t>* event_input = input[i];
+    setHPointersFromInput((uint8_t*) &(*event_input)[0], event_input->size());
+
+    for (int j=0; j<number_of_sensors; j++) {
+      const int hitnums = h_sensor_hitNums[j];
+      quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
+      acc_hitnums += hitnums;
+    }
+  }
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){
     // map to convert from z of hit to module
-    for(int i=0; i<*h_no_sensors; ++i){
+    for(int i=0; i<number_of_sensors; ++i){
       const int z = h_sensor_Zs[i];
       zhit_to_module[z] = i;
     }
@@ -43,17 +57,6 @@ cudaError_t invokeParallelSearch(
     }
   }
 
-  // int j = 0;
-  // for (int z=0; z<input.size(); ++z){
-  //   setHPointersFromInput((uint8_t*) &(*input[z])[0], input[z]->size());
-  //   for (int i=0; i<*h_no_sensors; ++i) {
-  //     if (h_sensor_hitNums[i] > j){
-  //       j = h_sensor_hitNums[i];
-  //     }
-  //   }
-  // }
-  // DEBUG << "Max hitnums in event: " << j << std::endl;
-
   // int* h_prevs, *h_nexts;
   // Histo histo;
   Track* dev_tracks;
@@ -65,6 +68,8 @@ cudaError_t invokeParallelSearch(
   int*   dev_weak_tracks;
   int*   dev_event_offsets;
   int*   dev_hit_offsets;
+  float* dev_best_fits;
+  int*   dev_hit_candidates;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int device_number = 0;
@@ -74,13 +79,10 @@ cudaError_t invokeParallelSearch(
 
   // Some startup settings
   dim3 numBlocks(eventsToProcess);
-  dim3 numThreads(64);
+  dim3 numThreads(NUMTHREADS_X, 2);
   cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
 
   // Allocate memory
-  // Allocate CPU buffers
-  const int num_atomics = 5;
-  int* atomics = (int*) malloc(eventsToProcess * num_atomics * sizeof(int));
 
   // Prepare event offset and hit offset
   std::vector<int> event_offsets;
@@ -97,16 +99,23 @@ cudaError_t invokeParallelSearch(
     acc_hits += event->numberOfHits;
   }
 
+  // Allocate CPU buffers
+  const int atomic_space = NUM_ATOMICS + 1;
+  int* atomics = (int*) malloc(eventsToProcess * atomic_space * sizeof(int));  
+  int* hit_candidates = (int*) malloc(2 * acc_hits * sizeof(int));
+
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * MAX_TRACKS * sizeof(Track)));
   cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * MAX_TRACKS * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
+  cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * MAX_NUMTHREADS_Y * sizeof(float)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_candidates, 2 * acc_hits * sizeof(int)));
 
   // Copy stuff from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_event_offsets, &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
@@ -118,39 +127,65 @@ cudaError_t invokeParallelSearch(
     acc_size += input[startingEvent + i]->size();
   }
 
-  // Initialize what we need
-  cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
-  cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * num_atomics * sizeof(int)));
+  // Adding timing
+  // Timing calculation
+  unsigned int niterations = 4;
+  unsigned int nexperiments = 8;
 
-  // searchByTriplet
-  DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event"
-    << (eventsToProcess>1 ? "s" : "") << "..." << std::endl;
-  cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
-  float t0;
+  std::vector<std::vector<float>> time_values {nexperiments};
+  std::vector<std::map<std::string, float>> mresults {nexperiments};
+  // std::vector<std::string> exp_names {nexperiments};
 
-  cudaEventCreate(&start_searchByTriplet);
-  cudaEventCreate(&stop_searchByTriplet);
+  DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event" << (eventsToProcess>1 ? "s" : "") << std::endl 
+	  << " " << nexperiments << " experiments, " << niterations << " iterations" << std::endl;
 
-  cudaEventRecord(start_searchByTriplet, 0 );
-  
-  // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
-  searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input, dev_tracks_to_follow,
-    dev_hit_used, dev_atomicsStorage, dev_tracklets, dev_weak_tracks, dev_event_offsets, dev_hit_offsets);
+  for (auto i=0; i<nexperiments; ++i) {
 
-  cudaEventRecord( stop_searchByTriplet, 0 );
-  cudaEventSynchronize( stop_searchByTriplet );
-  cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
+    DEBUG << i << ": " << std::flush;
 
-  cudaEventDestroy( start_searchByTriplet );
-  cudaEventDestroy( stop_searchByTriplet );
+    if (nexperiments!=1) numThreads.y = i+1;
 
-  cudaCheck( cudaPeekAtLastError() );
+    for (auto j=0; j<niterations; ++j) {
+      // Initialize what we need
+      cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
+      cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * atomic_space * sizeof(int)));
+      cudaCheck(cudaMemset(dev_hit_candidates, -1, 2 * acc_hits * sizeof(int)));
 
-  DEBUG << "Done!" << std::endl;
+      // searchByTriplet
+      cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
+      float t0;
+
+      cudaEventCreate(&start_searchByTriplet);
+      cudaEventCreate(&stop_searchByTriplet);
+
+      cudaEventRecord(start_searchByTriplet, 0 );
+      
+      // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
+      searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input,
+        dev_tracks_to_follow, dev_hit_used, dev_atomicsStorage, dev_tracklets,
+        dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits,
+        dev_hit_candidates);
+
+      cudaEventRecord( stop_searchByTriplet, 0 );
+      cudaEventSynchronize( stop_searchByTriplet );
+      cudaEventElapsedTime( &t0, start_searchByTriplet, stop_searchByTriplet );
+
+      cudaEventDestroy( start_searchByTriplet );
+      cudaEventDestroy( stop_searchByTriplet );
+
+      cudaCheck( cudaPeekAtLastError() );
+
+      time_values[i].push_back(t0);
+
+      DEBUG << "." << std::flush;
+    }
+
+    DEBUG << std::endl;
+  }
 
   // Get results
   DEBUG << "Number of tracks found per event:" << std::endl << " ";
-  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * num_atomics * sizeof(int), cudaMemcpyDeviceToHost));
+  cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int), cudaMemcpyDeviceToHost));
   for (int i=0; i<eventsToProcess; ++i){
     const int numberOfTracks = atomics[i];
     DEBUG << numberOfTracks << ", ";
@@ -159,6 +194,14 @@ cudaError_t invokeParallelSearch(
     cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
   }
   DEBUG << std::endl;
+
+  // cudaCheck(cudaMemcpy(hit_candidates, dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+  // std::ofstream hc0("hit_candidates.0");
+  // std::ofstream hc1("hit_candidates.1");
+  // for (int i=0; i<hit_offsets[1] * 2; ++i) hc0 << hit_candidates[i] << std::endl;
+  // for (int i=hit_offsets[1] * 2; i<acc_hits * 2; ++i) hc1 << hit_candidates[i] << std::endl;
+  // hc0.close();
+  // hc1.close();
 
   // Print info about the solution
   // const int numberOfTracks = output[0].size() / sizeof(Track);
@@ -170,8 +213,15 @@ cudaError_t invokeParallelSearch(
   //   }
   // }
   // DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
-  
-  DEBUG << "It took " << t0 << " milliseconds." << std::endl;
+
+  // DEBUG << "It took " << t0 << " milliseconds." << std::endl;
+
+  DEBUG << std::endl << "Time averages:" << std::endl;
+  for (auto i=0; i<nexperiments; ++i){
+    mresults[i] = calcResults(time_values[i]);
+    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << (nexperiments==1 ? numThreads.y : i+1) <<  "): " << mresults[i]["mean"]
+      << " ms (std dev " << mresults[i]["deviation"] << ")" << std::endl;
+  }
 
   free(atomics);
 
@@ -254,21 +304,23 @@ void printOutSensorHits(int sensorNumber, int* prevs, int* nexts){
   }
 }
 
-void printInfo() {
+void printInfo(int numberOfSensors, int numberOfHits) {
+  numberOfSensors = numberOfSensors>52 ? 52 : numberOfSensors;
+
   DEBUG << "Read info:" << std::endl
     << " no sensors: " << h_no_sensors[0] << std::endl
     << " no hits: " << h_no_hits[0] << std::endl
-    << "First 5 sensors: " << std::endl;
+    << numberOfSensors << " sensors: " << std::endl;
 
-  for (int i=0; i<5; ++i){
+  for (int i=0; i<numberOfSensors; ++i){
     DEBUG << " Zs: " << h_sensor_Zs[i] << std::endl
       << " hitStarts: " << h_sensor_hitStarts[i] << std::endl
       << " hitNums: " << h_sensor_hitNums[i] << std::endl << std::endl;
   }
 
-  DEBUG << "First 5 hits: " << std::endl;
+  DEBUG << numberOfHits << " hits: " << std::endl;
 
-  for (int i=0; i<5; ++i){
+  for (int i=0; i<numberOfHits; ++i){
     DEBUG << " hit_id: " << h_hit_IDs[i] << std::endl
       << " hit_X: " << h_hit_Xs[i] << std::endl
       << " hit_Y: " << h_hit_Ys[i] << std::endl

@@ -181,12 +181,12 @@ int main(int argc, char *argv[])
     }
 
     // Print out first byte from formatter->inputPointer
-    std::cout << "Files read: " << input.size() << std::endl << "Sizes: ";
-
-    for (int i=0; i<input.size(); ++i){
-        std::cout << input[i].size();
-        if (i != input.size()-1) std::cout << ", ";
-    }
+    std::cout << input.size() << " files read" << std::endl;
+    // std::cout << "Sizes: ";
+    // for (int i=0; i<input.size(); ++i){
+    //     std::cout << input[i].size();
+    //     if (i != input.size()-1) std::cout << ", ";
+    // }
 
     // std::cout << std::endl << "Pointers: " << std::hex;
     // for (int i=0; i<input.size(); ++i){
