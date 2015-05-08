@@ -82,59 +82,10 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
  * @param hit_Ys             
  * @param hit_Zs             
  */
-// __device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
-//   const int* const sensor_hitStarts, const int* const sensor_hitNums,
-//   const float* const hit_Xs, const float* const hit_Ys,
-//   const float* const hit_Zs) {
-
-__global__ void fillCandidates(Track* const dev_tracks, const char* const dev_input,
-  int* const dev_tracks_to_follow, bool* const dev_hit_used, int* const dev_atomicsStorage, Track* const dev_tracklets,
-  int* const dev_weak_tracks, int* const dev_event_offsets, int* const dev_hit_offsets, float* const dev_best_fits,
-  int* const dev_hit_candidates) {
-
-  /* Data initialization */
-  // Each event is treated with two blocks, one for each side.
-  const int event_number = blockIdx.x;
-  const int events_under_process = gridDim.x;
-  const int tracks_offset = event_number * MAX_TRACKS;
-  const int blockDim_product = blockDim.x * blockDim.y;
-
-  // Pointers to data within the event
-  const int data_offset = dev_event_offsets[event_number];
-  const int* const no_sensors = (const int*) &dev_input[data_offset];
-  const int* const no_hits = (const int*) (no_sensors + 1);
-  const int* const sensor_Zs = (const int*) (no_hits + 1);
-  const int number_of_sensors = no_sensors[0];
-  const int number_of_hits = no_hits[0];
-  const int* const sensor_hitStarts = (const int*) (sensor_Zs + number_of_sensors);
-  const int* const sensor_hitNums = (const int*) (sensor_hitStarts + number_of_sensors);
-  const unsigned int* const hit_IDs = (const unsigned int*) (sensor_hitNums + number_of_sensors);
-  const float* const hit_Xs = (const float*) (hit_IDs + number_of_hits);
-  const float* const hit_Ys = (const float*) (hit_Xs + number_of_hits);
-  const float* const hit_Zs = (const float*) (hit_Ys + number_of_hits);
-
-  // Per event datatypes
-  Track* tracks = &dev_tracks[tracks_offset];
-  unsigned int* const tracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number;
-
-  // Per side datatypes
-  const int hit_offset = dev_hit_offsets[event_number];
-  bool* const hit_used = dev_hit_used + hit_offset;
-  int* const hit_candidates = dev_hit_candidates + hit_offset * 2;
-
-  int* const tracks_to_follow = dev_tracks_to_follow + tracks_offset;
-  int* const weak_tracks = dev_weak_tracks + tracks_offset;
-  Track* const tracklets = dev_tracklets + tracks_offset;
-  float* const best_fits = dev_best_fits + event_number * blockDim_product;
-
-  // Initialize variables according to event number and sensor side
-  // Insert pointers (atomics)
-  const int ip_shift = events_under_process + event_number * NUM_ATOMICS;
-  unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
-  unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
-  unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* const sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
-  unsigned int* const max_numhits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
+__device__ void fillCandidates(int* const hit_candidates, const int no_sensors,
+  const int* const sensor_hitStarts, const int* const sensor_hitNums,
+  const float* const hit_Xs, const float* const hit_Ys,
+  const float* const hit_Zs) {
 
   const int blockDim_product = blockDim.x * blockDim.y;
   int first_sensor = 51;
@@ -273,7 +224,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ int sh_hit_process [NUMTHREADS_X];
   __shared__ int sensor_data [6];
 
-  // fillCandidates(hit_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
+  fillCandidates(hit_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums, hit_Xs, hit_Ys, hit_Zs);
 
   // Deal with odd or even in the same thread
   int first_sensor = 51;
