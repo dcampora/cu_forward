@@ -82,6 +82,11 @@ cudaError_t invokeParallelSearch(
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int device_number = 0;
   cudaCheck(cudaSetDevice(device_number));
+#if USE_SHARED_FOR_HITS
+  cudaCheck(cudaDeviceSetCacheConfig(cudaFuncCachePreferShared));
+#else
+  cudaCheck(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+#endif
   cudaDeviceProp* device_properties = (cudaDeviceProp*) malloc(sizeof(cudaDeviceProp));
   cudaGetDeviceProperties(device_properties, 0);
 

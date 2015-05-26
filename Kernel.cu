@@ -185,9 +185,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   unsigned int* const max_numhits_to_process = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
 
   /* The fun begins */
+#if USE_SHARED_FOR_HITS
   __shared__ float sh_hit_x [NUMTHREADS_X];
   __shared__ float sh_hit_y [NUMTHREADS_X];
   __shared__ float sh_hit_z [NUMTHREADS_X];
+#endif
   __shared__ int sh_hit_process [NUMTHREADS_X * SH_HIT_PROCESS_MULT];
   __shared__ int sensor_data [6];
 
@@ -277,6 +279,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       float best_fit = MAX_FLOAT;
       for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k) {
         
+#if USE_SHARED_FOR_HITS
         __syncthreads();
         const int sh_hit_no = blockDim.x * k + threadIdx.x;
         if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0) {
@@ -288,14 +291,19 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     		  sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
         }
         __syncthreads();
+#endif
 
         if (ttf_condition) {
           const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
           for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
             
             const int h2_index = sensor_data[2] + kk;
+#if USE_SHARED_FOR_HITS
             const int sh_h2_index = kk % blockDim.x;
             const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
+#else
+            const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
+#endif
 
             const float fit = fitHitToTrack(tx, ty, h0, h1_z, h2);
             const bool fit_is_better = fit < best_fit;
@@ -409,7 +417,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // Track creation starts
         unsigned int best_hit_h1, best_hit_h2;
-        Hit h0, h1, h2;
+        Hit h0, h1;
         int first_h1;
         float dymax;
 
@@ -462,6 +470,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           // Tiled memory access on h2
           for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k) {
 
+#if USE_SHARED_FOR_HITS
             __syncthreads();
             const int sh_hit_no = blockDim.x * k + threadIdx.x;
             if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0) {
@@ -473,6 +482,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         			sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
             }
             __syncthreads();
+#endif
 
             if (inside_bounds && !is_h1_used) {
 
@@ -480,10 +490,12 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
               for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
 
                 const int h2_index = sensor_data[2] + kk;
+#if USE_SHARED_FOR_HITS
                 const int sh_h2_index = kk % blockDim.x;
-                h2.x = sh_hit_x[sh_h2_index];
-                h2.y = sh_hit_y[sh_h2_index];
-                h2.z = sh_hit_z[sh_h2_index];
+                const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
+#else
+                const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
+#endif
 
                 // Predictions of x and y for this hit
                 const float z2_tz = (h2.z - h0.z) / (h1.z - h0.z);
