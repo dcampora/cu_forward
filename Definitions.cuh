@@ -14,6 +14,7 @@
 #define NUMTHREADS_X 64
 #define MAX_NUMTHREADS_Y 16
 #define NUM_ATOMICS 5
+#define SH_HIT_PROCESS_MULT 1
 
 #define MAX_TRACKS 8000
 #define MAX_TRACK_SIZE 24

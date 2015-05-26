@@ -25,6 +25,7 @@ cudaError_t invokeParallelSearch(
   
   // Order *all* the input vectors by h_hit_Xs natural order
   // per sensor
+  // int asdf;
   int number_of_sensors = *h_no_sensors;
   for (int i=0; i<eventsToProcess; ++i) {
     int acc_hitnums = 0;
@@ -35,8 +36,15 @@ cudaError_t invokeParallelSearch(
       const int hitnums = h_sensor_hitNums[j];
       quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
       acc_hitnums += hitnums;
+
+      // for (int k=0; k<hitnums; ++k) {
+      //   if (h_hit_IDs[h_sensor_hitStarts[j] + k] == 4294967295) {
+      //     asdf = 5;
+      //   }
+      // }
     }
   }
+  // DEBUG << asdf << std::endl;
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){
@@ -151,6 +159,10 @@ cudaError_t invokeParallelSearch(
       cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * atomic_space * sizeof(int)));
       cudaCheck(cudaMemset(dev_hit_candidates, -1, 2 * acc_hits * sizeof(int)));
 
+      // Just for debugging purposes
+      cudaCheck(cudaMemset(dev_tracks, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
+      cudaCheck(cudaMemset(dev_tracklets, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
+
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
       float t0;
@@ -203,18 +215,14 @@ cudaError_t invokeParallelSearch(
   // hc0.close();
   // hc1.close();
 
-  // Print info about the solution
+  // Print solution tracks of event 0
   // const int numberOfTracks = output[0].size() / sizeof(Track);
   // Track* tracks_in_solution = (Track*) &(output[0])[0];
-  // print debug info
   // if (logger::ll.verbosityLevel > 0){
   //   for(int i=0; i<numberOfTracks; ++i){
   //     printTrack(tracks_in_solution, i, zhit_to_module);
   //   }
   // }
-  // DEBUG << "Got " << numberOfTracks << " tracks" << std::endl;
-
-  // DEBUG << "It took " << t0 << " milliseconds." << std::endl;
 
   DEBUG << std::endl << "Time averages:" << std::endl;
   for (auto i=0; i<nexperiments; ++i){

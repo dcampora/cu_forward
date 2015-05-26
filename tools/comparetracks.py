@@ -132,7 +132,7 @@ def main():
     try: inverse = sys.argv[3]
     except: pass
 
-    prpixel_tracks = readfile(prpixel_filename, "prpixel")
+    prpixel_tracks = readfile(prpixel_filename, "gpupixel")
     gpupixel_tracks = readfile(gpupixel_filename, "gpupixel")
 
     if inverse == "--inverse":
