@@ -2,39 +2,6 @@
 #include "Kernel.cuh"
 
 /**
- * @brief Gives the fit between h0, h1 and h2
- * @details The result is given in a float. MAX_FLOAT is
- *          used as an upper limit. The lower it is, the better the fit is.
- *          
- * @param  h0 
- * @param  h1 
- * @param  h2 
- * @return    
- */
-__device__ float fitHits(const Hit& h0, const Hit& h1, const Hit &h2, const float dymax) {
-  // Max dx, dy permissible over next hit
-
-  // First approximation -
-  // With the sensor z, instead of the hit z
-  const float z2_tz = (h2.z - h0.z) / (h1.z - h0.z);
-  const float x = h0.x + (h1.x - h0.x) * z2_tz;
-  const float y = h0.y + (h1.y - h0.y) * z2_tz;
-
-  const float dx = x - h2.x;
-  const float dy = y - h2.y;
-
-  // Scatter - Updated to last PrPixel
-  const float scatterNum = (dx * dx) + (dy * dy);
-  const float scatterDenom = 1.f / (h2.z - h1.z);
-  const float scatter = scatterNum * scatterDenom * scatterDenom;
-
-  const bool scatter_condition = scatter < MAX_SCATTER;
-  const bool condition = fabs(h1.y - h0.y) < dymax && scatter_condition;
-
-  return condition * scatter + !condition * MAX_FLOAT;
-}
-
-/**
  * @brief Fits hits to tracks.
  * @details In case the tolerances constraints are met,
  *          returns the chi2 weight of the track. Otherwise,
@@ -494,7 +461,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           // Iterate in the third list of hits
           // Tiled memory access on h2
           for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k) {
-            
+
             __syncthreads();
             const int sh_hit_no = blockDim.x * k + threadIdx.x;
             if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0) {
@@ -511,24 +478,37 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
               const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
               for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
-                
+
                 const int h2_index = sensor_data[2] + kk;
                 const int sh_h2_index = kk % blockDim.x;
                 h2.x = sh_hit_x[sh_h2_index];
                 h2.y = sh_hit_y[sh_h2_index];
                 h2.z = sh_hit_z[sh_h2_index];
 
-                const float fit = fitHits(h0, h1, h2, dymax);
-                const bool fit_is_better = fit < best_fit;
+                // Predictions of x and y for this hit
+                const float z2_tz = (h2.z - h0.z) / (h1.z - h0.z);
+                const float x = h0.x + (h1.x - h0.x) * z2_tz;
+                const float y = h0.y + (h1.y - h0.y) * z2_tz;
+                const float dx = x - h2.x;
+                const float dy = y - h2.y;
 
-                best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-                best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
-                best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+                if (fabs(h1.y - h0.y) < dymax && fabs(dx) < PARAM_TOLERANCE_EXTRA && fabs(dy) < PARAM_TOLERANCE_EXTRA) {
+                  // Calculate fit
+                  const float scatterNum = (dx * dx) + (dy * dy);
+                  const float scatterDenom = 1.f / (h2.z - h1.z);
+                  const float scatter = scatterNum * scatterDenom * scatterDenom;
+                  const bool condition = scatter < MAX_SCATTER;
+                  const float fit = condition * scatter + !condition * MAX_FLOAT; 
+
+                  const bool fit_is_better = fit < best_fit;
+                  best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+                  best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
+                  best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+                }
               }
             }
           }
         }
-
 
         // Compare / Mix the results from the blockDim.y threads
         best_fits[threadIdx.x * blockDim.y + threadIdx.y] = best_fit;
