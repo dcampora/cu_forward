@@ -6,3 +6,5 @@ logs
 Debug
 .project
 .cproject
+mcdata/*.dat
+mcdata_old
