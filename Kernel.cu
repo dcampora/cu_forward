@@ -338,7 +338,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         
 #if USE_SHARED_FOR_HITS
         __syncthreads();
-        const int tid = threadIdx.y * blockDim_sh_hit + threadIdx.x;
+        const int tid = threadIdx.y * blockDim.x + threadIdx.x;
         const int sh_hit_no = blockDim_sh_hit * k + tid;
         if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && sh_hit_no < blockDim_sh_hit) {
           const int h2_index = sensor_data[2] + sh_hit_no;
@@ -539,7 +539,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
 #if USE_SHARED_FOR_HITS
             __syncthreads();
-            const int tid = threadIdx.y * blockDim_sh_hit + threadIdx.x;
+            const int tid = threadIdx.y * blockDim.x + threadIdx.x;
             const int sh_hit_no = blockDim_sh_hit * k + tid;
             if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && sh_hit_no < blockDim_sh_hit) {
               const int h2_index = sensor_data[2] + sh_hit_no;
