@@ -239,13 +239,16 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   /* The fun begins */
 #if USE_SHARED_FOR_HITS
-  __shared__ float sh_hit_x [NUMTHREADS_X];
-  __shared__ float sh_hit_y [NUMTHREADS_X];
-  __shared__ float sh_hit_z [NUMTHREADS_X];
+  __shared__ float sh_hit_x [NUMTHREADS_X * SH_HIT_MULT];
+  __shared__ float sh_hit_y [NUMTHREADS_X * SH_HIT_MULT];
+  __shared__ float sh_hit_z [NUMTHREADS_X * SH_HIT_MULT];
 #endif
   __shared__ int sh_hit_process [NUMTHREADS_X * SH_HIT_PROCESS_MULT];
   __shared__ int sensor_data [6];
 
+  const int blockDim_sh_hit = blockDim.x * blockDim.y > NUMTHREADS_X * SH_HIT_MULT ?
+    NUMTHREADS_X * SH_HIT_MULT : blockDim.x * blockDim.y;
+    
   fillCandidates(hit_candidates, hit_h2_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums,
     hit_Xs, hit_Ys, hit_Zs, sensor_Zs);
 
@@ -331,29 +334,30 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // Tiled memory access on h2
       // Only load for threadIdx.y == 0
       float best_fit = MAX_FLOAT;
-      for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k) {
+      for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim_sh_hit)); ++k) {
         
 #if USE_SHARED_FOR_HITS
         __syncthreads();
-        const int sh_hit_no = blockDim.x * k + threadIdx.x;
-        if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0) {
+        const int tid = threadIdx.y * blockDim_sh_hit + threadIdx.x;
+        const int sh_hit_no = blockDim_sh_hit * k + tid;
+        if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && sh_hit_no < blockDim_sh_hit) {
           const int h2_index = sensor_data[2] + sh_hit_no;
 
           // Coalesced memory accesses
-    		  sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
-    		  sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
-    		  sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
+          sh_hit_x[tid] = hit_Xs[h2_index];
+          sh_hit_y[tid] = hit_Ys[h2_index];
+          sh_hit_z[tid] = hit_Zs[h2_index];
         }
         __syncthreads();
 #endif
 
         if (ttf_condition) {
-          const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
-          for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
+          const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
+          for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
             
             const int h2_index = sensor_data[2] + kk;
 #if USE_SHARED_FOR_HITS
-            const int sh_h2_index = kk % blockDim.x;
+            const int sh_h2_index = kk % blockDim_sh_hit;
             const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
 #else
             const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
@@ -506,9 +510,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         // Only iterate max_numhits_to_process[0] iterations (with blockDim.y threads) :D :D :D
         for (int j=0; j<((int) ceilf(((float) (max_numhits_to_process[0])) / blockDim.y)); ++j) {
           const int h1_element = blockDim.y * j + threadIdx.y;
-          inside_bounds &= h1_element < num_h1_to_process;
+          inside_bounds &= h1_element < num_h1_to_process; // Hmmm...
           bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
           int h1_index;
+          float dz_inverted;
 
           if (inside_bounds) {
             h1_index = first_h1 + h1_element;
@@ -517,6 +522,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
               h1.x = hit_Xs[h1_index];
               h1.y = hit_Ys[h1_index];
               h1.z = hit_Zs[h1_index];
+
+              dz_inverted = 1.f / (h1.z - h0.z);
             }
 
             first_h2 = hit_h2_candidates[2 * h1_index];
@@ -528,38 +535,39 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
           // Iterate in the third list of hits
           // Tiled memory access on h2
-          for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim.x)); ++k) {
+          for (int k=0; k<((int) ceilf( ((float) sensor_data[SENSOR_DATA_HITNUMS + 2]) / blockDim_sh_hit)); ++k) {
 
 #if USE_SHARED_FOR_HITS
             __syncthreads();
-            const int sh_hit_no = blockDim.x * k + threadIdx.x;
-            if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && threadIdx.y==0) {
+            const int tid = threadIdx.y * blockDim_sh_hit + threadIdx.x;
+            const int sh_hit_no = blockDim_sh_hit * k + tid;
+            if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2] && sh_hit_no < blockDim_sh_hit) {
               const int h2_index = sensor_data[2] + sh_hit_no;
 
               // Coalesced memory accesses
-              sh_hit_x[threadIdx.x] = hit_Xs[h2_index];
-        			sh_hit_y[threadIdx.x] = hit_Ys[h2_index];
-        			sh_hit_z[threadIdx.x] = hit_Zs[h2_index];
+              sh_hit_x[tid] = hit_Xs[h2_index];
+        			sh_hit_y[tid] = hit_Ys[h2_index];
+        			sh_hit_z[tid] = hit_Zs[h2_index];
             }
             __syncthreads();
 #endif
 
             if (inside_bounds && !is_h1_used) {
 
-              const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
-              for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
+              const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
+              for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
 
                 const int h2_index = sensor_data[2] + kk;
                 if (h2_index >= first_h2 && h2_index < last_h2) {
 #if USE_SHARED_FOR_HITS
-                  const int sh_h2_index = kk % blockDim.x;
+                  const int sh_h2_index = kk % blockDim_sh_hit;
                   const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
 #else
                   const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
 #endif
 
                   // Predictions of x and y for this hit
-                  const float z2_tz = (h2.z - h0.z) / (h1.z - h0.z);
+                  const float z2_tz = (h2.z - h0.z) * dz_inverted;
                   const float x = h0.x + (h1.x - h0.x) * z2_tz;
                   const float y = h0.y + (h1.y - h0.y) * z2_tz;
                   const float dx = x - h2.x;
