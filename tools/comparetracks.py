@@ -102,7 +102,7 @@ def read_gpupixel_file(filename):
 
     for i in re.finditer("Track #(?P<ntrack>\d+), length (?P<nhits>\d+)\n(?P<hits>.*?)\n\n", s, re.DOTALL):
         hits = []
-        for j in re.finditer(" (?P<hitid>\d+) module *(?P<module>\d+), x *(?P<x>[\d\.\-]+), y *(?P<y>[\d\.\-]+), z *(?P<z>[\d\.\-]+)", i.group(0), re.DOTALL):
+        for j in re.finditer(" (?P<hitid>\d+) module *(?P<module>\d+) \(\d+\), x *(?P<x>[\d\.\-]+), y *(?P<y>[\d\.\-]+), z *(?P<z>[\d\.\-]+)", i.group(0), re.DOTALL):
             hits.append({'hitid': j.group('hitid'),
                 'module': j.group('module'),
                 'x': j.group('x'),
