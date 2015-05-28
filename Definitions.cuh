@@ -14,9 +14,9 @@
 #define NUMTHREADS_X 64
 #define MAX_NUMTHREADS_Y 16
 #define NUM_ATOMICS 5
-#define SH_HIT_PROCESS_MULT 1
 #define USE_SHARED_FOR_HITS 1
 #define SH_HIT_MULT 2
+#define SH_HIT_PROCESS_MULT 2
 
 #define MAX_TRACKS 8000
 #define MAX_TRACK_SIZE 24
@@ -39,6 +39,8 @@
 
 #define MAX_SCATTER 0.000016f
 #define SENSOR_DATA_HITNUMS 3
+
+#define PRINT_SOLUTION false
 
 struct Sensor {
 	unsigned int hitStart;

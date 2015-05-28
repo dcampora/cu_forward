@@ -224,13 +224,15 @@ cudaError_t invokeParallelSearch(
   // hc1.close();
 
   // Print solution tracks of event 0
-  // const int numberOfTracks = output[0].size() / sizeof(Track);
-  // Track* tracks_in_solution = (Track*) &(output[0])[0];
-  // if (logger::ll.verbosityLevel > 0){
-  //   for(int i=0; i<numberOfTracks; ++i){
-  //     printTrack(tracks_in_solution, i, zhit_to_module);
-  //   }
-  // }
+  if (PRINT_SOLUTION) {
+    const int numberOfTracks = output[0].size() / sizeof(Track);
+    Track* tracks_in_solution = (Track*) &(output[0])[0];
+    if (logger::ll.verbosityLevel > 0){
+      for(int i=0; i<numberOfTracks; ++i){
+        printTrack(tracks_in_solution, i, zhit_to_module);
+      }
+    }
+  }
 
   DEBUG << std::endl << "Time averages:" << std::endl;
   for (auto i=0; i<nexperiments; ++i){
@@ -264,7 +266,7 @@ void printTrack(Track* tracks, const int trackNumber, const std::map<int, int>& 
     const float z = h_hit_Zs[hitNumber];
     const int module = zhit_to_module.at((int) z);
 
-    DEBUG << " " << std::setw(8) << id
+    DEBUG << " " << std::setw(8) << id << " (" << hitNumber << ")"
       << " module " << std::setw(2) << module
       << ", x " << std::setw(6) << x
       << ", y " << std::setw(6) << y
