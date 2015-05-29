@@ -25,7 +25,6 @@ cudaError_t invokeParallelSearch(
   
   // Order *all* the input vectors by h_hit_Xs natural order
   // per sensor
-  // int asdf;
   int number_of_sensors = *h_no_sensors;
   for (int i=0; i<eventsToProcess; ++i) {
     int acc_hitnums = 0;
@@ -36,15 +35,8 @@ cudaError_t invokeParallelSearch(
       const int hitnums = h_sensor_hitNums[j];
       quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
       acc_hitnums += hitnums;
-
-      // for (int k=0; k<hitnums; ++k) {
-      //   if (h_hit_IDs[h_sensor_hitStarts[j] + k] == 4294967295) {
-      //     asdf = 5;
-      //   }
-      // }
     }
   }
-  // DEBUG << asdf << std::endl;
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){

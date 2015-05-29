@@ -43,6 +43,13 @@
 
 #define PRINT_SOLUTION true
 
+// #define ASSERTS_ENABLED
+#ifdef ASSERTS_ENABLED
+#define ASSERT(EXPR) assert(EXPR);
+#else
+#define ASSERT(EXPR) 
+#endif
+
 struct Sensor {
 	unsigned int hitStart;
 	unsigned int hitNums;
