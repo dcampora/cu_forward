@@ -120,9 +120,9 @@ cudaError_t invokeParallelSearch(
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracklets, acc_hits * sizeof(Track)));
+  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, acc_hits * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * TTF_MODULO * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
@@ -144,8 +144,8 @@ cudaError_t invokeParallelSearch(
 
   // Adding timing
   // Timing calculation
-  unsigned int niterations = 4;
-  unsigned int nexperiments = 8;
+  unsigned int niterations = 2;
+  unsigned int nexperiments = 1;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -169,7 +169,7 @@ cudaError_t invokeParallelSearch(
 
       // Just for debugging purposes
       cudaCheck(cudaMemset(dev_tracks, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-      cudaCheck(cudaMemset(dev_tracklets, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
+      cudaCheck(cudaMemset(dev_tracklets, 0, acc_hits * sizeof(Track)));
 
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;

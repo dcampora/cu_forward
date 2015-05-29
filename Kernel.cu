@@ -68,7 +68,7 @@ __device__ void fillCandidates(int* const hit_candidates,
 
     // Iterate in all hits in z0
     for (int i=0; i<((int) ceilf( ((float) sensor_hitNums[first_sensor]) / blockDim_product)); ++i) {
-      const int h0_element = blockDim.x * i + threadIdx.x * blockDim.y + threadIdx.y;
+      const int h0_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
       bool inside_bounds = h0_element < sensor_hitNums[first_sensor];
 
       if (inside_bounds) {
@@ -214,7 +214,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   const float* const hit_Zs = (const float*) (hit_Ys + number_of_hits);
 
   // Per event datatypes
-  Track* tracks = &dev_tracks[tracks_offset];
+  Track* tracks = dev_tracks + tracks_offset;
   unsigned int* const tracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number;
 
   // Per side datatypes
@@ -223,9 +223,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   int* const hit_candidates = dev_hit_candidates + hit_offset * 2;
   int* const hit_h2_candidates = dev_hit_h2_candidates + hit_offset * 2;
 
-  int* const tracks_to_follow = dev_tracks_to_follow + tracks_offset;
-  int* const weak_tracks = dev_weak_tracks + tracks_offset;
-  Track* const tracklets = dev_tracklets + tracks_offset;
+  int* const tracks_to_follow = dev_tracks_to_follow + TTF_MODULO;
+  int* const weak_tracks = dev_weak_tracks + hit_offset;
+  Track* const tracklets = dev_tracklets + hit_offset;
   float* const best_fits = dev_best_fits + event_number * blockDim_product;
 
   // Initialize variables according to event number and sensor side
@@ -282,10 +282,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     __syncthreads();
 
     prev_ttf = last_ttf;
-    last_ttf = ttf_insertPointer[0];
+    last_ttf = ttf_insertPointer[0] % TTF_MODULO;
+    const unsigned int diff_ttf = last_ttf >= prev_ttf ? last_ttf - prev_ttf : last_ttf - prev_ttf + TTF_MODULO;
 
     // 2a. Track forwarding
-    for (int i=0; i<((int) ceilf( ((float) (last_ttf - prev_ttf)) / blockDim_product)); ++i) {
+    for (int i=0; i<((int) ceilf( ((float) diff_ttf) / blockDim_product)); ++i) {
       const unsigned int ttf_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
 
       // These variables need to go here, shared memory and scope requirements
@@ -295,9 +296,9 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       Hit h0;
 
       // The logic is broken in two parts for shared memory loading
-      const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
+      const bool ttf_condition = ttf_element < diff_ttf;
       if (ttf_condition) {
-        fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
+        fulltrackno = tracks_to_follow[(prev_ttf + ttf_element) % TTF_MODULO];
         const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
         skipped_modules = (fulltrackno & 0x70000000) >> 28;
         trackno = fulltrackno & 0x0FFFFFFF;
@@ -399,7 +400,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           tracks[trackno] = t;
 
           // Add the tracks to the bag of tracks to_follow
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
           tracks_to_follow[ttfP] = trackno;
         }
         // A track just skipped a module
@@ -409,7 +410,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           trackno = ((skipped_modules + 1) << 28) | (fulltrackno & 0x8FFFFFFF);
 
           // Add the tracks to the bag of tracks to_follow
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
           tracks_to_follow[ttfP] = trackno;
         }
         // If there are only three hits in this track,
@@ -435,7 +436,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
 
       __syncthreads();
-
       if (threadIdx.y < SH_HIT_PROCESS_MULT) {
         // All threads in this context will add a hit to the 
         // shared elements, or exhaust the list
@@ -458,13 +458,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // Fill in sh_hit_process with either the found hit or -1
         sh_hit_process[shift_sh_element] = (inside_bounds && !is_h0_used) ? h0_index : -1;
-        
-        // TODO: Check if this is actually faster, or comment otherwise
-        // sh_hit_x[shift_sh_element] = inside_bounds ? hit_Xs[h0_index] : 0;
-        // sh_hit_y[shift_sh_element] = inside_bounds ? hit_Ys[h0_index] : 0;
-        // sh_hit_z[shift_sh_element] = inside_bounds ? hit_Zs[h0_index] : 0;
       }
-
       __syncthreads();
 
       // Update the iteration condition
@@ -486,9 +480,6 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // We will repeat this for performance reasons
         if (inside_bounds) {
-          // h0.x = sh_hit_x[threadIdx.x];
-          // h0.y = sh_hit_y[threadIdx.x];
-          // h0.z = sh_hit_z[threadIdx.x];
           h0.x = hit_Xs[h0_index];
           h0.y = hit_Ys[h0_index];
           h0.z = hit_Zs[h0_index];
@@ -623,7 +614,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           // Add the tracks to the bag of tracks to_follow
           // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
           // and hence it is stored in tracklets
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1);
+          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
           tracks_to_follow[ttfP] = 0x80000000 | trackP;
         }
       }
@@ -635,14 +626,15 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __syncthreads();
 
   prev_ttf = last_ttf;
-  last_ttf = ttf_insertPointer[0];
+  last_ttf = ttf_insertPointer[0] % TTF_MODULO;
+  const unsigned diff_ttf = last_ttf >= prev_ttf ? last_ttf - prev_ttf : last_ttf - prev_ttf + TTF_MODULO;
 
   // Process the last bunch of track_to_follows
-  for (int i=0; i<((int) ceilf( ((float) (last_ttf - prev_ttf)) / blockDim_product)); ++i) {
+  for (int i=0; i<((int) ceilf( ((float) diff_ttf) / blockDim_product)); ++i) {
     const unsigned int ttf_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
 
-    if (ttf_element < (last_ttf - prev_ttf)) {
-      const int fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
+    if (ttf_element < diff_ttf) {
+      const int fulltrackno = tracks_to_follow[(prev_ttf + ttf_element) % TTF_MODULO];
       const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
       const int trackno = fulltrackno & 0x0FFFFFFF;
 

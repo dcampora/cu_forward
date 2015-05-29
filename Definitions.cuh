@@ -18,7 +18,7 @@
 #define SH_HIT_MULT 2
 #define SH_HIT_PROCESS_MULT 2
 
-#define MAX_TRACKS 8000
+#define MAX_TRACKS 3000
 #define MAX_TRACK_SIZE 24
 
 #define REQUIRED_UNIQUES 0.6f
@@ -26,6 +26,7 @@
 #define MAX_FLOAT FLT_MAX
 #define MIN_FLOAT -FLT_MAX
 #define MAX_SKIPPED_MODULES 3
+#define TTF_MODULO 2000
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 #define PARAM_MAXXSLOPE 0.4f
@@ -40,7 +41,7 @@
 #define MAX_SCATTER 0.000016f
 #define SENSOR_DATA_HITNUMS 3
 
-#define PRINT_SOLUTION false
+#define PRINT_SOLUTION true
 
 struct Sensor {
 	unsigned int hitStart;
