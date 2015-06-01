@@ -41,10 +41,10 @@
 #define MAX_SCATTER 0.000016f
 #define SENSOR_DATA_HITNUMS 3
 
-#define PRINT_SOLUTION true
+#define PRINT_SOLUTION false
+#define ASSERTS_ENABLED false
 
-// #define ASSERTS_ENABLED
-#ifdef ASSERTS_ENABLED
+#if ASSERTS_ENABLED == true
 #include "assert.h"
 #define ASSERT(EXPR) assert(EXPR);
 #else
