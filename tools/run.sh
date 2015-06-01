@@ -18,7 +18,4 @@ do
   fi
 done
 
-echo $INPUT
 ./gpupixel $INPUT
-
-

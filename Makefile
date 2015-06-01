@@ -79,7 +79,7 @@ else
 endif
 endif
 
-NVCC := $(CUDA_PATH)/bin/nvcc --maxrregcount=32 -std=c++11 -ccbin $(GCC)
+NVCC := $(CUDA_PATH)/bin/nvcc --maxrregcount=28 -std=c++11 -ccbin $(GCC)
 
 # internal flags
 NVCCFLAGS   := -m${OS_SIZE} ${ARCH_FLAGS}
