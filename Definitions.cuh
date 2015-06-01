@@ -45,6 +45,7 @@
 
 // #define ASSERTS_ENABLED
 #ifdef ASSERTS_ENABLED
+#include "assert.h"
 #define ASSERT(EXPR) assert(EXPR);
 #else
 #define ASSERT(EXPR) 

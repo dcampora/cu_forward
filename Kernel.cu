@@ -293,8 +293,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     __syncthreads();
 
     prev_ttf = last_ttf;
-    last_ttf = ttf_insertPointer[0] % TTF_MODULO;
-    const unsigned int diff_ttf = last_ttf >= prev_ttf ? last_ttf - prev_ttf : last_ttf - prev_ttf + TTF_MODULO;
+    last_ttf = ttf_insertPointer[0];
+    const unsigned int diff_ttf = last_ttf - prev_ttf;
 
     // 2a. Track forwarding
     for (int i=0; i<(diff_ttf + blockDim_product - 1) / blockDim_product; ++i) {
@@ -615,7 +615,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         }
 
         // Compare / Mix the results from the blockDim.y threads
-        ASSERT(threadIdx.x * blockDim.y + threadIdx.y < numThreads.x * MAX_NUMTHREADS_Y)
+        ASSERT(threadIdx.x * blockDim.y + threadIdx.y < blockDim.x * MAX_NUMTHREADS_Y)
         best_fits[threadIdx.x * blockDim.y + threadIdx.y] = best_fit;
 
         __syncthreads();
@@ -659,8 +659,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __syncthreads();
 
   prev_ttf = last_ttf;
-  last_ttf = ttf_insertPointer[0] % TTF_MODULO;
-  const unsigned diff_ttf = last_ttf >= prev_ttf ? last_ttf - prev_ttf : last_ttf - prev_ttf + TTF_MODULO;
+  last_ttf = ttf_insertPointer[0];
+  const unsigned diff_ttf = last_ttf - prev_ttf;
 
   // Process the last bunch of track_to_follows
   for (int i=0; i<(diff_ttf + blockDim_product - 1) / blockDim_product; ++i) {
