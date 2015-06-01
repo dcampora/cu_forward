@@ -258,7 +258,8 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   __shared__ int sh_hit_process [NUMTHREADS_X * SH_HIT_PROCESS_MULT];
   __shared__ int sensor_data [6];
 
-  const int blockDim_sh_hit = min(NUMTHREADS_X * blockDim.y, NUMTHREADS_X * SH_HIT_MULT);
+  const int cond_sh_hit_mult = min(blockDim.y, SH_HIT_MULT);
+  const int blockDim_sh_hit = NUMTHREADS_X * cond_sh_hit_mult;
 
   fillCandidates(hit_candidates, hit_h2_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums,
     hit_Xs, hit_Ys, hit_Zs, sensor_Zs);
@@ -485,6 +486,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
         // Fill in sh_hit_process with either the found hit or -1
         ASSERT(shift_sh_element < NUMTHREADS_X * SH_HIT_PROCESS_MULT)
+        ASSERT(h0_index >= 0)
         sh_hit_process[shift_sh_element] = (inside_bounds && !is_h0_used) ? h0_index : -1;
       }
       __syncthreads();
@@ -493,7 +495,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       sh_hit_prevPointer = sh_hit_lastPointer[0] + shift_lastPointer;
       shift_lastPointer += blockDim.x * SH_HIT_PROCESS_MULT;
 
-      for (int sh_hit_iteration=0; sh_hit_iteration<SH_HIT_PROCESS_MULT; ++sh_hit_iteration) {
+      for (int sh_hit_iteration=0; sh_hit_iteration<cond_sh_hit_mult; ++sh_hit_iteration) {
 
         // Track creation starts
         unsigned int best_hit_h1, best_hit_h2;
