@@ -283,9 +283,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
     prev_ttf = last_ttf;
     last_ttf = ttf_insertPointer[0];
+    const unsigned int diff_ttf = last_ttf - prev_ttf;
 
     // 2a. Track forwarding
-    for (int i=0; i<(last_ttf - prev_ttf + blockDim_product - 1) / blockDim_product; ++i) {
+    for (int i=0; i<(diff_ttf + blockDim_product - 1) / blockDim_product; ++i) {
       const unsigned int ttf_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
 
       // These variables need to go here, shared memory and scope requirements
@@ -295,7 +296,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       Hit h0;
 
       // The logic is broken in two parts for shared memory loading
-      const bool ttf_condition = ttf_element < (last_ttf - prev_ttf);
+      const bool ttf_condition = ttf_element < diff_ttf;
       if (ttf_condition) {
         fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
         const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
@@ -636,12 +637,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   prev_ttf = last_ttf;
   last_ttf = ttf_insertPointer[0];
+  const unsigned int diff_ttf = last_ttf - prev_ttf;
 
   // Process the last bunch of track_to_follows
-  for (int i=0; i<(last_ttf - prev_ttf + blockDim_product - 1) / blockDim_product; ++i) {
+  for (int i=0; i<(diff_ttf + blockDim_product - 1) / blockDim_product; ++i) {
     const unsigned int ttf_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
 
-    if (ttf_element < (last_ttf - prev_ttf)) {
+    if (ttf_element < diff_ttf) {
       const int fulltrackno = tracks_to_follow[prev_ttf + ttf_element];
       const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
       const int trackno = fulltrackno & 0x0FFFFFFF;
