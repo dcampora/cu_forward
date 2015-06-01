@@ -25,7 +25,6 @@ cudaError_t invokeParallelSearch(
   
   // Order *all* the input vectors by h_hit_Xs natural order
   // per sensor
-  // int asdf;
   int number_of_sensors = *h_no_sensors;
   for (int i=0; i<eventsToProcess; ++i) {
     int acc_hitnums = 0;
@@ -36,15 +35,8 @@ cudaError_t invokeParallelSearch(
       const int hitnums = h_sensor_hitNums[j];
       quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
       acc_hitnums += hitnums;
-
-      // for (int k=0; k<hitnums; ++k) {
-      //   if (h_hit_IDs[h_sensor_hitStarts[j] + k] == 4294967295) {
-      //     asdf = 5;
-      //   }
-      // }
     }
   }
-  // DEBUG << asdf << std::endl;
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){
@@ -120,9 +112,9 @@ cudaError_t invokeParallelSearch(
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_tracklets, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, eventsToProcess * MAX_TRACKS * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * MAX_TRACKS * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracklets, acc_hits * sizeof(Track)));
+  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, acc_hits * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * TTF_MODULO * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
@@ -169,7 +161,8 @@ cudaError_t invokeParallelSearch(
 
       // Just for debugging purposes
       cudaCheck(cudaMemset(dev_tracks, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-      cudaCheck(cudaMemset(dev_tracklets, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
+      cudaCheck(cudaMemset(dev_tracklets, 0, acc_hits * sizeof(Track)));
+      cudaCheck(cudaMemset(dev_tracks_to_follow, 0, eventsToProcess * TTF_MODULO * sizeof(int)));
 
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
