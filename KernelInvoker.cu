@@ -162,6 +162,7 @@ cudaError_t invokeParallelSearch(
       // Just for debugging purposes
       cudaCheck(cudaMemset(dev_tracks, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
       cudaCheck(cudaMemset(dev_tracklets, 0, acc_hits * sizeof(Track)));
+      cudaCheck(cudaMemset(dev_tracks_to_follow, 0, eventsToProcess * TTF_MODULO * sizeof(int)));
 
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;

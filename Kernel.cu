@@ -235,7 +235,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   int* const hit_candidates = dev_hit_candidates + hit_offset * 2;
   int* const hit_h2_candidates = dev_hit_h2_candidates + hit_offset * 2;
 
-  int* const tracks_to_follow = dev_tracks_to_follow + TTF_MODULO;
+  int* const tracks_to_follow = dev_tracks_to_follow + event_number * TTF_MODULO;
   int* const weak_tracks = dev_weak_tracks + hit_offset;
   Track* const tracklets = dev_tracklets + hit_offset;
   float* const best_fits = dev_best_fits + event_number * blockDim_product;
