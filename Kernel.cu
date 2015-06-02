@@ -523,6 +523,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           const int last_h1 = hit_candidates[2 * h0_index + 1];
           num_h1_to_process = last_h1 - first_h1;
           atomicMax(max_numhits_to_process, num_h1_to_process);
+          ASSERT(max_numhits_to_process[0] >= num_h1_to_process)
         }
 
         __syncthreads();
