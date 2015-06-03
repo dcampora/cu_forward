@@ -24,13 +24,22 @@ def findTrack(trackSearched, tracks):
 # Compares two lists of tracks
 def compareTracks(tracks_list1, tracks_list2):
     tracks_list = []
+    identical_tracks = 0
+    different_tracks = 0
     for track in tracks_list1:
         if not track['hits'][0]['hitid'] in tracks_list:
             tracks_list.append(track['hits'][0]['hitid'])
-            compareTrack(track, tracks_list2)
+            if compareTrack(track, tracks_list2):
+                identical_tracks += 1
+            else:
+                different_tracks += 1
             print
         else:
             print "Track ", track['hits'][0]['hitid'], "appears repeated in the first list of tracks"
+    if different_tracks == 0:
+        print "All tracks are equal"
+    else:
+        print float(identical_tracks) / (identical_tracks + different_tracks), "% of tracks are identical (", identical_tracks, "identical,", different_tracks, "different)"
 
 # Compares two tracks
 def compareTrack(trackA, tracks):
@@ -39,6 +48,7 @@ def compareTrack(trackA, tracks):
         print "Track ID", trackA['hits'][0]['hitid'], "has no corresponding track"
         for hitinfo in trackA['hits']:
             print " -", hitinfo['hitid'], "module", hitinfo['module'], "x", hitinfo['x'], "y", hitinfo['y'], "z", hitinfo['z']
+        return False
     elif trackA['nhits'] != trackB['nhits']:
         print "Tracks with ID", trackA['hits'][0]['hitid'], "differ:"
         print " nohits:", trackA['nhits'], "vs", trackB['nhits']
@@ -61,8 +71,10 @@ def compareTrack(trackA, tracks):
         for hitid in amissing:
             hitinfo = [a for a in trackB['hits'] if a['hitid']==hitid][0]
             print " +", hitinfo['hitid'], "module", hitinfo['module'], "x", hitinfo['x'], "y", hitinfo['y'], "z", hitinfo['z']
+        return False
     else:
         print "Track ID", trackA['hits'][0]['hitid'], "are equal! :)"
+        return True
 
 
 def read_prpixel_file(filename):
@@ -102,7 +114,7 @@ def read_gpupixel_file(filename):
 
     for i in re.finditer("Track #(?P<ntrack>\d+), length (?P<nhits>\d+)\n(?P<hits>.*?)\n\n", s, re.DOTALL):
         hits = []
-        for j in re.finditer(" (?P<hitid>\d+) module *(?P<module>\d+) \(\d+\), x *(?P<x>[\d\.\-]+), y *(?P<y>[\d\.\-]+), z *(?P<z>[\d\.\-]+)", i.group(0), re.DOTALL):
+        for j in re.finditer(" (?P<hitid>\d+) (\(\d+\) )?module *(?P<module>\d+), x *(?P<x>[\d\.\-]+), y *(?P<y>[\d\.\-]+), z *(?P<z>[\d\.\-]+)", i.group(0), re.DOTALL):
             hits.append({'hitid': j.group('hitid'),
                 'module': j.group('module'),
                 'x': j.group('x'),
