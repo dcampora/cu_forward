@@ -16,8 +16,10 @@
 #define NUM_ATOMICS 5
 #define USE_SHARED_FOR_HITS 1
 #define SH_HIT_MULT 2
+#define MAX_TRACKS_PER_SENSOR 100
 
-#define MAX_TRACKS 3000
+#define TRACK_SHIFT 10000
+#define MAX_TRACKS 15300
 #define MAX_TRACK_SIZE 24
 
 #define REQUIRED_UNIQUES 0.6f
@@ -40,8 +42,8 @@
 #define MAX_SCATTER 0.000016f
 #define SENSOR_DATA_HITNUMS 3
 
-#define PRINT_SOLUTION false
-#define ASSERTS_ENABLED false
+#define PRINT_SOLUTION true
+#define ASSERTS_ENABLED true
 
 #if ASSERTS_ENABLED == true
 #include "assert.h"

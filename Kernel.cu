@@ -227,11 +227,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   // Per event datatypes
   Track* tracks = dev_tracks + tracks_offset;
-  unsigned int* const tracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number;
+  unsigned int* const tracks_insertPointer = (unsigned int*) dev_atomicsStorage + number_of_sensors * event_number;
 
   // Per side datatypes
   const int hit_offset = dev_hit_offsets[event_number];
-  bool* const hit_used = dev_hit_used + hit_offset;
+  bool* const h0_used = dev_hit_used + 3 * hit_offset;
+  bool* const h1_used = dev_hit_used + 3 * hit_offset + number_of_hits;
+  bool* const hit_used = dev_hit_used + 3 * hit_offset + 2 * number_of_hits;
   int* const hit_candidates = dev_hit_candidates + hit_offset * 2;
   int* const hit_h2_candidates = dev_hit_h2_candidates + hit_offset * 2;
 
@@ -242,7 +244,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
   // Initialize variables according to event number and sensor side
   // Insert pointers (atomics)
-  const int ip_shift = events_under_process + event_number * NUM_ATOMICS;
+  const int ip_shift = number_of_sensors * events_under_process + event_number * NUM_ATOMICS;
   unsigned int* const weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* const tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* const ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
@@ -395,8 +397,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       // Fill in t, ONLY in case the best fit is acceptable
       if (ttf_condition) {
         if (best_fit != MAX_FLOAT) {
-          // Mark h2 as used
-          ASSERT(best_hit_h2 < number_of_hits)
+
           hit_used[best_hit_h2] = true;
 
           // Update the tracks to follow, we'll have to follow up
@@ -405,23 +406,29 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
           t.hits[t.hitsNum++] = best_hit_h2;
 
           // Update the track in the bag
-          if (t.hitsNum <= 4) {
-            ASSERT(t.hits[0] < number_of_hits)
+          if (t.hitsNum == 4) {
             ASSERT(t.hits[1] < number_of_hits)
             ASSERT(t.hits[2] < number_of_hits)
 
             // Also mark the first three as used
+            h0_used[t.hits[1]] = true;
+            h1_used[t.hits[2]] = true;
+
+            // For compatibility with weak tracks
             hit_used[t.hits[0]] = true;
             hit_used[t.hits[1]] = true;
             hit_used[t.hits[2]] = true;
 
+            // Find out what the first sensor for this track was
+            const unsigned int h0_sensor = first_sensor + 2 + skipped_modules;
+
             // If it is a track made out of less than or equal than 4 hits,
             // we have to allocate it in the tracks pointer
-            trackno = atomicAdd(tracks_insertPointer, 1);
+            trackno = atomicAdd(&tracks_insertPointer[h0_sensor], 1) + TRACK_SHIFT + h0_sensor * MAX_TRACKS_PER_SENSOR;
           }
 
           // Copy the track into tracks
-          ASSERT(trackno < number_of_hits)
+          ASSERT(trackno < MAX_TRACKS)
           tracks[trackno] = t;
 
           // Add the tracks to the bag of tracks to_follow
@@ -469,23 +476,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         int sh_element = sh_hit_prevPointer + shift_sh_element;
         bool inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
         int h0_index = sensor_data[0] + sh_element;
-        bool is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
-
-        // Find an unused element or exhaust the list,
-        // in case the hit is used
-        while (inside_bounds && is_h0_used) {
-          // Since it is used, find another element while we are inside bounds
-          // This is a simple gather for those elements
-          sh_element = sh_hit_prevPointer + shift_lastPointer + atomicAdd(sh_hit_lastPointer, 1);
-          inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-          h0_index = sensor_data[0] + sh_element;
-          is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
-        }
 
         // Fill in sh_hit_process with either the found hit or -1
         ASSERT(shift_sh_element < NUMTHREADS_X)
         ASSERT(h0_index >= 0)
-        sh_hit_process[shift_sh_element] = (inside_bounds && !is_h0_used) ? h0_index : -1;
+        sh_hit_process[shift_sh_element] = inside_bounds ? h0_index : -1;
       }
       __syncthreads();
 
@@ -532,20 +527,16 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         for (int j=0; j<(max_numhits_to_process[0] + blockDim.y - 1) / blockDim.y; ++j) {
           const int h1_element = blockDim.y * j + threadIdx.y;
           inside_bounds &= h1_element < num_h1_to_process; // Hmmm...
-          bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
           int h1_index;
           float dz_inverted;
 
           if (inside_bounds) {
             h1_index = first_h1 + h1_element;
-            is_h1_used = hit_used[h1_index];
-            if (!is_h1_used) {
-              h1.x = hit_Xs[h1_index];
-              h1.y = hit_Ys[h1_index];
-              h1.z = hit_Zs[h1_index];
+            h1.x = hit_Xs[h1_index];
+            h1.y = hit_Ys[h1_index];
+            h1.z = hit_Zs[h1_index];
 
-              dz_inverted = 1.f / (h1.z - h0.z);
-            }
+            dz_inverted = 1.f / (h1.z - h0.z);
 
             first_h2 = hit_h2_candidates[2 * h1_index];
             last_h2 = hit_h2_candidates[2 * h1_index + 1];
@@ -576,7 +567,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
             __syncthreads();
 #endif
 
-            if (inside_bounds && !is_h1_used) {
+            if (inside_bounds) {
 
               const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
               for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
@@ -681,6 +672,31 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
         weak_tracks[weakP] = trackno;
       }
     }
+  }
+
+  __syncthreads();
+
+  // Track selection prototype
+  // 
+  // Go through the tracks of each sensor
+  // Add them to the tracks_insertPointer[0] if h0 and h1 are not used
+  first_sensor = 52;
+  while (first_sensor >= 4) {
+    for (int i=0; i<(tracks_insertPointer[first_sensor] + blockDim_product - 1) / blockDim_product; ++i) {
+      const unsigned int element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
+      // Get the track
+      const unsigned int trackno = TRACK_SHIFT + first_sensor * MAX_TRACKS_PER_SENSOR + element;
+      if (element < tracks_insertPointer[first_sensor]) {
+        Track t = tracks[trackno];
+        // Check h1 and h2 are not used for this track
+        if (!h0_used[t.hits[0]] && !h1_used[t.hits[1]]) {
+          // Add it to the final tracks
+          const unsigned int trackP = atomicAdd(tracks_insertPointer, 1);
+          tracks[trackP] = t;
+        }
+      }
+    }
+    first_sensor -= 1;
   }
 
   __syncthreads();

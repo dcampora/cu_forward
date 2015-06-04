@@ -106,7 +106,7 @@ cudaError_t invokeParallelSearch(
   }
 
   // Allocate CPU buffers
-  const int atomic_space = NUM_ATOMICS + 1;
+  const int atomic_space = NUM_ATOMICS + 52;
   int* atomics = (int*) malloc(eventsToProcess * atomic_space * sizeof(int));  
   int* hit_candidates = (int*) malloc(2 * acc_hits * sizeof(int));
 
@@ -118,7 +118,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_used, 3 * acc_hits * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
   cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * MAX_NUMTHREADS_Y * sizeof(float)));
   cudaCheck(cudaMalloc((void**)&dev_hit_candidates, 2 * acc_hits * sizeof(int)));
