@@ -412,7 +412,10 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
 
             // Also mark the first three as used
             h0_used[t.hits[1]] = true;
-            h1_used[t.hits[2]] = true;
+            h0_used[t.hits[2]] = true;
+            h0_used[t.hits[3]] = true;
+            // h1_used[t.hits[2]] = true;
+            // h1_used[t.hits[3]] = true;
 
             // For compatibility with weak tracks
             hit_used[t.hits[0]] = true;
