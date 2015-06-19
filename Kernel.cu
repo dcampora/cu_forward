@@ -39,14 +39,15 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
 /**
  * @brief Fills dev_hit_candidates.
  * 
- * @param hit_candidates 
+ * @param hit_candidates    
  * @param hit_h2_candidates 
- * @param no_sensors         
- * @param sensor_hitStarts   
- * @param sensor_hitNums     
- * @param hit_Xs             
- * @param hit_Ys             
- * @param hit_Zs             
+ * @param number_of_sensors 
+ * @param sensor_hitStarts  
+ * @param sensor_hitNums    
+ * @param hit_Xs            
+ * @param hit_Ys            
+ * @param hit_Zs            
+ * @param sensor_Zs         
  */
 __device__ void fillCandidates(int* const hit_candidates,
   int* const hit_h2_candidates, const int number_of_sensors,
@@ -175,6 +176,375 @@ __device__ void fillCandidates(int* const hit_candidates,
 }
 
 /**
+ * @brief Performs the track forwarding.
+ *
+ * @param hit_Xs           
+ * @param hit_Ys           
+ * @param hit_Zs           
+ * @param sensor_data      
+ * @param sh_hit_x         
+ * @param sh_hit_y         
+ * @param sh_hit_z         
+ * @param diff_ttf         
+ * @param blockDim_product 
+ * @param tracks_to_follow 
+ * @param weak_tracks      
+ * @param prev_ttf         
+ * @param tracklets        
+ * @param tracks           
+ * @param number_of_hits   
+ */
+__device__ void trackForwarding(const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
+  bool* const hit_used, unsigned int* const tracks_insertPointer, unsigned int* const ttf_insertPointer,
+  unsigned int* const weaktracks_insertPointer, int blockDim_sh_hit,
+  int* const sensor_data, float* const sh_hit_x, float* const sh_hit_y, float* const sh_hit_z,
+  unsigned int diff_ttf, int blockDim_product, int* const tracks_to_follow,
+  int* const weak_tracks, unsigned int prev_ttf, Track* const tracklets,
+  Track* const tracks, int number_of_hits) {
+
+  for (int i=0; i<(diff_ttf + blockDim_product - 1) / blockDim_product; ++i) {
+    const unsigned int ttf_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
+
+    // These variables need to go here, shared memory and scope requirements
+    float tx, ty, h1_z;
+    unsigned int trackno, fulltrackno, skipped_modules, best_hit_h2;
+    Track t;
+    Hit h0;
+
+    // The logic is broken in two parts for shared memory loading
+    const bool ttf_condition = ttf_element < diff_ttf;
+    if (ttf_condition) {
+      fulltrackno = tracks_to_follow[(prev_ttf + ttf_element) % TTF_MODULO];
+      const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
+      skipped_modules = (fulltrackno & 0x70000000) >> 28;
+      trackno = fulltrackno & 0x0FFFFFFF;
+
+      const Track* const track_pointer = track_flag ? tracklets : tracks;
+      
+      ASSERT(track_pointer==tracklets ? trackno < number_of_hits : true)
+      ASSERT(track_pointer==tracks ? trackno < MAX_TRACKS : true)
+      t = track_pointer[trackno];
+
+      // Load last two hits in h0, h1
+      const int t_hitsNum = t.hitsNum;
+      const int h0_num = t.hits[t_hitsNum - 2];
+      const int h1_num = t.hits[t_hitsNum - 1];
+
+      ASSERT(h0_num < number_of_hits)
+      h0.x = hit_Xs[h0_num];
+      h0.y = hit_Ys[h0_num];
+      h0.z = hit_Zs[h0_num];
+
+      ASSERT(h1_num < number_of_hits)
+      const float h1_x = hit_Xs[h1_num];
+      const float h1_y = hit_Ys[h1_num];
+      h1_z = hit_Zs[h1_num];
+
+      // Track forwarding over t, for all hits in the next module
+      // Line calculations
+      const float td = 1.0f / (h1_z - h0.z);
+      const float txn = (h1_x - h0.x);
+      const float tyn = (h1_y - h0.y);
+      tx = txn * td;
+      ty = tyn * td;
+    }
+
+    // Search for a best fit
+    // Load shared elements
+    
+    // Iterate in the third list of hits
+    // Tiled memory access on h2
+    // Only load for threadIdx.y == 0
+    float best_fit = MAX_FLOAT;
+    for (int k=0; k<(sensor_data[SENSOR_DATA_HITNUMS + 2] + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
+      
+#if USE_SHARED_FOR_HITS
+      __syncthreads();
+      const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+      const int sh_hit_no = blockDim_sh_hit * k + tid;
+      if (threadIdx.y < SH_HIT_MULT && sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2]) {
+        const int h2_index = sensor_data[2] + sh_hit_no;
+
+        // Coalesced memory accesses
+        ASSERT(tid < blockDim_sh_hit)
+        sh_hit_x[tid] = hit_Xs[h2_index];
+        sh_hit_y[tid] = hit_Ys[h2_index];
+        sh_hit_z[tid] = hit_Zs[h2_index];
+      }
+      __syncthreads();
+#endif
+
+      if (ttf_condition) {
+        const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
+        for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
+          
+          const int h2_index = sensor_data[2] + kk;
+#if USE_SHARED_FOR_HITS
+          const int sh_h2_index = kk % blockDim_sh_hit;
+          const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
+#else
+          const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
+#endif
+
+          const float fit = fitHitToTrack(tx, ty, h0, h1_z, h2);
+          const bool fit_is_better = fit < best_fit;
+
+          best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+          best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
+        }
+      }
+    }
+
+    // We have a best fit!
+    // Fill in t, ONLY in case the best fit is acceptable
+    if (ttf_condition) {
+      if (best_fit != MAX_FLOAT) {
+        // Mark h2 as used
+        ASSERT(best_hit_h2 < number_of_hits)
+        hit_used[best_hit_h2] = true;
+
+        // Update the tracks to follow, we'll have to follow up
+        // this track on the next iteration :)
+        ASSERT(t.hitsNum < MAX_TRACK_SIZE)
+        t.hits[t.hitsNum++] = best_hit_h2;
+
+        // Update the track in the bag
+        if (t.hitsNum <= 4) {
+          ASSERT(t.hits[0] < number_of_hits)
+          ASSERT(t.hits[1] < number_of_hits)
+          ASSERT(t.hits[2] < number_of_hits)
+
+          // Also mark the first three as used
+          hit_used[t.hits[0]] = true;
+          hit_used[t.hits[1]] = true;
+          hit_used[t.hits[2]] = true;
+
+          // If it is a track made out of less than or equal than 4 hits,
+          // we have to allocate it in the tracks pointer
+          trackno = atomicAdd(tracks_insertPointer, 1);
+        }
+
+        // Copy the track into tracks
+        ASSERT(trackno < number_of_hits)
+        tracks[trackno] = t;
+
+        // Add the tracks to the bag of tracks to_follow
+        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+        tracks_to_follow[ttfP] = trackno;
+      }
+      // A track just skipped a module
+      // We keep it for another round
+      else if (skipped_modules <= MAX_SKIPPED_MODULES) {
+        // Form the new mask
+        trackno = ((skipped_modules + 1) << 28) | (fulltrackno & 0x8FFFFFFF);
+
+        // Add the tracks to the bag of tracks to_follow
+        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+        tracks_to_follow[ttfP] = trackno;
+      }
+      // If there are only three hits in this track,
+      // mark it as "doubtful"
+      else if (t.hitsNum == 3) {
+        const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
+        ASSERT(weakP < number_of_hits)
+        weak_tracks[weakP] = trackno;
+      }
+      // In the "else" case, we couldn't follow up the track,
+      // so we won't be track following it anymore.
+    }
+  }
+}
+
+/**
+ * @brief Track Creation
+ * 
+ * @param hit_Xs                  
+ * @param hit_Ys                  
+ * @param hit_Zs                  
+ * @param sensor_data             
+ * @param hit_candidates          
+ * @param max_numhits_to_process  
+ * @param sh_hit_x                
+ * @param sh_hit_y                
+ * @param sh_hit_z                
+ * @param sh_hit_process          
+ * @param hit_used                
+ * @param hit_h2_candidates       
+ * @param blockDim_sh_hit         
+ * @param best_fits               
+ * @param tracklets_insertPointer 
+ * @param ttf_insertPointer       
+ * @param tracklets               
+ * @param tracks_to_follow        
+ */
+__device__ void trackCreation(const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
+  int* const sensor_data, int* const hit_candidates, unsigned int* const max_numhits_to_process, float* const sh_hit_x,
+  float* const sh_hit_y, float* const sh_hit_z, int* const sh_hit_process, bool* const hit_used,
+  int* const hit_h2_candidates, int blockDim_sh_hit, float* const best_fits,
+  unsigned int* const tracklets_insertPointer, unsigned int* const ttf_insertPointer, Track* const tracklets,
+  int* const tracks_to_follow) {
+
+  // Track creation starts
+  unsigned int best_hit_h1, best_hit_h2;
+  Hit h0, h1;
+  int first_h1, first_h2, last_h2;
+  float dymax;
+
+  const int h0_index = sh_hit_process[threadIdx.x];
+  bool inside_bounds = h0_index != -1;
+  unsigned int num_h1_to_process = 0;
+  float best_fit = MAX_FLOAT;
+
+  // We will repeat this for performance reasons
+  if (inside_bounds) {
+    h0.x = hit_Xs[h0_index];
+    h0.y = hit_Ys[h0_index];
+    h0.z = hit_Zs[h0_index];
+    
+    // Calculate new dymax
+    const float s1_z = hit_Zs[sensor_data[1]];
+    const float h_dist = fabs(s1_z - h0.z);
+    dymax = PARAM_MAXYSLOPE * h_dist;
+
+    // Only iterate in the hits indicated by hit_candidates :)
+    first_h1 = hit_candidates[2 * h0_index];
+    const int last_h1 = hit_candidates[2 * h0_index + 1];
+    num_h1_to_process = last_h1 - first_h1;
+    atomicMax(max_numhits_to_process, num_h1_to_process);
+    ASSERT(max_numhits_to_process[0] >= num_h1_to_process)
+  }
+
+  __syncthreads();
+
+  // Only iterate max_numhits_to_process[0] iterations (with blockDim.y threads) :D :D :D
+  for (int j=0; j<(max_numhits_to_process[0] + blockDim.y - 1) / blockDim.y; ++j) {
+    const int h1_element = blockDim.y * j + threadIdx.y;
+    inside_bounds &= h1_element < num_h1_to_process; // Hmmm...
+    bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
+    int h1_index;
+    float dz_inverted;
+
+    if (inside_bounds) {
+      h1_index = first_h1 + h1_element;
+      is_h1_used = hit_used[h1_index];
+      if (!is_h1_used) {
+        h1.x = hit_Xs[h1_index];
+        h1.y = hit_Ys[h1_index];
+        h1.z = hit_Zs[h1_index];
+
+        dz_inverted = 1.f / (h1.z - h0.z);
+      }
+
+      first_h2 = hit_h2_candidates[2 * h1_index];
+      last_h2 = hit_h2_candidates[2 * h1_index + 1];
+      // In case there be no h2 to process,
+      // we can preemptively prevent further processing
+      inside_bounds &= first_h2 != -1;
+    }
+
+    // Iterate in the third list of hits
+    // Tiled memory access on h2
+    for (int k=0; k<(sensor_data[SENSOR_DATA_HITNUMS + 2] + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
+
+#if USE_SHARED_FOR_HITS
+      __syncthreads();
+      if (threadIdx.y < SH_HIT_MULT) {
+        const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+        const int sh_hit_no = blockDim_sh_hit * k + tid;
+        if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2]) {
+          const int h2_index = sensor_data[2] + sh_hit_no;
+
+          // Coalesced memory accesses
+          ASSERT(tid < blockDim_sh_hit)
+          sh_hit_x[tid] = hit_Xs[h2_index];
+          sh_hit_y[tid] = hit_Ys[h2_index];
+          sh_hit_z[tid] = hit_Zs[h2_index];
+        }
+      }
+      __syncthreads();
+#endif
+
+      if (inside_bounds && !is_h1_used) {
+
+        const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
+        for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
+
+          const int h2_index = sensor_data[2] + kk;
+          if (h2_index >= first_h2 && h2_index < last_h2) {
+#if USE_SHARED_FOR_HITS
+            const int sh_h2_index = kk % blockDim_sh_hit;
+            const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
+#else
+            const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
+#endif
+
+            // Predictions of x and y for this hit
+            const float z2_tz = (h2.z - h0.z) * dz_inverted;
+            const float x = h0.x + (h1.x - h0.x) * z2_tz;
+            const float y = h0.y + (h1.y - h0.y) * z2_tz;
+            const float dx = x - h2.x;
+            const float dy = y - h2.y;
+
+            if (fabs(h1.y - h0.y) < dymax && fabs(dx) < PARAM_TOLERANCE_EXTRA && fabs(dy) < PARAM_TOLERANCE_EXTRA) {
+              // Calculate fit
+              const float scatterNum = (dx * dx) + (dy * dy);
+              const float scatterDenom = 1.f / (h2.z - h1.z);
+              const float scatter = scatterNum * scatterDenom * scatterDenom;
+              const bool condition = scatter < MAX_SCATTER;
+              const float fit = condition * scatter + !condition * MAX_FLOAT; 
+
+              const bool fit_is_better = fit < best_fit;
+              best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+              best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
+              best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
+            }
+          }
+        }
+      }
+    }
+  }
+
+
+
+  // Compare / Mix the results from the blockDim.y threads
+  ASSERT(threadIdx.x * blockDim.y + threadIdx.y < blockDim.x * MAX_NUMTHREADS_Y)
+  best_fits[threadIdx.x * blockDim.y + threadIdx.y] = best_fit;
+
+  __syncthreads();
+
+  bool accept_track = false;
+  if (h0_index != -1 && best_fit != MAX_FLOAT) {
+    best_fit = MAX_FLOAT;
+    int threadIdx_y_winner = -1;
+    for (int i=0; i<blockDim.y; ++i) {
+      const float fit = best_fits[threadIdx.x * blockDim.y + i];
+      if (fit < best_fit) {
+        best_fit = fit;
+        threadIdx_y_winner = i;
+      }
+    }
+    accept_track = threadIdx.y == threadIdx_y_winner;
+  }
+
+  // We have a best fit! - haven't we?
+  // Only go through the tracks on the selected thread
+  if (accept_track) {
+    // Fill in track information
+
+    // Add the track to the bag of tracks
+    const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
+    ASSERT(trackP < number_of_hits)
+    tracklets[trackP] = Track {3, (unsigned int) sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};;
+
+    // Add the tracks to the bag of tracks to_follow
+    // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
+    // and hence it is stored in tracklets
+    const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+    tracks_to_follow[ttfP] = 0x80000000 | trackP;
+  }
+}
+
+/**
  * @brief Track following algorithm, loosely based on Pr/PrPixel.
  * @details It should be simplistic in its design, as is the Pixel VELO problem ;)
  *          Triplets are chosen based on a fit and forwarded using a typical track following algo.
@@ -188,16 +558,18 @@ __device__ void fillCandidates(int* const hit_candidates,
  *          the track following is performed first, hits are marked as used, and then the seeding is performed,
  *          requiring the first two hits in the triplet to be unused.
  * 
- * @param dev_tracks              
- * @param dev_input               
- * @param dev_tracks_to_follow_q1 
- * @param dev_tracks_to_follow_q2 
- * @param dev_hit_used            
- * @param dev_atomicsStorage      
- * @param dev_tracklets           
- * @param dev_weak_tracks         
- * @param dev_event_offsets       
- * @param dev_hit_offsets         
+ * @param dev_tracks            
+ * @param dev_input             
+ * @param dev_tracks_to_follow  
+ * @param dev_hit_used          
+ * @param dev_atomicsStorage    
+ * @param dev_tracklets         
+ * @param dev_weak_tracks       
+ * @param dev_event_offsets     
+ * @param dev_hit_offsets       
+ * @param dev_best_fits         
+ * @param dev_hit_candidates    
+ * @param dev_hit_h2_candidates 
  */
 __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_input,
   int* const dev_tracks_to_follow, bool* const dev_hit_used, int* const dev_atomicsStorage, Track* const dev_tracklets,
@@ -298,157 +670,12 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     const unsigned int diff_ttf = last_ttf - prev_ttf;
 
     // 2a. Track forwarding
-    for (int i=0; i<(diff_ttf + blockDim_product - 1) / blockDim_product; ++i) {
-      const unsigned int ttf_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
-
-      // These variables need to go here, shared memory and scope requirements
-      float tx, ty, h1_z;
-      unsigned int trackno, fulltrackno, skipped_modules, best_hit_h2;
-      Track t;
-      Hit h0;
-
-      // The logic is broken in two parts for shared memory loading
-      const bool ttf_condition = ttf_element < diff_ttf;
-      if (ttf_condition) {
-        fulltrackno = tracks_to_follow[(prev_ttf + ttf_element) % TTF_MODULO];
-        const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-        skipped_modules = (fulltrackno & 0x70000000) >> 28;
-        trackno = fulltrackno & 0x0FFFFFFF;
-
-        const Track* const track_pointer = track_flag ? tracklets : tracks;
-        
-        ASSERT(track_pointer==tracklets ? trackno < number_of_hits : true)
-        ASSERT(track_pointer==tracks ? trackno < MAX_TRACKS : true)
-        t = track_pointer[trackno];
-
-        // Load last two hits in h0, h1
-        const int t_hitsNum = t.hitsNum;
-        const int h0_num = t.hits[t_hitsNum - 2];
-        const int h1_num = t.hits[t_hitsNum - 1];
-
-        ASSERT(h0_num < number_of_hits)
-        h0.x = hit_Xs[h0_num];
-        h0.y = hit_Ys[h0_num];
-        h0.z = hit_Zs[h0_num];
-
-        ASSERT(h1_num < number_of_hits)
-        const float h1_x = hit_Xs[h1_num];
-        const float h1_y = hit_Ys[h1_num];
-        h1_z = hit_Zs[h1_num];
-
-        // Track forwarding over t, for all hits in the next module
-        // Line calculations
-        const float td = 1.0f / (h1_z - h0.z);
-        const float txn = (h1_x - h0.x);
-        const float tyn = (h1_y - h0.y);
-        tx = txn * td;
-        ty = tyn * td;
-      }
-
-      // Search for a best fit
-      // Load shared elements
-      
-      // Iterate in the third list of hits
-      // Tiled memory access on h2
-      // Only load for threadIdx.y == 0
-      float best_fit = MAX_FLOAT;
-      for (int k=0; k<(sensor_data[SENSOR_DATA_HITNUMS + 2] + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
-        
-#if USE_SHARED_FOR_HITS
-        __syncthreads();
-        const int tid = threadIdx.y * blockDim.x + threadIdx.x;
-        const int sh_hit_no = blockDim_sh_hit * k + tid;
-        if (threadIdx.y < SH_HIT_MULT && sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2]) {
-          const int h2_index = sensor_data[2] + sh_hit_no;
-
-          // Coalesced memory accesses
-          ASSERT(tid < blockDim_sh_hit)
-          sh_hit_x[tid] = hit_Xs[h2_index];
-          sh_hit_y[tid] = hit_Ys[h2_index];
-          sh_hit_z[tid] = hit_Zs[h2_index];
-        }
-        __syncthreads();
-#endif
-
-        if (ttf_condition) {
-          const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
-          for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
-            
-            const int h2_index = sensor_data[2] + kk;
-#if USE_SHARED_FOR_HITS
-            const int sh_h2_index = kk % blockDim_sh_hit;
-            const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
-#else
-            const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
-#endif
-
-            const float fit = fitHitToTrack(tx, ty, h0, h1_z, h2);
-            const bool fit_is_better = fit < best_fit;
-
-            best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-            best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
-          }
-        }
-      }
-
-      // We have a best fit!
-      // Fill in t, ONLY in case the best fit is acceptable
-      if (ttf_condition) {
-        if (best_fit != MAX_FLOAT) {
-          // Mark h2 as used
-          ASSERT(best_hit_h2 < number_of_hits)
-          hit_used[best_hit_h2] = true;
-
-          // Update the tracks to follow, we'll have to follow up
-          // this track on the next iteration :)
-          ASSERT(t.hitsNum < MAX_TRACK_SIZE)
-          t.hits[t.hitsNum++] = best_hit_h2;
-
-          // Update the track in the bag
-          if (t.hitsNum <= 4) {
-            ASSERT(t.hits[0] < number_of_hits)
-            ASSERT(t.hits[1] < number_of_hits)
-            ASSERT(t.hits[2] < number_of_hits)
-
-            // Also mark the first three as used
-            hit_used[t.hits[0]] = true;
-            hit_used[t.hits[1]] = true;
-            hit_used[t.hits[2]] = true;
-
-            // If it is a track made out of less than or equal than 4 hits,
-            // we have to allocate it in the tracks pointer
-            trackno = atomicAdd(tracks_insertPointer, 1);
-          }
-
-          // Copy the track into tracks
-          ASSERT(trackno < number_of_hits)
-          tracks[trackno] = t;
-
-          // Add the tracks to the bag of tracks to_follow
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
-          tracks_to_follow[ttfP] = trackno;
-        }
-        // A track just skipped a module
-        // We keep it for another round
-        else if (skipped_modules <= MAX_SKIPPED_MODULES) {
-          // Form the new mask
-          trackno = ((skipped_modules + 1) << 28) | (fulltrackno & 0x8FFFFFFF);
-
-          // Add the tracks to the bag of tracks to_follow
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
-          tracks_to_follow[ttfP] = trackno;
-        }
-        // If there are only three hits in this track,
-        // mark it as "doubtful"
-        else if (t.hitsNum == 3) {
-          const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-          ASSERT(weakP < number_of_hits)
-          weak_tracks[weakP] = trackno;
-        }
-        // In the "else" case, we couldn't follow up the track,
-        // so we won't be track following it anymore.
-      }
-    }
+    trackForwarding(hit_Xs, hit_Ys, hit_Zs, hit_used,
+      tracks_insertPointer, ttf_insertPointer, weaktracks_insertPointer,
+      blockDim_sh_hit, (int*) &sensor_data[0],
+      (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
+      diff_ttf, blockDim_product, tracks_to_follow, weak_tracks, prev_ttf,
+      tracklets, tracks, number_of_hits);
 
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation
@@ -493,166 +720,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       sh_hit_prevPointer = sh_hit_lastPointer[0] + shift_lastPointer;
       shift_lastPointer += blockDim.x;
 
-      // Believe it or not, this "{" gives a 5% speedup (registers)
-      {
-
-        // Track creation starts
-        unsigned int best_hit_h1, best_hit_h2;
-        Hit h0, h1;
-        int first_h1, first_h2, last_h2;
-        float dymax;
-
-        const int h0_index = sh_hit_process[threadIdx.x];
-        bool inside_bounds = h0_index != -1;
-        unsigned int num_h1_to_process = 0;
-        float best_fit = MAX_FLOAT;
-
-        // We will repeat this for performance reasons
-        if (inside_bounds) {
-          h0.x = hit_Xs[h0_index];
-          h0.y = hit_Ys[h0_index];
-          h0.z = hit_Zs[h0_index];
-          
-          // Calculate new dymax
-          const float s1_z = hit_Zs[sensor_data[1]];
-          const float h_dist = fabs(s1_z - h0.z);
-          dymax = PARAM_MAXYSLOPE * h_dist;
-
-          // Only iterate in the hits indicated by hit_candidates :)
-          first_h1 = hit_candidates[2 * h0_index];
-          const int last_h1 = hit_candidates[2 * h0_index + 1];
-          num_h1_to_process = last_h1 - first_h1;
-          atomicMax(max_numhits_to_process, num_h1_to_process);
-          ASSERT(max_numhits_to_process[0] >= num_h1_to_process)
-        }
-
-        __syncthreads();
-
-        // Only iterate max_numhits_to_process[0] iterations (with blockDim.y threads) :D :D :D
-        for (int j=0; j<(max_numhits_to_process[0] + blockDim.y - 1) / blockDim.y; ++j) {
-          const int h1_element = blockDim.y * j + threadIdx.y;
-          inside_bounds &= h1_element < num_h1_to_process; // Hmmm...
-          bool is_h1_used = true; // TODO: Can be merged with h1_element restriction
-          int h1_index;
-          float dz_inverted;
-
-          if (inside_bounds) {
-            h1_index = first_h1 + h1_element;
-            is_h1_used = hit_used[h1_index];
-            if (!is_h1_used) {
-              h1.x = hit_Xs[h1_index];
-              h1.y = hit_Ys[h1_index];
-              h1.z = hit_Zs[h1_index];
-
-              dz_inverted = 1.f / (h1.z - h0.z);
-            }
-
-            first_h2 = hit_h2_candidates[2 * h1_index];
-            last_h2 = hit_h2_candidates[2 * h1_index + 1];
-            // In case there be no h2 to process,
-            // we can preemptively prevent further processing
-            inside_bounds &= first_h2 != -1;
-          }
-
-          // Iterate in the third list of hits
-          // Tiled memory access on h2
-          for (int k=0; k<(sensor_data[SENSOR_DATA_HITNUMS + 2] + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
-
-#if USE_SHARED_FOR_HITS
-            __syncthreads();
-            if (threadIdx.y < SH_HIT_MULT) {
-              const int tid = threadIdx.y * blockDim.x + threadIdx.x;
-              const int sh_hit_no = blockDim_sh_hit * k + tid;
-              if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2]) {
-                const int h2_index = sensor_data[2] + sh_hit_no;
-
-                // Coalesced memory accesses
-                ASSERT(tid < blockDim_sh_hit)
-                sh_hit_x[tid] = hit_Xs[h2_index];
-          			sh_hit_y[tid] = hit_Ys[h2_index];
-          			sh_hit_z[tid] = hit_Zs[h2_index];
-              }
-            }
-            __syncthreads();
-#endif
-
-            if (inside_bounds && !is_h1_used) {
-
-              const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
-              for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
-
-                const int h2_index = sensor_data[2] + kk;
-                if (h2_index >= first_h2 && h2_index < last_h2) {
-#if USE_SHARED_FOR_HITS
-                  const int sh_h2_index = kk % blockDim_sh_hit;
-                  const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
-#else
-                  const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
-#endif
-
-                  // Predictions of x and y for this hit
-                  const float z2_tz = (h2.z - h0.z) * dz_inverted;
-                  const float x = h0.x + (h1.x - h0.x) * z2_tz;
-                  const float y = h0.y + (h1.y - h0.y) * z2_tz;
-                  const float dx = x - h2.x;
-                  const float dy = y - h2.y;
-
-                  if (fabs(h1.y - h0.y) < dymax && fabs(dx) < PARAM_TOLERANCE_EXTRA && fabs(dy) < PARAM_TOLERANCE_EXTRA) {
-                    // Calculate fit
-                    const float scatterNum = (dx * dx) + (dy * dy);
-                    const float scatterDenom = 1.f / (h2.z - h1.z);
-                    const float scatter = scatterNum * scatterDenom * scatterDenom;
-                    const bool condition = scatter < MAX_SCATTER;
-                    const float fit = condition * scatter + !condition * MAX_FLOAT; 
-
-                    const bool fit_is_better = fit < best_fit;
-                    best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-                    best_hit_h1 = fit_is_better * (h1_index) + !fit_is_better * best_hit_h1;
-                    best_hit_h2 = fit_is_better * (h2_index) + !fit_is_better * best_hit_h2;
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // Compare / Mix the results from the blockDim.y threads
-        ASSERT(threadIdx.x * blockDim.y + threadIdx.y < blockDim.x * MAX_NUMTHREADS_Y)
-        best_fits[threadIdx.x * blockDim.y + threadIdx.y] = best_fit;
-
-        __syncthreads();
-
-        bool accept_track = false;
-        if (h0_index != -1 && best_fit != MAX_FLOAT) {
-          best_fit = MAX_FLOAT;
-          int threadIdx_y_winner = -1;
-          for (int i=0; i<blockDim.y; ++i) {
-            const float fit = best_fits[threadIdx.x * blockDim.y + i];
-            if (fit < best_fit) {
-              best_fit = fit;
-              threadIdx_y_winner = i;
-            }
-          }
-          accept_track = threadIdx.y == threadIdx_y_winner;
-        }
-
-        // We have a best fit! - haven't we?
-        // Only go through the tracks on the selected thread
-        if (accept_track) {
-          // Fill in track information
-
-          // Add the track to the bag of tracks
-          const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
-          ASSERT(trackP < number_of_hits)
-          tracklets[trackP] = Track {3, (unsigned int) sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};;
-
-          // Add the tracks to the bag of tracks to_follow
-          // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
-          // and hence it is stored in tracklets
-          const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
-          tracks_to_follow[ttfP] = 0x80000000 | trackP;
-        }
-      }
+      // Track creation
+      trackCreation(hit_Xs, hit_Ys, hit_Zs, (int*) &sensor_data[0], hit_candidates,
+        max_numhits_to_process, (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
+        (int*) &sh_hit_process[0], hit_used, hit_h2_candidates, blockDim_sh_hit, best_fits,
+        tracklets_insertPointer, ttf_insertPointer, tracklets, tracks_to_follow);
     }
 
     first_sensor -= 1;

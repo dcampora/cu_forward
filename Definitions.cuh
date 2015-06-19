@@ -83,13 +83,4 @@ struct Track { // 4 + 24 * 4 = 100 B
     }
 };
 
-struct Tracklet {
-    unsigned int hitsNum;
-    unsigned int h0, h1, h2, hnext;
-
-    __device__ Tracklet(){}
-    __device__ Tracklet(const unsigned int _hitsNum, unsigned int _h0, unsigned int _h1, unsigned int _h2) : 
-        hitsNum(_hitsNum), h0(_h0), h1(_h1), h2(_h2) {}
-};
-
 #endif
