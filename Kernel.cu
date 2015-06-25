@@ -194,10 +194,13 @@ __device__ void fillCandidates(int* const hit_candidates,
  * @param tracks           
  * @param number_of_hits   
  */
-__device__ void trackForwarding(const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
+__device__ void trackForwarding(
+#if USE_SHARED_FOR_HITS
+  float* const sh_hit_x, float* const sh_hit_y, float* const sh_hit_z,
+#endif
+  const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
   bool* const hit_used, unsigned int* const tracks_insertPointer, unsigned int* const ttf_insertPointer,
-  unsigned int* const weaktracks_insertPointer, int blockDim_sh_hit,
-  int* const sensor_data, float* const sh_hit_x, float* const sh_hit_y, float* const sh_hit_z,
+  unsigned int* const weaktracks_insertPointer, int blockDim_sh_hit, int* const sensor_data,
   unsigned int diff_ttf, int blockDim_product, int* const tracks_to_follow,
   int* const weak_tracks, unsigned int prev_ttf, Track* const tracklets,
   Track* const tracks, int number_of_hits) {
@@ -377,10 +380,13 @@ __device__ void trackForwarding(const float* const hit_Xs, const float* const hi
  * @param tracklets               
  * @param tracks_to_follow        
  */
-__device__ void trackCreation(const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
-  int* const sensor_data, int* const hit_candidates, unsigned int* const max_numhits_to_process, float* const sh_hit_x,
-  float* const sh_hit_y, float* const sh_hit_z, int* const sh_hit_process, bool* const hit_used,
-  int* const hit_h2_candidates, int blockDim_sh_hit, float* const best_fits,
+__device__ void trackCreation(
+#if USE_SHARED_FOR_HITS
+  float* const sh_hit_x, float* const sh_hit_y, float* const sh_hit_z,
+#endif
+  const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
+  int* const sensor_data, int* const hit_candidates, unsigned int* const max_numhits_to_process, int* const sh_hit_process,
+  bool* const hit_used, int* const hit_h2_candidates, int blockDim_sh_hit, float* const best_fits,
   unsigned int* const tracklets_insertPointer, unsigned int* const ttf_insertPointer, Track* const tracklets,
   int* const tracks_to_follow) {
 
@@ -670,10 +676,13 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     const unsigned int diff_ttf = last_ttf - prev_ttf;
 
     // 2a. Track forwarding
-    trackForwarding(hit_Xs, hit_Ys, hit_Zs, hit_used,
+    trackForwarding(
+#if USE_SHARED_FOR_HITS
+      (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
+#endif
+      hit_Xs, hit_Ys, hit_Zs, hit_used,
       tracks_insertPointer, ttf_insertPointer, weaktracks_insertPointer,
       blockDim_sh_hit, (int*) &sensor_data[0],
-      (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
       diff_ttf, blockDim_product, tracks_to_follow, weak_tracks, prev_ttf,
       tracklets, tracks, number_of_hits);
 
@@ -721,8 +730,11 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
       shift_lastPointer += blockDim.x;
 
       // Track creation
-      trackCreation(hit_Xs, hit_Ys, hit_Zs, (int*) &sensor_data[0], hit_candidates,
-        max_numhits_to_process, (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
+      trackCreation(
+#if USE_SHARED_FOR_HITS
+        (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
+#endif
+        hit_Xs, hit_Ys, hit_Zs, (int*) &sensor_data[0], hit_candidates, max_numhits_to_process,
         (int*) &sh_hit_process[0], hit_used, hit_h2_candidates, blockDim_sh_hit, best_fits,
         tracklets_insertPointer, ttf_insertPointer, tracklets, tracks_to_follow);
     }
