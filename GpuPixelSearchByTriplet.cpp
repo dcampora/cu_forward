@@ -15,6 +15,9 @@ int independent_execute(
   std::cout << std::fixed << std::setprecision(2);
   logger::ll.verbosityLevel = 3;
 
+  // Order input hits by X
+  preorder_by_x(converted_input);
+
   return gpuPixelSearchByTripletInvocation(converted_input, output);
 }
 

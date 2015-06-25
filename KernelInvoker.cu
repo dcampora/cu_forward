@@ -16,27 +16,9 @@ cudaError_t invokeParallelSearch(
     const std::vector<const std::vector<uint8_t>* > & input,
     std::vector<std::vector<uint8_t> > & output) {
 
-  // DEBUG << "Input pointer: " 
-  //   << std::hex << "0x" << (long long int) &(input[0])
-  //   << std::dec << std::endl;
-  
   const std::vector<uint8_t>* startingEvent_input = input[startingEvent];
   setHPointersFromInput((uint8_t*) &(*startingEvent_input)[0], startingEvent_input->size());
-  
-  // Order *all* the input vectors by h_hit_Xs natural order
-  // per sensor
   int number_of_sensors = *h_no_sensors;
-  for (int i=0; i<eventsToProcess; ++i) {
-    int acc_hitnums = 0;
-    const std::vector<uint8_t>* event_input = input[i];
-    setHPointersFromInput((uint8_t*) &(*event_input)[0], event_input->size());
-
-    for (int j=0; j<number_of_sensors; j++) {
-      const int hitnums = h_sensor_hitNums[j];
-      quicksort(h_hit_Xs, h_hit_Ys, h_hit_Zs, h_hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
-      acc_hitnums += hitnums;
-    }
-  }
 
   std::map<int, int> zhit_to_module;
   if (logger::ll.verbosityLevel > 0){
