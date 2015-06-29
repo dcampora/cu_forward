@@ -491,7 +491,7 @@ __device__ void trackCreation(
             const float dx = x - h2.x;
             const float dy = y - h2.y;
 
-            if (fabs(h1.y - h0.y) < dymax && fabs(dx) < PARAM_TOLERANCE_EXTRA && fabs(dy) < PARAM_TOLERANCE_EXTRA) {
+            if (fabs(h1.y - h0.y) < dymax && fabs(dx) < PARAM_TOLERANCE && fabs(dy) < PARAM_TOLERANCE) {
               // Calculate fit
               const float scatterNum = (dx * dx) + (dy * dy);
               const float scatterDenom = 1.f / (h2.z - h1.z);
