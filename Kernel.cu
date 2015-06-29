@@ -88,17 +88,17 @@ __device__ void fillCandidates(int* const hit_candidates,
           
           // Min and max possible x0s
           const float h_dist = fabs(h0.z - z_s0);
-          const float dxmax = PARAM_MAXXSLOPE * h_dist;
+          const float dxmax = PARAM_MAXXSLOPE_CANDIDATES * h_dist;
           const float x0_min = h0.x - dxmax;
           const float x0_max = h0.x + dxmax;
 
           // Min and max possible h1s for that h0
           float z2_tz = (((float) z_s2 - z_s0)) / (h0.z - z_s0);
           float x = x0_max + (h0.x - x0_max) * z2_tz;
-          xmin_h2 = x - PARAM_TOLERANCE;
+          xmin_h2 = x - PARAM_TOLERANCE_CANDIDATES;
 
           x = x0_min + (h0.x - x0_min) * z2_tz;
-          xmax_h2 = x + PARAM_TOLERANCE;
+          xmax_h2 = x + PARAM_TOLERANCE_CANDIDATES;
         }
         
         if (first_sensor >= 4) {
@@ -113,7 +113,7 @@ __device__ void fillCandidates(int* const hit_candidates,
               if (process_h1_candidates && !last_h1_found) {
                 // Check if h0 and h1 are compatible
                 const float h_dist = fabs(h1.z - h0.z);
-                const float dxmax = PARAM_MAXXSLOPE * h_dist;
+                const float dxmax = PARAM_MAXXSLOPE_CANDIDATES * h_dist;
                 const bool tol_condition = fabs(h1.x - h0.x) < dxmax;
                 
                 // Find the first one
