@@ -15,10 +15,10 @@ __device__ void trackForwarding(
 #endif
   const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
   bool* const hit_used, unsigned int* const tracks_insertPointer, unsigned int* const ttf_insertPointer,
-  unsigned int* const weaktracks_insertPointer, int blockDim_sh_hit, int* const sensor_data,
-  unsigned int diff_ttf, int blockDim_product, int* const tracks_to_follow,
-  int* const weak_tracks, unsigned int prev_ttf, Track* const tracklets,
-  Track* const tracks, int number_of_hits);
+  unsigned int* const weaktracks_insertPointer, const int blockDim_sh_hit, int* const sensor_data,
+  const unsigned int diff_ttf, const int blockDim_product, int* const tracks_to_follow,
+  int* const weak_tracks, const unsigned int prev_ttf, Track* const tracklets,
+  Track* const tracks, const int number_of_hits);
 
 __device__ void trackCreation(
 #if USE_SHARED_FOR_HITS
@@ -26,7 +26,7 @@ __device__ void trackCreation(
 #endif
   const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs,
   int* const sensor_data, int* const hit_candidates, unsigned int* const max_numhits_to_process, int* const sh_hit_process,
-  bool* const hit_used, int* const hit_h2_candidates, int blockDim_sh_hit, float* const best_fits,
+  bool* const hit_used, int* const hit_h2_candidates, const int blockDim_sh_hit, float* const best_fits,
   unsigned int* const tracklets_insertPointer, unsigned int* const ttf_insertPointer, Track* const tracklets,
   int* const tracks_to_follow);
 

@@ -24,7 +24,7 @@
 #define MIN_HITS_TRACK 3
 #define MAX_FLOAT FLT_MAX
 #define MIN_FLOAT -FLT_MAX
-#define MAX_SKIPPED_MODULES 1
+#define MAX_SKIPPED_MODULES 3
 #define TTF_MODULO 2000
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
@@ -38,7 +38,7 @@
 #define MAX_SCATTER 0.000016f
 #define SENSOR_DATA_HITNUMS 3
 
-#define PRINT_SOLUTION false
+#define PRINT_SOLUTION true
 #define ASSERTS_ENABLED false
 
 #if ASSERTS_ENABLED == true
