@@ -123,7 +123,6 @@ cudaError_t invokeParallelSearch(
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
-  // std::vector<std::string> exp_names {nexperiments};
 
   DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event" << (eventsToProcess>1 ? "s" : "") << std::endl 
 	  << " " << nexperiments << " experiments, " << niterations << " iterations" << std::endl;
@@ -179,16 +178,16 @@ cudaError_t invokeParallelSearch(
   }
 
   // Get results
-  DEBUG << "Number of tracks found per event:" << std::endl << " ";
+  if (PRINT_SOLUTION) DEBUG << "Number of tracks found per event:" << std::endl << " ";
   cudaCheck(cudaMemcpy(atomics, dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int), cudaMemcpyDeviceToHost));
   for (int i=0; i<eventsToProcess; ++i){
     const int numberOfTracks = atomics[i];
-    DEBUG << numberOfTracks << ", ";
+    if (PRINT_SOLUTION) DEBUG << numberOfTracks << ", ";
     
     output[startingEvent + i].resize(numberOfTracks * sizeof(Track));
     cudaCheck(cudaMemcpy(&(output[startingEvent + i])[0], &dev_tracks[i * MAX_TRACKS], numberOfTracks * sizeof(Track), cudaMemcpyDeviceToHost));
   }
-  DEBUG << std::endl;
+  if (PRINT_SOLUTION) DEBUG << std::endl;
 
   // cudaCheck(cudaMemcpy(hit_candidates, dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
   // std::ofstream hc0("hit_candidates.0");
@@ -199,7 +198,7 @@ cudaError_t invokeParallelSearch(
   // hc1.close();
 
   // Print solution tracks of event 0
-  if (PRINT_SOLUTION) {
+  if (PRINT_VERBOSE) {
     const int numberOfTracks = output[0].size() / sizeof(Track);
     Track* tracks_in_solution = (Track*) &(output[0])[0];
     if (logger::ll.verbosityLevel > 0){

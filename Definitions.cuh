@@ -38,7 +38,8 @@
 #define MAX_SCATTER 0.000016f
 #define SENSOR_DATA_HITNUMS 3
 
-#define PRINT_SOLUTION true
+#define PRINT_SOLUTION false
+#define PRINT_VERBOSE false
 #define ASSERTS_ENABLED false
 
 #if ASSERTS_ENABLED == true
