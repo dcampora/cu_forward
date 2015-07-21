@@ -674,6 +674,14 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
     last_ttf = ttf_insertPointer[0];
     const unsigned int diff_ttf = last_ttf - prev_ttf;
 
+#if USE_SHARED_FOR_HITS == false
+    // We need this sync if we are not using shared memory for the hits.
+    // Removing shmem for hits removes the barriers in trackForwarding.
+    // Otherwise the three statements from before could be executed before / after updating
+    // the values inside trackForwarding
+    __syncthreads();
+#endif
+
     // 2a. Track forwarding
     trackForwarding(
 #if USE_SHARED_FOR_HITS
