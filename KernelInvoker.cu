@@ -189,6 +189,7 @@ cudaError_t invokeParallelSearch(
   }
   if (PRINT_SOLUTION) DEBUG << std::endl;
 
+
   // cudaCheck(cudaMemcpy(hit_candidates, dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
   // std::ofstream hc0("hit_candidates.0");
   // std::ofstream hc1("hit_candidates.1");

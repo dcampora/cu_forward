@@ -230,6 +230,7 @@ __device__ void trackForwarding(
 
       // Load last two hits in h0, h1
       const int t_hitsNum = t.hitsNum;
+      ASSERT(t_hitsNum < MAX_TRACK_SIZE)
       const int h0_num = t.hits[t_hitsNum - 2];
       const int h1_num = t.hits[t_hitsNum - 1];
 
