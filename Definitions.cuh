@@ -3,18 +3,16 @@
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <cfloat>
-
 #include <vector>
 
 #define NUMTHREADS_X 64
 #define MAX_NUMTHREADS_Y 16
 #define NUM_ATOMICS 5
-#define USE_SHARED_FOR_HITS 1
+#define USE_SHARED_FOR_HITS true
 #define SH_HIT_MULT 2
 
 #define MAX_TRACKS 3000
@@ -37,6 +35,7 @@
 
 #define MAX_SCATTER 0.000016f
 #define SENSOR_DATA_HITNUMS 3
+#define RESULTS_FOLDER "results"
 
 #define PRINT_SOLUTION false
 #define PRINT_VERBOSE false

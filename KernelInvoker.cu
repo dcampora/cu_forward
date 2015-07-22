@@ -20,25 +20,6 @@ cudaError_t invokeParallelSearch(
   setHPointersFromInput((uint8_t*) &(*startingEvent_input)[0], startingEvent_input->size());
   int number_of_sensors = *h_no_sensors;
 
-  std::map<int, int> zhit_to_module;
-  if (logger::ll.verbosityLevel > 0){
-    // map to convert from z of hit to module
-    for(int i=0; i<number_of_sensors; ++i){
-      const int z = h_sensor_Zs[i];
-      zhit_to_module[z] = i;
-    }
-
-    // Some hits z may not correspond to a sensor's,
-    // but be close enough
-    for(int i=0; i<*h_no_hits; ++i){
-      const int z = h_hit_Zs[i];
-      if (zhit_to_module.find(z) == zhit_to_module.end()){
-        const int sensor = findClosestModule(z, zhit_to_module);
-        zhit_to_module[z] = sensor;
-      }
-    }
-  }
-
   // int* h_prevs, *h_nexts;
   // Histo histo;
   Track* dev_tracks;
@@ -189,23 +170,39 @@ cudaError_t invokeParallelSearch(
   }
   if (PRINT_SOLUTION) DEBUG << std::endl;
 
-
-  // cudaCheck(cudaMemcpy(hit_candidates, dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
-  // std::ofstream hc0("hit_candidates.0");
-  // std::ofstream hc1("hit_candidates.1");
-  // for (int i=0; i<hit_offsets[1] * 2; ++i) hc0 << hit_candidates[i] << std::endl;
-  // for (int i=hit_offsets[1] * 2; i<acc_hits * 2; ++i) hc1 << hit_candidates[i] << std::endl;
-  // hc0.close();
-  // hc1.close();
-
-  // Print solution tracks of event 0
   if (PRINT_VERBOSE) {
-    const int numberOfTracks = output[0].size() / sizeof(Track);
-    Track* tracks_in_solution = (Track*) &(output[0])[0];
-    if (logger::ll.verbosityLevel > 0){
-      for(int i=0; i<numberOfTracks; ++i){
-        printTrack(tracks_in_solution, i, zhit_to_module);
+    // Print solution of all events processed, to results
+    for (int i=0; i<eventsToProcess; ++i) {
+
+      // Calculate z to sensor map
+      std::map<int, int> zhit_to_module;
+      setHPointersFromInput((uint8_t*) &(*(input[startingEvent + i]))[0], input[startingEvent + i]->size());
+      int number_of_sensors = *h_no_sensors;
+      if (logger::ll.verbosityLevel > 0){
+        // map to convert from z of hit to module
+        for(int j=0; j<number_of_sensors; ++j){
+          const int z = h_sensor_Zs[j];
+          zhit_to_module[z] = j;
+        }
+        // Some hits z may not correspond to a sensor's,
+        // but be close enough
+        for(int j=0; j<*h_no_hits; ++j){
+          const int z = (int) h_hit_Zs[j];
+          if (zhit_to_module.find(z) == zhit_to_module.end()){
+            const int sensor = findClosestModule(z, zhit_to_module);
+            zhit_to_module[z] = sensor;
+          }
+        }
       }
+
+      // Print to output file with event no.
+      const int numberOfTracks = output[i].size() / sizeof(Track);
+      Track* tracks_in_solution = (Track*) &(output[startingEvent + i])[0];
+      std::ofstream outfile (std::string(RESULTS_FOLDER) + std::string("/") + toString(i) + std::string(".out"));
+      for(int j=0; j<numberOfTracks; ++j){
+        printTrack(tracks_in_solution, j, zhit_to_module, outfile);
+      }
+      outfile.close();
     }
   }
 
@@ -229,9 +226,10 @@ cudaError_t invokeParallelSearch(
  * @param tracks      
  * @param trackNumber 
  */
-void printTrack(Track* tracks, const int trackNumber, const std::map<int, int>& zhit_to_module){
+void printTrack(Track* tracks, const int trackNumber,
+  const std::map<int, int>& zhit_to_module, std::ofstream& outstream){
   const Track t = tracks[trackNumber];
-  DEBUG << "Track #" << trackNumber << ", length " << (int) t.hitsNum << std::endl;
+  outstream << "Track #" << trackNumber << ", length " << (int) t.hitsNum << std::endl;
 
   for(int i=0; i<t.hitsNum; ++i){
     const int hitNumber = t.hits[i];
@@ -241,14 +239,14 @@ void printTrack(Track* tracks, const int trackNumber, const std::map<int, int>& 
     const float z = h_hit_Zs[hitNumber];
     const int module = zhit_to_module.at((int) z);
 
-    DEBUG << " " << std::setw(8) << id << " (" << hitNumber << ")"
+    outstream << " " << std::setw(8) << id << " (" << hitNumber << ")"
       << " module " << std::setw(2) << module
       << ", x " << std::setw(6) << x
       << ", y " << std::setw(6) << y
       << ", z " << std::setw(6) << z << std::endl;
   }
 
-  DEBUG << std::endl;
+  outstream << std::endl;
 }
 
 /**
