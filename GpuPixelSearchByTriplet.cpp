@@ -22,8 +22,7 @@ int independent_execute(
 }
 
 void independent_post_execute(const std::vector<std::vector<uint8_t> > & output) {
-    DEBUG << "post_execute invoked" << std::endl;
-    DEBUG << "Size of output: " << output.size() << " entries" << std::endl;
+    DEBUG << std::endl << "Size of output: " << output.size() << " entries" << std::endl;
 }
 
 int gpuPixelSearchByTriplet(
