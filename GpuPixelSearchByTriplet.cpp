@@ -44,7 +44,7 @@ int gpuPixelSearchByTriplet(
 int gpuPixelSearchByTripletInvocation(
     const std::vector<const std::vector<uint8_t>* > & input,
     std::vector<std::vector<uint8_t> > & output) {
-  DEBUG << "Invoking gpuPixelSearchByTriplet with " << input.size() << " events" << std::endl;
+  DEBUG << std::endl << "Invoking gpuPixelSearchByTriplet with " << input.size() << " events" << std::endl;
 
   // Define how many blocks / threads we need to deal with numberOfEvents
   // Each execution will return a different output

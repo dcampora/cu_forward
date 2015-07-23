@@ -16,10 +16,6 @@ cudaError_t invokeParallelSearch(
     const std::vector<const std::vector<uint8_t>* > & input,
     std::vector<std::vector<uint8_t> > & output) {
 
-  const std::vector<uint8_t>* startingEvent_input = input[startingEvent];
-  setHPointersFromInput((uint8_t*) &(*startingEvent_input)[0], startingEvent_input->size());
-  int number_of_sensors = *h_no_sensors;
-
   // int* h_prevs, *h_nexts;
   // Histo histo;
   Track* dev_tracks;
@@ -99,8 +95,8 @@ cudaError_t invokeParallelSearch(
 
   // Adding timing
   // Timing calculation
-  unsigned int niterations = 1;
-  unsigned int nexperiments = 1;
+  unsigned int niterations = 4;
+  unsigned int nexperiments = 4;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
