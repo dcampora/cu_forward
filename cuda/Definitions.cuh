@@ -1,5 +1,4 @@
-#ifndef DEFINITIONS_CUH
-#define DEFINITIONS_CUH 1
+#pragma once
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -80,5 +79,3 @@ struct Track { // 4 + 24 * 4 = 100 B
         hits[2] = _h2;
     }
 };
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef CUDALOGGER
-#define CUDALOGGER 1
+#pragma once
 
 #define DEBUG logger::logger(3)
 #define INFO  logger::logger(2)
@@ -29,5 +28,3 @@ namespace logger {
     Logger ll;
     #endif
 }
-
-#endif

@@ -1,3 +1,4 @@
+#pragma once
 
 /**
  *      FileStdLogger
@@ -8,9 +9,6 @@
  *      April, 2014
  *      CERN
  */
-
-#ifndef FILESTDLOGGER
-#define FILESTDLOGGER 1
 
 #include <iostream>
 #include <fstream>
@@ -77,5 +75,3 @@ public:
     }
 
 };
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef CUDA_KERNEL
-#define CUDA_KERNEL 1
+#pragma once
 
 #include "Definitions.cuh"
 
@@ -71,7 +70,8 @@ __device__ void trackCreation(
   int* const tracks_to_follow
 );
 
-__global__ void searchByTriplet(Track* const dev_tracks,
+__global__ void searchByTriplet(
+  Track* const dev_tracks,
   const char* const dev_input,
   int* const dev_tracks_to_follow,
   bool* const dev_hit_used,
@@ -84,5 +84,3 @@ __global__ void searchByTriplet(Track* const dev_tracks,
   int* const dev_hit_candidates,
   int* const dev_hit_h2_candidates
 );
-
-#endif
