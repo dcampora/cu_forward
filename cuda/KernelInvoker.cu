@@ -86,7 +86,7 @@ cudaError_t invokeParallelSearch(
   // Adding timing
   // Timing calculation
   unsigned int niterations = 4;
-  unsigned int nexperiments = 4;
+  unsigned int nexperiments = 8;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -196,8 +196,9 @@ cudaError_t invokeParallelSearch(
   DEBUG << std::endl << "Time averages:" << std::endl;
   for (auto i=0; i<nexperiments; ++i){
     mresults[i] = calcResults(time_values[i]);
-    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << (nexperiments==1 ? numThreads.y : i+1) <<  "): " << mresults[i]["mean"]
-      << " ms (std dev " << mresults[i]["deviation"] << ")" << std::endl;
+    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << (nexperiments==1 ? numThreads.y : i+1) <<  "): "
+      << eventsToProcess / (mresults[i]["mean"] * 0.001) << " events/s, "
+      << mresults[i]["mean"] << " ms (std dev " << mresults[i]["deviation"] << ")" << std::endl;
   }
 
   free(atomics);

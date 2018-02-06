@@ -158,7 +158,10 @@ std::vector<std::vector<unsigned char>> readFolder (
     std::string readingFile = folderContents[i % folderContents.size()];
     readFileIntoVector(foldername + "/" + readingFile, input[readFiles]);
     readFiles++;
-    std::cout << "." << std::flush;
+    
+    if ((readFiles % 100) == 0) {
+      std::cout << "." << std::flush;
+    }
   }
 
   std::cout << std::endl << input.size() << " files read" << std::endl << std::endl;
