@@ -8,3 +8,4 @@ Debug
 .cproject
 mcdata/*.dat
 mcdata_old
+build
