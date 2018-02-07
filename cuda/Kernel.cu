@@ -14,7 +14,8 @@
  * @param h2 
  * @return 
  */
-__device__ float fitHitToTrack(const float tx,
+__device__ float fitHitToTrack(
+  const float tx,
   const float ty,
   const Hit& h0,
   const float h1_z,
@@ -54,7 +55,8 @@ __device__ float fitHitToTrack(const float tx,
  * @param hit_Zs            
  * @param sensor_Zs         
  */
-__device__ void fillCandidates(int* const hit_candidates,
+__device__ void fillCandidates(
+  int* const hit_candidates,
   int* const hit_h2_candidates,
   const int number_of_sensors,
   const int* const sensor_hitStarts,
@@ -680,7 +682,7 @@ __global__ void searchByTriplet(
   __shared__ int sh_hit_process [NUMTHREADS_X];
   __shared__ int sensor_data [6];
 
-  const int cond_sh_hit_mult = min(blockDim.y, SH_HIT_MULT);
+  const int cond_sh_hit_mult = USE_SHARED_FOR_HITS ? min(blockDim.y, SH_HIT_MULT) : blockDim.y;
   const int blockDim_sh_hit = NUMTHREADS_X * cond_sh_hit_mult;
 
   fillCandidates(hit_candidates, hit_h2_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums,
@@ -730,13 +732,28 @@ __global__ void searchByTriplet(
     // 2a. Track forwarding
     trackForwarding(
 #if USE_SHARED_FOR_HITS
-      (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
+      (float*) &sh_hit_x[0],
+      (float*) &sh_hit_y[0],
+      (float*) &sh_hit_z[0],
 #endif
-      hit_Xs, hit_Ys, hit_Zs, hit_used,
-      tracks_insertPointer, ttf_insertPointer, weaktracks_insertPointer,
-      blockDim_sh_hit, (int*) &sensor_data[0],
-      diff_ttf, blockDim_product, tracks_to_follow, weak_tracks, prev_ttf,
-      tracklets, tracks, number_of_hits);
+      hit_Xs,
+      hit_Ys,
+      hit_Zs,
+      hit_used,
+      tracks_insertPointer,
+      ttf_insertPointer,
+      weaktracks_insertPointer,
+      blockDim_sh_hit,
+      (int*) &sensor_data[0],
+      diff_ttf,
+      blockDim_product,
+      tracks_to_follow,
+      weak_tracks,
+      prev_ttf,
+      tracklets,
+      tracks,
+      number_of_hits
+    );
 
     // Iterate in all hits for current sensor
     // 2a. Seeding - Track creation

@@ -14,6 +14,6 @@ set(CUDA_HOST_COMPILER "g++")
 
 set(CUDA_SEPARABLE_COMPILATION ON)
 
-set(CUDA_NVCC_FLAGS "-std=c++11;-O2;-g;--expt-relaxed-constexpr; --generate-line-info;--resource-usage;--verbose;--nvlink-options=--verbose;-Xptxas=--verbose;--maxrregcount=128;--gpu-architecture=compute_50;--gpu-code=sm_50;")
+set(CUDA_NVCC_FLAGS "-std=c++11;-O3;-g;--expt-relaxed-constexpr; --generate-line-info;--resource-usage;--verbose;--nvlink-options=--verbose;-Xptxas=--verbose;--maxrregcount=128;")
 
 cuda_add_executable(cuForward src/main.cpp src/Tools.cpp src/Logger.cpp cuda/CudaException.cpp cuda/Tools.cu cuda/Kernel.cu cuda/KernelInvoker.cu)
