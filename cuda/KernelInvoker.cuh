@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include "Definitions.cuh"
-#include "Kernel.cuh"
+#include "SearchByTriplet.cuh"
 #include "Tools.cuh"
 #include "../src/Logger.h"
 #include "../src/Common.h"

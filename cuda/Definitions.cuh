@@ -8,7 +8,7 @@
 #include <cfloat>
 #include <vector>
 
-#define NUMTHREADS_X 16
+#define NUMTHREADS_X 32
 #define MAX_NUMTHREADS_Y 16
 #define NUM_ATOMICS 5
 #define USE_SHARED_FOR_HITS false
@@ -21,7 +21,7 @@
 #define MIN_HITS_TRACK 3
 #define MAX_FLOAT FLT_MAX
 #define MIN_FLOAT -FLT_MAX
-#define MAX_SKIPPED_MODULES 3
+#define MAX_SKIPPED_MODULES 1
 #define TTF_MODULO 2000
 
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
