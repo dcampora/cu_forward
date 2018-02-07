@@ -384,7 +384,7 @@ __device__ void trackForwarding(
 }
 
 /**
- * @brief Track Creation
+ * @brief Track Seeding
  * 
  * @param hit_Xs                  
  * @param hit_Ys                  
@@ -405,7 +405,7 @@ __device__ void trackForwarding(
  * @param tracklets               
  * @param tracks_to_follow        
  */
-__device__ void trackCreation(
+__device__ void trackSeeding(
 #if USE_SHARED_FOR_HITS
   float* const sh_hit_x,
   float* const sh_hit_y,
@@ -799,7 +799,7 @@ __global__ void searchByTriplet(
       shift_lastPointer += blockDim.x;
 
       // Track creation
-      trackCreation(
+      trackSeeding(
 #if USE_SHARED_FOR_HITS
         (float*) &sh_hit_x[0], (float*) &sh_hit_y[0], (float*) &sh_hit_z[0],
 #endif

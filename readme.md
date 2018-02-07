@@ -23,7 +23,7 @@ In order to run it, some binary input files are included with the project. A run
 Here are some example run options:
 
     ```# Run all input files once
-    ./cuForward ../input 51
+    ./cuForward ../input 50
 
     # Run a total of 1000 events, round robin over the existing ones
     ./cuForward ../input 1000```
