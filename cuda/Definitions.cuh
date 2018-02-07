@@ -9,7 +9,7 @@
 #include <vector>
 
 #define NUMTHREADS_X 16
-#define MAX_NUMTHREADS_Y 16
+#define MAX_NUMTHREADS_Y 32
 #define NUM_ATOMICS 5
 #define USE_SHARED_FOR_HITS false
 #define SH_HIT_MULT 2

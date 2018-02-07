@@ -34,8 +34,7 @@ cudaError_t invokeParallelSearch(
 
   // Some startup settings
   dim3 numBlocks(eventsToProcess);
-  dim3 numThreads(NUMTHREADS_X, 2);
-  cudaFuncSetCacheConfig(searchByTriplet, cudaFuncCachePreferShared);
+  dim3 numThreads(NUMTHREADS_X, 4);
 
   // Allocate memory
 
@@ -85,8 +84,8 @@ cudaError_t invokeParallelSearch(
 
   // Adding timing
   // Timing calculation
-  unsigned int niterations = 4;
-  unsigned int nexperiments = 8;
+  unsigned int niterations = 3;
+  unsigned int nexperiments = 5;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -94,11 +93,13 @@ cudaError_t invokeParallelSearch(
   DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event" << (eventsToProcess>1 ? "s" : "") << std::endl 
 	  << " " << nexperiments << " experiments, " << niterations << " iterations" << std::endl;
 
+  if (nexperiments!=1) {
+    numThreads.y = 1;
+  }
+
   for (auto i=0; i<nexperiments; ++i) {
 
-    DEBUG << i << ": " << std::flush;
-
-    if (nexperiments!=1) numThreads.y = i+1;
+    DEBUG << numThreads.x << ", " << numThreads.y << ": " << std::flush;
 
     for (auto j=0; j<niterations; ++j) {
       // Initialize what we need
@@ -140,6 +141,10 @@ cudaError_t invokeParallelSearch(
       time_values[i].push_back(t0);
 
       DEBUG << "." << std::flush;
+    }
+    
+    if (nexperiments!=1) {
+      numThreads.y *= 2;
     }
 
     DEBUG << std::endl;
@@ -194,11 +199,14 @@ cudaError_t invokeParallelSearch(
   }
 
   DEBUG << std::endl << "Time averages:" << std::endl;
+  int exp = 1;
   for (auto i=0; i<nexperiments; ++i){
     mresults[i] = calcResults(time_values[i]);
-    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << (nexperiments==1 ? numThreads.y : i+1) <<  "): "
+    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << (nexperiments==1 ? numThreads.y : exp) <<  "): "
       << eventsToProcess / (mresults[i]["mean"] * 0.001) << " events/s, "
       << mresults[i]["mean"] << " ms (std dev " << mresults[i]["deviation"] << ")" << std::endl;
+
+    exp *= 2;
   }
 
   free(atomics);
