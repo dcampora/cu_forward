@@ -100,8 +100,15 @@ __global__ void searchByTriplet(
   const int cond_sh_hit_mult = USE_SHARED_FOR_HITS ? min(blockDim.y, SH_HIT_MULT) : blockDim.y;
   const int blockDim_sh_hit = NUMTHREADS_X * cond_sh_hit_mult;
 
-  fillCandidates(hit_candidates, hit_h2_candidates, number_of_sensors, sensor_hitStarts, sensor_hitNums,
-    hit_Xs, hit_Ys, hit_Zs, sensor_Zs);
+  fillCandidates(hit_candidates,
+    hit_h2_candidates,
+    number_of_sensors,
+    sensor_hitStarts,
+    sensor_hitNums,
+    hit_Xs,
+    hit_Ys,
+    hit_Zs,
+    sensor_Zs);
 
   // Deal with odd or even in the same thread
   int first_sensor = number_of_sensors - 1;
@@ -120,8 +127,8 @@ __global__ void searchByTriplet(
       sensor_data[threadIdx.x] = sensor_hitStarts[sensor_number];
     }
     else if (threadIdx.x >= 3 && threadIdx.x < 6 && threadIdx.y == 0) {
-      const int sensor_number = first_sensor - (threadIdx.x - 3) * 2 - 1;
-      sensor_data[threadIdx.x] = sensor_hitNums[sensor_number] + sensor_hitNums[sensor_number + 1];
+      const int sensor_number = first_sensor - (threadIdx.x - 3) * 2;
+      sensor_data[threadIdx.x] = sensor_hitNums[sensor_number];
     }
     else if (threadIdx.x == 6 && threadIdx.y == 0) {
       sh_hit_lastPointer[0] = 0;
@@ -130,19 +137,11 @@ __global__ void searchByTriplet(
       max_numhits_to_process[0] = 0;
     }
 
-    __syncthreads();
-
     prev_ttf = last_ttf;
     last_ttf = ttf_insertPointer[0];
     const unsigned int diff_ttf = last_ttf - prev_ttf;
 
-#if USE_SHARED_FOR_HITS == false
-    // We need this sync if we are not using shared memory for the hits.
-    // Removing shmem for hits removes the barriers in trackForwarding.
-    // Otherwise the three statements from before could be executed before / after updating
-    // the values inside trackForwarding
     __syncthreads();
-#endif
 
     // 2a. Track forwarding
     trackForwarding(
@@ -221,7 +220,7 @@ __global__ void searchByTriplet(
         tracklets_insertPointer, ttf_insertPointer, tracklets, tracks_to_follow);
     }
 
-    first_sensor -= 2;
+    first_sensor -= 1;
   }
 
   __syncthreads();

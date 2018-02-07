@@ -3,6 +3,8 @@
 #include <vector>
 #include "cuda_runtime.h"
 
+#define NUMBER_OF_SENSORS 52
+
 #define cudaCheck(stmt) {                                    \
     cudaError_t err = stmt;                                  \
     if (err != cudaSuccess){                                 \

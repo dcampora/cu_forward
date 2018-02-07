@@ -192,7 +192,7 @@ __device__ void trackSeeding(
 
     // Add the track to the bag of tracks
     const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
-    ASSERT(trackP < number_of_hits)
+    // ASSERT(trackP < number_of_hits)
     tracklets[trackP] = Track {3, (unsigned int) sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};;
 
     // Add the tracks to the bag of tracks to_follow

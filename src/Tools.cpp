@@ -150,15 +150,23 @@ std::vector<std::vector<unsigned char>> readFolder (
 
   std::cout << "Requested " << fileNumber << " files" << std::endl;
   
-  std::vector<std::vector<unsigned char>> input (fileNumber);
+  std::vector<std::vector<unsigned char>> input;
   int readFiles = 0;
 
   for (int i=0; i<fileNumber; ++i) {
     // Read event #i in the list and add it to the inputs
     std::string readingFile = folderContents[i % folderContents.size()];
-    readFileIntoVector(foldername + "/" + readingFile, input[readFiles]);
+
+    std::vector<unsigned char> inputContents;
+    readFileIntoVector(foldername + "/" + readingFile, inputContents);
+
+    // Check the number of sensors is correct, otherwise ignore it
+    auto eventInfo = EventInfo(inputContents);
+    if (eventInfo.numberOfSensors == NUMBER_OF_SENSORS) {
+      input.push_back(inputContents);
+    }
+
     readFiles++;
-    
     if ((readFiles % 100) == 0) {
       std::cout << "." << std::flush;
     }

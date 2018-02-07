@@ -172,8 +172,8 @@ __device__ void trackForwarding(
           const float fit = fitHitToTrack(tx, ty, h0, h1_z, h2);
           const bool fit_is_better = fit < best_fit;
 
-          best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-          best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
+          best_fit = fit_is_better ? fit : best_fit;
+          best_hit_h2 = fit_is_better ? h2_index : best_hit_h2;
         }
       }
     }
