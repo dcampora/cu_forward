@@ -1,27 +1,13 @@
 #include "SearchByTriplet.cuh"
 
-/**
- * @brief Fills dev_hit_candidates.
- * 
- * @param hit_candidates    
- * @param hit_h2_candidates 
- * @param number_of_sensors 
- * @param sensor_hitStarts  
- * @param sensor_hitNums    
- * @param hit_Xs            
- * @param hit_Ys            
- * @param hit_Zs            
- * @param sensor_Zs         
- */
 __device__ void fillCandidates(
-  int* const hit_candidates,
-  int* const hit_h2_candidates,
+  int* hit_candidates,
+  int* hit_h2_candidates,
   const int number_of_sensors,
-  const int* const sensor_hitStarts,
-  const int* const sensor_hitNums,
-  const float* const hit_Xs,
-  const float* const hit_Ys,
-  const float* const hit_Zs,
+  const int* sensor_hitStarts,
+  const int* sensor_hitNums,
+  const float* hit_Xs,
+  const float* hit_Ys,
   const int* sensor_Zs
 ) {
   const int blockDim_product = blockDim.x * blockDim.y;
@@ -34,6 +20,7 @@ __device__ void fillCandidates(
 
     // Sensor dependent calculations
     const int z_s0 = process_h2_candidates ? sensor_Zs[first_sensor + 2] : 0;
+    const int z_s1 = sensor_Zs[first_sensor];
     const int z_s2 = process_h2_candidates ? sensor_Zs[second_sensor] : 0;
 
     // Iterate in all hits in z0
@@ -46,7 +33,7 @@ __device__ void fillCandidates(
         bool first_h2_found = false, last_h2_found = false;
         const int h0_index = sensor_hitStarts[first_sensor] + h0_element;
         int h1_index;
-        const Hit h0 {hit_Xs[h0_index], 0.f, hit_Zs[h0_index]};
+        const float h0_x = hit_Xs[h0_index];
         const int hitstarts_s2 = sensor_hitStarts[second_sensor];
         const int hitnums_s2 = sensor_hitNums[second_sensor];
 
@@ -56,17 +43,17 @@ __device__ void fillCandidates(
           // of the notation is fine.
           
           // Min and max possible x0s
-          const float h_dist = fabs(h0.z - z_s0);
+          const float h_dist = fabs(z_s1 - z_s0);
           const float dxmax = PARAM_MAXXSLOPE_CANDIDATES * h_dist;
-          const float x0_min = h0.x - dxmax;
-          const float x0_max = h0.x + dxmax;
+          const float x0_min = h0_x - dxmax;
+          const float x0_max = h0_x + dxmax;
 
           // Min and max possible h1s for that h0
-          float z2_tz = (((float) z_s2 - z_s0)) / (h0.z - z_s0);
-          float x = x0_max + (h0.x - x0_max) * z2_tz;
+          float z2_tz = (((float) z_s2 - z_s0)) / (z_s1 - z_s0);
+          float x = x0_max + (h0_x - x0_max) * z2_tz;
           xmin_h2 = x - PARAM_TOLERANCE_CANDIDATES;
 
-          x = x0_min + (h0.x - x0_min) * z2_tz;
+          x = x0_min + (h0_x - x0_min) * z2_tz;
           xmax_h2 = x + PARAM_TOLERANCE_CANDIDATES;
         }
         
@@ -77,13 +64,13 @@ __device__ void fillCandidates(
 
             if (inside_bounds) {
               h1_index = hitstarts_s2 + h1_element;
-              const Hit h1 {hit_Xs[h1_index], 0.f, hit_Zs[h1_index]};
+              const float h1_x = hit_Xs[h1_index];
 
               if (process_h1_candidates && !last_h1_found) {
                 // Check if h0 and h1 are compatible
-                const float h_dist = fabs(h1.z - h0.z);
+                const float h_dist = fabs(z_s2 - z_s1);
                 const float dxmax = PARAM_MAXXSLOPE_CANDIDATES * h_dist;
-                const bool tol_condition = fabs(h1.x - h0.x) < dxmax;
+                const bool tol_condition = fabs(h1_x - h0_x) < dxmax;
                 
                 // Find the first one
                 if (!first_h1_found && tol_condition) {
@@ -102,13 +89,13 @@ __device__ void fillCandidates(
               }
 
               if (process_h2_candidates && !last_h2_found) {
-                if (!first_h2_found && h1.x > xmin_h2) {
+                if (!first_h2_found && h1_x > xmin_h2) {
                   ASSERT(2 * h0_index < 2 * (sensor_hitStarts[number_of_sensors-1] + sensor_hitNums[number_of_sensors-1]))
 
                   hit_h2_candidates[2 * h0_index] = h1_index;
                   first_h2_found = true;
                 }
-                else if (first_h2_found && h1.x > xmax_h2) {
+                else if (first_h2_found && h1_x > xmax_h2) {
                   ASSERT(2 * h0_index + 1 < 2 * (sensor_hitStarts[number_of_sensors-1] + sensor_hitNums[number_of_sensors-1]))
 
                   hit_h2_candidates[2 * h0_index + 1] = h1_index;

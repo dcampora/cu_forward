@@ -24,25 +24,23 @@
  */
 __device__ void trackSeeding(
 #if USE_SHARED_FOR_HITS
-  float* const sh_hit_x,
-  float* const sh_hit_y,
-  float* const sh_hit_z,
+  float* sh_hit_x,
+  float* sh_hit_y,
 #endif
-  const float* const hit_Xs,
-  const float* const hit_Ys,
-  const float* const hit_Zs,
-  int* const sensor_data,
-  const int* const hit_candidates,
-  unsigned int* const max_numhits_to_process,
-  int* const sh_hit_process,
-  bool* const hit_used,
-  const int* const hit_h2_candidates,
+  const float* hit_Xs,
+  const float* hit_Ys,
+  const Sensor* sensor_data,
+  const int* hit_candidates,
+  unsigned int* max_numhits_to_process,
+  int* sh_hit_process,
+  bool* hit_used,
+  const int* hit_h2_candidates,
   const int blockDim_sh_hit,
-  float* const best_fits,
-  unsigned int* const tracklets_insertPointer,
-  unsigned int* const ttf_insertPointer,
-  Track* const tracklets,
-  int* const tracks_to_follow
+  float* best_fits,
+  unsigned int* tracklets_insertPointer,
+  unsigned int* ttf_insertPointer,
+  Track* tracklets,
+  int* tracks_to_follow
 ) {
 
   // Track creation starts
@@ -60,11 +58,9 @@ __device__ void trackSeeding(
   if (inside_bounds) {
     h0.x = hit_Xs[h0_index];
     h0.y = hit_Ys[h0_index];
-    h0.z = hit_Zs[h0_index];
     
     // Calculate new dymax
-    const float s1_z = hit_Zs[sensor_data[1]];
-    const float h_dist = fabs(s1_z - h0.z);
+    const float h_dist = fabs(sensor_data[1].z - sensor_data[0].z);
     dymax = PARAM_MAXYSLOPE * h_dist;
 
     // Only iterate in the hits indicated by hit_candidates :)
@@ -91,9 +87,8 @@ __device__ void trackSeeding(
       if (!is_h1_used) {
         h1.x = hit_Xs[h1_index];
         h1.y = hit_Ys[h1_index];
-        h1.z = hit_Zs[h1_index];
 
-        dz_inverted = 1.f / (h1.z - h0.z);
+        dz_inverted = 1.f / (sensor_data[1].z - sensor_data[0].z);
       }
 
       first_h2 = hit_h2_candidates[2 * h1_index];
@@ -105,21 +100,20 @@ __device__ void trackSeeding(
 
     // Iterate in the third list of hits
     // Tiled memory access on h2
-    for (int k=0; k<(sensor_data[SENSOR_DATA_HITNUMS + 2] + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
+    for (int k=0; k<(sensor_data[2].hitNums + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
 
 #if USE_SHARED_FOR_HITS
       __syncthreads();
       if (threadIdx.y < SH_HIT_MULT) {
         const int tid = threadIdx.y * blockDim.x + threadIdx.x;
         const int sh_hit_no = blockDim_sh_hit * k + tid;
-        if (sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2]) {
-          const int h2_index = sensor_data[2] + sh_hit_no;
+        if (sh_hit_no < sensor_data[2].hitNums) {
+          const int h2_index = sensor_data[2].hitStart + sh_hit_no;
 
           // Coalesced memory accesses
           ASSERT(tid < blockDim_sh_hit)
           sh_hit_x[tid] = hit_Xs[h2_index];
           sh_hit_y[tid] = hit_Ys[h2_index];
-          sh_hit_z[tid] = hit_Zs[h2_index];
         }
       }
       __syncthreads();
@@ -127,20 +121,20 @@ __device__ void trackSeeding(
 
       if (inside_bounds && !is_h1_used) {
 
-        const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
+        const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[2].hitNums);
         for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
 
-          const int h2_index = sensor_data[2] + kk;
+          const int h2_index = sensor_data[2].hitStart + kk;
           if (h2_index >= first_h2 && h2_index < last_h2) {
 #if USE_SHARED_FOR_HITS
             const int sh_h2_index = kk % blockDim_sh_hit;
-            const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
+            const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index]};
 #else
-            const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
+            const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
 #endif
 
             // Predictions of x and y for this hit
-            const float z2_tz = (h2.z - h0.z) * dz_inverted;
+            const float z2_tz = (sensor_data[2].z - sensor_data[0].z) * dz_inverted;
             const float x = h0.x + (h1.x - h0.x) * z2_tz;
             const float y = h0.y + (h1.y - h0.y) * z2_tz;
             const float dx = x - h2.x;
@@ -149,7 +143,7 @@ __device__ void trackSeeding(
             if (fabs(h1.y - h0.y) < dymax && fabs(dx) < PARAM_TOLERANCE && fabs(dy) < PARAM_TOLERANCE) {
               // Calculate fit
               const float scatterNum = (dx * dx) + (dy * dy);
-              const float scatterDenom = 1.f / (h2.z - h1.z);
+              const float scatterDenom = 1.f / (sensor_data[2].z - sensor_data[1].z);
               const float scatter = scatterNum * scatterDenom * scatterDenom;
               const bool condition = scatter < MAX_SCATTER;
               const float fit = condition * scatter + !condition * MAX_FLOAT; 

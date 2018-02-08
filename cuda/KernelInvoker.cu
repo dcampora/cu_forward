@@ -123,7 +123,6 @@ cudaError_t invokeParallelSearch(
 
       cudaEventRecord(start_searchByTriplet, 0 );
       
-      // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
       searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input,
         dev_tracks_to_follow, dev_hit_used, dev_atomicsStorage, dev_tracklets,
         dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits,
@@ -167,32 +166,12 @@ cudaError_t invokeParallelSearch(
     // Print solution of all events processed, to results
     for (int i=0; i<eventsToProcess; ++i) {
 
-      // Calculate z to sensor map
-      std::map<int, int> zhit_to_module;
-      auto eventInfo = EventInfo(input[i]);
-      if (logger::ll.verbosityLevel > 0){
-        // map to convert from z of hit to module
-        for(int j=0; j<eventInfo.numberOfSensors; ++j){
-          const int z = eventInfo.sensor_Zs[j];
-          zhit_to_module[z] = j;
-        }
-        // Some hits z may not correspond to a sensor's,
-        // but be close enough
-        for(int j=0; j<eventInfo.numberOfHits; ++j){
-          const int z = (int) eventInfo.hit_Zs[j];
-          if (zhit_to_module.find(z) == zhit_to_module.end()){
-            const int sensor = findClosestModule(z, zhit_to_module);
-            zhit_to_module[z] = sensor;
-          }
-        }
-      }
-
       // Print to output file with event no.
       const int numberOfTracks = output[i].size() / sizeof(Track);
       Track* tracks_in_solution = (Track*) &(output[i])[0];
       std::ofstream outfile (std::string(RESULTS_FOLDER) + std::string("/") + std::to_string(i) + std::string(".out"));
       for(int j=0; j<numberOfTracks; ++j){
-        printTrack(EventInfo(input[i]), tracks_in_solution, j, zhit_to_module, outfile);
+        printTrack(EventInfo(input[i]), tracks_in_solution, j, outfile);
       }
       outfile.close();
     }
@@ -226,8 +205,6 @@ void printTrack(
   const EventInfo& info,
   Track* tracks,
   const int trackNumber,
-  const std::map<int,
-  int>& zhit_to_module,
   std::ofstream& outstream
 ) {
   const Track t = tracks[trackNumber];
@@ -238,14 +215,16 @@ void printTrack(
     const unsigned int id = info.hit_IDs[hitNumber];
     const float x = info.hit_Xs[hitNumber];
     const float y = info.hit_Ys[hitNumber];
-    const float z = info.hit_Zs[hitNumber];
-    const int module = zhit_to_module.at((int) z);
+    
+    // TODO: This can be done by searching the ID
+    // const int module = zhit_to_module.at((int) z);
 
     outstream << " " << std::setw(8) << id << " (" << hitNumber << ")"
-      << " module " << std::setw(2) << module
+      // << " module " << std::setw(2) << module
       << ", x " << std::setw(6) << x
       << ", y " << std::setw(6) << y
-      << ", z " << std::setw(6) << z << std::endl;
+      // << ", z " << std::setw(6) << z
+      << std::endl;
   }
 
   outstream << std::endl;
@@ -317,6 +296,7 @@ void printInfo(const EventInfo& info, int numberOfSensors, int numberOfHits) {
     DEBUG << " hit_id: " << info.hit_IDs[i] << std::endl
       << " hit_X: " << info.hit_Xs[i] << std::endl
       << " hit_Y: " << info.hit_Ys[i] << std::endl
-      << " hit_Z: " << info.hit_Zs[i] << std::endl << std::endl;
+      // << " hit_Z: " << info.hit_Zs[i] << std::endl
+      << std::endl;
   }
 }

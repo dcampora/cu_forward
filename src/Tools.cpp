@@ -9,21 +9,21 @@ void preorderByX(std::vector<std::vector<uint8_t>>& input) {
 
     for (int j=0; j<eventInfo.numberOfSensors; j++) {
       const int hitnums = eventInfo.sensor_hitNums[j];
-      quicksort(eventInfo.hit_Xs, eventInfo.hit_Ys, eventInfo.hit_Zs, eventInfo.hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
+      quicksort(eventInfo.hit_Xs, eventInfo.hit_Ys, eventInfo.hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
       acc_hitnums += hitnums;
     }
   }
 }
 
-void quicksort (float* a, float* b, float* c, unsigned int* d, int start, int end) {
+void quicksort (float* a, float* b, unsigned int* c, int start, int end) {
     if (start < end) {
-        const int pivot = divide(a, b, c, d, start, end);
-        quicksort(a, b, c, d, start, pivot - 1);
-        quicksort(a, b, c, d, pivot + 1, end);
+        const int pivot = divide(a, b, c, start, end);
+        quicksort(a, b, c, start, pivot - 1);
+        quicksort(a, b, c, pivot + 1, end);
     }
 }
 
-int divide (float* a, float* b, float* c, unsigned int* d, int start, int end) {
+int divide (float* a, float* b, unsigned int* c, int start, int end) {
     int left;
     int right;
     float pivot;
@@ -45,14 +45,12 @@ int divide (float* a, float* b, float* c, unsigned int* d, int start, int end) {
             swap(a[left], a[right]);
             swap(b[left], b[right]);
             swap(c[left], c[right]);
-            swap(d[left], d[right]);
         }
     }
  
     swap(a[right], a[start]);
     swap(b[right], b[start]);
     swap(c[right], c[start]);
-    swap(d[right], d[start]);
  
     return right;
 }
@@ -163,6 +161,8 @@ std::vector<std::vector<unsigned char>> readFolder (
     // Check the number of sensors is correct, otherwise ignore it
     auto eventInfo = EventInfo(inputContents);
     if (eventInfo.numberOfSensors == NUMBER_OF_SENSORS) {
+      // Make inputContents only the reported size by eventInfo
+      inputContents.resize(eventInfo.size);
       input.push_back(inputContents);
     }
 

@@ -29,6 +29,6 @@ std::vector<std::vector<unsigned char>> readFolder (
 
 // A non-efficient implementation that does what I need
 void preorderByX(std::vector<std::vector<uint8_t>>& input);
-void quicksort(float* a, float* b, float* c, unsigned int* d, int start, int end);
-int divide(float* a, float* b, float* c, unsigned int* d, int first, int last);
+void quicksort(float* a, float* b, unsigned int* c, int start, int end);
+int divide(float* a, float* b, unsigned int* c, int first, int last);
 template<typename T> void swap(T& a, T& b);

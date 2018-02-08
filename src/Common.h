@@ -24,7 +24,11 @@ struct EventInfo {
   uint32_t* hit_IDs;
   float* hit_Xs;
   float* hit_Ys;
-  float* hit_Zs;
+
+  // Ignore hit_Zs
+  // float* hit_Zs;
+  
+  int size;
 
   EventInfo() = default;
   EventInfo(const std::vector<uint8_t>& event) {
@@ -38,6 +42,8 @@ struct EventInfo {
     hit_IDs          = (uint32_t*)input; input += sizeof(uint32_t) * numberOfHits;
     hit_Xs           = (float*)  input; input += sizeof(float)   * numberOfHits;
     hit_Ys           = (float*)  input; input += sizeof(float)   * numberOfHits;
-    hit_Zs           = (float*)  input; input += sizeof(float)   * numberOfHits;
+
+    size = input - (uint8_t*) event.data();
+    // hit_Zs           = (float*)  input; input += sizeof(float)   * numberOfHits;
   }
 };

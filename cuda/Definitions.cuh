@@ -48,30 +48,30 @@
 #endif
 
 struct Sensor {
-	unsigned int hitStart;
-	unsigned int hitNums;
+	int hitStart;
+	int hitNums;
+    int z;
 
     __device__ Sensor(){}
-    __device__ Sensor(const int _hitStart, const int _hitNums) : 
-        hitStart(_hitStart), hitNums(_hitNums) {}
+    __device__ Sensor(const int _hitStart, const int _hitNums, const int _z) : 
+        hitStart(_hitStart), hitNums(_hitNums), z(_z) {}
 };
 
 struct Hit {
 	float x;
 	float y;
-	float z;
 
     __device__ Hit(){}
-    __device__ Hit(const float _x, const float _y, const float _z) :
-        x(_x), y(_y), z(_z) {}
+    __device__ Hit(const float _x, const float _y) :
+        x(_x), y(_y) {}
 };
 
 struct Track { // 4 + 24 * 4 = 100 B
-	unsigned int hitsNum;
-	unsigned int hits[MAX_TRACK_SIZE];
+	int hitsNum;
+	int hits[MAX_TRACK_SIZE];
 
     __device__ Track(){}
-    __device__ Track(const unsigned int _hitsNum, unsigned int _h0, unsigned int _h1, unsigned int _h2) : 
+    __device__ Track(const int _hitsNum, int _h0, int _h1, int _h2) : 
         hitsNum(_hitsNum) {
         
         hits[0] = _h0;
