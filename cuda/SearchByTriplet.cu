@@ -15,7 +15,7 @@ __device__ void processModules(
   const int number_of_sensors,
   const int* sensor_hitStarts,
   const int* sensor_hitNums,
-  const int* sensor_Zs,
+  const float* sensor_Zs,
   const float* hit_Xs,
   const float* hit_Ys,
   unsigned int* weaktracks_insertPointer,
@@ -238,7 +238,7 @@ __global__ void searchByTriplet(
   const int data_offset = dev_event_offsets[event_number];
   const int* no_sensors = (const int*) &dev_input[data_offset];
   const int* no_hits = (const int*) (no_sensors + 1);
-  const int* sensor_Zs = (const int*) (no_hits + 1);
+  const float* sensor_Zs = (const float*) (no_hits + 1);
   const int number_of_sensors = no_sensors[0];
   const int number_of_hits = no_hits[0];
   const int* sensor_hitStarts = (const int*) (sensor_Zs + number_of_sensors);

@@ -1,26 +1,7 @@
 #include "SearchByTriplet.cuh"
 
 /**
- * @brief Track Seeding
- * 
- * @param hit_Xs                  
- * @param hit_Ys                  
- * @param hit_Zs                  
- * @param sensor_data             
- * @param hit_candidates          
- * @param max_numhits_to_process  
- * @param sh_hit_x                
- * @param sh_hit_y                
- * @param sh_hit_z                
- * @param sh_hit_process          
- * @param hit_used                
- * @param hit_h2_candidates       
- * @param blockDim_sh_hit         
- * @param best_fits               
- * @param tracklets_insertPointer 
- * @param ttf_insertPointer       
- * @param tracklets               
- * @param tracks_to_follow        
+ * @brief Creates the tracks seeds from unused triplets.
  */
 __device__ void trackSeeding(
 #if USE_SHARED_FOR_HITS
@@ -87,7 +68,7 @@ __device__ void trackSeeding(
       if (!is_h1_used) {
         h1.x = hit_Xs[h1_index];
         h1.y = hit_Ys[h1_index];
-
+        
         dz_inverted = 1.f / (sensor_data[1].z - sensor_data[0].z);
       }
 
@@ -187,7 +168,7 @@ __device__ void trackSeeding(
     // Add the track to the bag of tracks
     const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
     // ASSERT(trackP < number_of_hits)
-    tracklets[trackP] = Track {3, (unsigned int) sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};;
+    tracklets[trackP] = Track {3, sh_hit_process[threadIdx.x], best_hit_h1, best_hit_h2};;
 
     // Add the tracks to the bag of tracks to_follow
     // Note: The first bit flag marks this is a tracklet (hitsNum == 3),

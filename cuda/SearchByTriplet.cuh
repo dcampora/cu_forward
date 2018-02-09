@@ -6,10 +6,10 @@ __device__ float fitHitToTrack(
   const float tx,
   const float ty,
   const Hit& h0,
-  const int h0_z,
-  const int h1_z,
+  const float h0_z,
+  const float h1_z,
   const Hit& h2,
-  const int h2_z
+  const float h2_z
 );
 
 __device__ void fillCandidates(
@@ -20,7 +20,7 @@ __device__ void fillCandidates(
   const int* sensor_hitNums,
   const float* hit_Xs,
   const float* hit_Ys,
-  const int* sensor_Zs
+  const float* sensor_Zs
 );
 
 __device__ void trackForwarding(
@@ -45,7 +45,7 @@ __device__ void trackForwarding(
   Track* tracks,
   const int number_of_hits,
   const int first_sensor,
-  const int* sensor_Zs,
+  const float* sensor_Zs,
   const int* sensor_hitStarts,
   const int* sensor_hitNums
 );
@@ -86,7 +86,7 @@ __device__ void processModules(
   const int number_of_sensors,
   const int* sensor_hitStarts,
   const int* sensor_hitNums,
-  const int* sensor_Zs,
+  const float* sensor_Zs,
   const float* hit_Xs,
   const float* hit_Ys,
   unsigned int* weaktracks_insertPointer,

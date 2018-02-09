@@ -19,16 +19,32 @@ public:
     const char* what() const throw() { return s.c_str(); }
 };
 
-bool fileExists (const std::string& name);
-void readFileIntoVector(const std::string& foldername, std::vector<unsigned char> & output);
+bool fileExists(const std::string& name);
 
-std::vector<std::vector<unsigned char>> readFolder (
+void readFileIntoVector(
+  const std::string& foldername,
+  std::vector<uint8_t> & output
+);
+
+std::vector<std::vector<uint8_t>> readFolder(
   const std::string& foldername,
   int fileNumber
 );
 
-// A non-efficient implementation that does what I need
 void preorderByX(std::vector<std::vector<uint8_t>>& input);
-void quicksort(float* a, float* b, unsigned int* c, int start, int end);
-int divide(float* a, float* b, unsigned int* c, int first, int last);
-template<typename T> void swap(T& a, T& b);
+
+void quicksort(
+  float* a,
+  float* b,
+  uint32_t* c,
+  int start,
+  int end
+);
+
+int divide(float* a,
+  float* b,
+  uint32_t* c,
+  int first,
+  int last
+);
+

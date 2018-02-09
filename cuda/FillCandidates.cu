@@ -8,7 +8,7 @@ __device__ void fillCandidates(
   const int* sensor_hitNums,
   const float* hit_Xs,
   const float* hit_Ys,
-  const int* sensor_Zs
+  const float* sensor_Zs
 ) {
   const int blockDim_product = blockDim.x * blockDim.y;
   int first_sensor = number_of_sensors - 1;
@@ -19,9 +19,9 @@ __device__ void fillCandidates(
     const bool process_h2_candidates = first_sensor <= number_of_sensors - 3;
 
     // Sensor dependent calculations
-    const int z_s0 = process_h2_candidates ? sensor_Zs[first_sensor + 2] : 0;
-    const int z_s1 = sensor_Zs[first_sensor];
-    const int z_s2 = process_h2_candidates ? sensor_Zs[second_sensor] : 0;
+    const float z_s0 = process_h2_candidates ? sensor_Zs[first_sensor + 2] : 0;
+    const float z_s1 = sensor_Zs[first_sensor];
+    const float z_s2 = process_h2_candidates ? sensor_Zs[second_sensor] : 0;
 
     // Iterate in all hits in z0
     for (int i=0; i<(sensor_hitNums[first_sensor] + blockDim_product - 1) / blockDim_product; ++i) {
@@ -49,7 +49,7 @@ __device__ void fillCandidates(
           const float x0_max = h0_x + dxmax;
 
           // Min and max possible h1s for that h0
-          float z2_tz = (((float) z_s2 - z_s0)) / (z_s1 - z_s0);
+          float z2_tz = ((z_s2 - z_s0)) / (z_s1 - z_s0);
           float x = x0_max + (h0_x - x0_max) * z2_tz;
           xmin_h2 = x - PARAM_TOLERANCE_CANDIDATES;
 

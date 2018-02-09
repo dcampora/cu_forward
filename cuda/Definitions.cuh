@@ -38,6 +38,7 @@
 
 #define PRINT_SOLUTION false
 #define PRINT_VERBOSE false
+#define PRINT_BINARY false
 #define ASSERTS_ENABLED false
 
 #if ASSERTS_ENABLED == true
@@ -50,10 +51,10 @@
 struct Sensor {
 	int hitStart;
 	int hitNums;
-    int z;
+    float z;
 
     __device__ Sensor(){}
-    __device__ Sensor(const int _hitStart, const int _hitNums, const int _z) : 
+    __device__ Sensor(const int _hitStart, const int _hitNums, const float _z) : 
         hitStart(_hitStart), hitNums(_hitNums), z(_z) {}
 };
 

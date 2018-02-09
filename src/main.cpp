@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
     std::cout << std::fixed << std::setprecision(2);
     logger::ll.verbosityLevel = 3;
 
-    // Preorder events by X
+    // Preorder events by x
     preorderByX(input);
 
     // Attempt to execute all in one go

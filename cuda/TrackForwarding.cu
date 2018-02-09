@@ -17,13 +17,13 @@ __device__ float fitHitToTrack(
   const float tx,
   const float ty,
   const Hit& h0,
-  const int h0_z,
-  const int h1_z,
+  const float h0_z,
+  const float h1_z,
   const Hit& h2,
-  const int h2_z
+  const float h2_z
 ) {
   // tolerances
-  const int dz = h2_z - h0_z;
+  const float dz = h2_z - h0_z;
   const float x_prediction = h0.x + tx * dz;
   const float dx = fabs(x_prediction - h2.x);
   const bool tolx_condition = dx < PARAM_TOLERANCE;
@@ -84,7 +84,7 @@ __device__ void trackForwarding(
   Track* tracks,
   const int number_of_hits,
   const int first_sensor,
-  const int* sensor_Zs,
+  const float* sensor_Zs,
   const int* sensor_hitStarts,
   const int* sensor_hitNums
 ) {
@@ -131,8 +131,8 @@ __device__ void trackForwarding(
         h1_z = sensor_data[1].z;
       } else {
         // Oh boy.
-        // Here we assume we are only letting one sensor side skip
-        h1_z = sensor_data[0].z;
+        // We assume only one module can be skipped
+        h1_z = (h1_num < sensor_data[1].hitStart + sensor_data[1].hitNums) ? sensor_data[1].z : sensor_data[0].z;
 
         // We do not know if h0 was in the previous sensor or the previous-previous one.
         // So we have to pay the price and ask the question
@@ -172,7 +172,6 @@ __device__ void trackForwarding(
         ASSERT(tid < blockDim_sh_hit)
         sh_hit_x[tid] = hit_Xs[h2_index];
         sh_hit_y[tid] = hit_Ys[h2_index];
-        sh_hit_z[tid] = hit_Zs[h2_index];
       }
       __syncthreads();
 #endif
