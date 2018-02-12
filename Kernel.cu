@@ -53,7 +53,7 @@ __device__ void fillCandidates(int* const hit_candidates,
   int* const hit_h2_candidates, const int number_of_sensors,
   const int* const sensor_hitStarts, const int* const sensor_hitNums,
   const float* const hit_Xs, const float* const hit_Ys,
-  const float* const hit_Zs, const int* sensor_Zs) {
+  const float* const hit_Zs, const float* sensor_Zs) {
 
   const int blockDim_product = blockDim.x * blockDim.y;
   int first_sensor = number_of_sensors - 1;
@@ -251,111 +251,115 @@ __device__ void trackForwarding(
       const float tyn = (h1_y - h0.y);
       tx = txn * td;
       ty = tyn * td;
-    }
-
-    // Search for a best fit
-    // Load shared elements
     
-    // Iterate in the third list of hits
-    // Tiled memory access on h2
-    // Only load for threadIdx.y == 0
-    float best_fit = MAX_FLOAT;
-    for (int k=0; k<(sensor_data[SENSOR_DATA_HITNUMS + 2] + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
+      const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
+      ASSERT(weakP < number_of_hits)
+      weak_tracks[weakP] = trackno;
+    }
+
+//     // Search for a best fit
+//     // Load shared elements
+    
+//     // Iterate in the third list of hits
+//     // Tiled memory access on h2
+//     // Only load for threadIdx.y == 0
+//     float best_fit = MAX_FLOAT;
+//     for (int k=0; k<(sensor_data[SENSOR_DATA_HITNUMS + 2] + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
       
-#if USE_SHARED_FOR_HITS
-      __syncthreads();
-      const int tid = threadIdx.y * blockDim.x + threadIdx.x;
-      const int sh_hit_no = blockDim_sh_hit * k + tid;
-      if (threadIdx.y < SH_HIT_MULT && sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2]) {
-        const int h2_index = sensor_data[2] + sh_hit_no;
+// #if USE_SHARED_FOR_HITS
+//       __syncthreads();
+//       const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+//       const int sh_hit_no = blockDim_sh_hit * k + tid;
+//       if (threadIdx.y < SH_HIT_MULT && sh_hit_no < sensor_data[SENSOR_DATA_HITNUMS + 2]) {
+//         const int h2_index = sensor_data[2] + sh_hit_no;
 
-        // Coalesced memory accesses
-        ASSERT(tid < blockDim_sh_hit)
-        sh_hit_x[tid] = hit_Xs[h2_index];
-        sh_hit_y[tid] = hit_Ys[h2_index];
-        sh_hit_z[tid] = hit_Zs[h2_index];
-      }
-      __syncthreads();
-#endif
+//         // Coalesced memory accesses
+//         ASSERT(tid < blockDim_sh_hit)
+//         sh_hit_x[tid] = hit_Xs[h2_index];
+//         sh_hit_y[tid] = hit_Ys[h2_index];
+//         sh_hit_z[tid] = hit_Zs[h2_index];
+//       }
+//       __syncthreads();
+// #endif
 
-      if (ttf_condition) {
-        const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
-        for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
+//       if (ttf_condition) {
+//         const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[SENSOR_DATA_HITNUMS + 2]);
+//         for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
           
-          const int h2_index = sensor_data[2] + kk;
-#if USE_SHARED_FOR_HITS
-          const int sh_h2_index = kk % blockDim_sh_hit;
-          const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
-#else
-          const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
-#endif
+//           const int h2_index = sensor_data[2] + kk;
+// #if USE_SHARED_FOR_HITS
+//           const int sh_h2_index = kk % blockDim_sh_hit;
+//           const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index], sh_hit_z[sh_h2_index]};
+// #else
+//           const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index], hit_Zs[h2_index]};
+// #endif
 
-          const float fit = fitHitToTrack(tx, ty, h0, h1_z, h2);
-          const bool fit_is_better = fit < best_fit;
+//           const float fit = fitHitToTrack(tx, ty, h0, h1_z, h2);
+//           const bool fit_is_better = fit < best_fit;
 
-          best_fit = fit_is_better * fit + !fit_is_better * best_fit;
-          best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
-        }
-      }
-    }
+//           best_fit = fit_is_better * fit + !fit_is_better * best_fit;
+//           best_hit_h2 = fit_is_better * h2_index + !fit_is_better * best_hit_h2;
+//         }
+//       }
+//     }
 
-    // We have a best fit!
-    // Fill in t, ONLY in case the best fit is acceptable
-    if (ttf_condition) {
-      if (best_fit != MAX_FLOAT) {
-        // Mark h2 as used
-        ASSERT(best_hit_h2 < number_of_hits)
-        hit_used[best_hit_h2] = true;
+//     // We have a best fit!
+//     // Fill in t, ONLY in case the best fit is acceptable
+//     if (ttf_condition) {
+//       if (best_fit != MAX_FLOAT) {
+//         // Mark h2 as used
+//         ASSERT(best_hit_h2 < number_of_hits)
+//         hit_used[best_hit_h2] = true;
 
-        // Update the tracks to follow, we'll have to follow up
-        // this track on the next iteration :)
-        ASSERT(t.hitsNum < MAX_TRACK_SIZE)
-        t.hits[t.hitsNum++] = best_hit_h2;
+//         // Update the tracks to follow, we'll have to follow up
+//         // this track on the next iteration :)
+//         ASSERT(t.hitsNum < MAX_TRACK_SIZE)
+//         t.hits[t.hitsNum++] = best_hit_h2;
 
-        // Update the track in the bag
-        if (t.hitsNum <= 4) {
-          ASSERT(t.hits[0] < number_of_hits)
-          ASSERT(t.hits[1] < number_of_hits)
-          ASSERT(t.hits[2] < number_of_hits)
+//         // Update the track in the bag
+//         if (t.hitsNum <= 4) {
+//           ASSERT(t.hits[0] < number_of_hits)
+//           ASSERT(t.hits[1] < number_of_hits)
+//           ASSERT(t.hits[2] < number_of_hits)
 
-          // Also mark the first three as used
-          hit_used[t.hits[0]] = true;
-          hit_used[t.hits[1]] = true;
-          hit_used[t.hits[2]] = true;
+//           // Also mark the first three as used
+//           hit_used[t.hits[0]] = true;
+//           hit_used[t.hits[1]] = true;
+//           hit_used[t.hits[2]] = true;
 
-          // If it is a track made out of less than or equal than 4 hits,
-          // we have to allocate it in the tracks pointer
-          trackno = atomicAdd(tracks_insertPointer, 1);
-        }
+//           // If it is a track made out of less than or equal than 4 hits,
+//           // we have to allocate it in the tracks pointer
+//           trackno = atomicAdd(tracks_insertPointer, 1);
+//         }
 
-        // Copy the track into tracks
-        ASSERT(trackno < number_of_hits)
-        tracks[trackno] = t;
+//         // Copy the track into tracks
+//         ASSERT(trackno < number_of_hits)
+//         tracks[trackno] = t;
 
-        // Add the tracks to the bag of tracks to_follow
-        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
-        tracks_to_follow[ttfP] = trackno;
-      }
-      // A track just skipped a module
-      // We keep it for another round
-      else if (skipped_modules <= MAX_SKIPPED_MODULES) {
-        // Form the new mask
-        trackno = ((skipped_modules + 1) << 28) | (fulltrackno & 0x8FFFFFFF);
+//         // Add the tracks to the bag of tracks to_follow
+//         const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+//         tracks_to_follow[ttfP] = trackno;
+//       }
+//       // A track just skipped a module
+//       // We keep it for another round
+//       else if (skipped_modules <= MAX_SKIPPED_MODULES) {
+//         // Form the new mask
+//         trackno = ((skipped_modules + 1) << 28) | (fulltrackno & 0x8FFFFFFF);
 
-        // Add the tracks to the bag of tracks to_follow
-        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
-        tracks_to_follow[ttfP] = trackno;
-      }
-      // If there are only three hits in this track,
-      // mark it as "doubtful"
-      else if (t.hitsNum == 3) {
-        const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
-        ASSERT(weakP < number_of_hits)
-        weak_tracks[weakP] = trackno;
-      }
-      // In the "else" case, we couldn't follow up the track,
-      // so we won't be track following it anymore.
-    }
+//         // Add the tracks to the bag of tracks to_follow
+//         const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+//         tracks_to_follow[ttfP] = trackno;
+//       }
+//       // If there are only three hits in this track,
+//       // mark it as "doubtful"
+//       else if (t.hitsNum == 3) {
+//         const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
+//         ASSERT(weakP < number_of_hits)
+//         weak_tracks[weakP] = trackno;
+//       }
+//       // In the "else" case, we couldn't follow up the track,
+//       // so we won't be track following it anymore.
+//     }
   }
 }
 
@@ -592,7 +596,7 @@ __global__ void searchByTriplet(Track* const dev_tracks, const char* const dev_i
   const int data_offset = dev_event_offsets[event_number];
   const int* const no_sensors = (const int*) &dev_input[data_offset];
   const int* const no_hits = (const int*) (no_sensors + 1);
-  const int* const sensor_Zs = (const int*) (no_hits + 1);
+  const float* const sensor_Zs = (const float*) (no_hits + 1);
   const int number_of_sensors = no_sensors[0];
   const int number_of_hits = no_hits[0];
   const int* const sensor_hitStarts = (const int*) (sensor_Zs + number_of_sensors);

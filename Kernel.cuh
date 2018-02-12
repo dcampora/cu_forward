@@ -7,7 +7,7 @@ __device__ float fitHitToTrack(const float tx, const float ty, const Hit& h0, co
 
 __device__ void fillCandidates(int* const hit_candidates, int* const hit_h2_candidates, const int number_of_sensors,
   const int* const sensor_hitStarts, const int* const sensor_hitNums,
-  const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs, const int* sensor_Zs);
+  const float* const hit_Xs, const float* const hit_Ys, const float* const hit_Zs, const float* sensor_Zs);
 
 __device__ void trackForwarding(
 #if USE_SHARED_FOR_HITS

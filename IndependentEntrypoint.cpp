@@ -85,35 +85,17 @@ bool fileExists (const std::string& name) {
  * int dataSize
  * char* data
  */
-void readFileIntoVector(std::string filename, std::vector<unsigned char> & output){
+void readFileIntoVector(const std::string& filename, std::vector<unsigned char>& output) {
     // Check if file exists
     if (!fileExists(filename)){
         throw StrException("Error: File " + filename + " does not exist.");
     }
 
-    std::ifstream infile (filename.c_str(), std::ifstream::binary);
-
-    // get size of file
-    infile.seekg(0, std::ifstream::end);
-    int size = infile.tellg();
-    infile.seekg(0);
-
-    // Read format expected:
-    //  int funcNameLen
-    //  char* funcName
-    //  int dataSize
-    //  char* data
-    int funcNameLen;
-    int dataSize;
-    std::vector<char> funcName;
-
-    char* pFuncNameLen = (char*) &funcNameLen;
-    char* pDataSize = (char*) &dataSize;
-    infile.read(pFuncNameLen, sizeof(int));
-
-    funcName.resize(funcNameLen);
-    infile.read(&(funcName[0]), funcNameLen);
-    infile.read(pDataSize, sizeof(int));
+    std::ifstream infile(filename.c_str(), std::ifstream::binary);
+    infile.seekg(0, std::ios::end);
+    auto end = infile.tellg();
+    infile.seekg(0, std::ios::beg);
+    auto dataSize = end - infile.tellg();
 
     // read content of infile with a vector
     output.resize(dataSize);

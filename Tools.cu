@@ -47,8 +47,8 @@ void setHPointersFromInput(uint8_t * input, size_t size){
   h_hit_Ys           = (float*)  input; input += sizeof(float)   * *h_no_hits;
   h_hit_Zs           = (float*)  input; input += sizeof(float)   * *h_no_hits;
 
-  if (input != end)
-    throw std::runtime_error("failed to deserialize event");
+  // if (input != end)
+  //   throw std::runtime_error("failed to deserialize event");
 }
 
 /**

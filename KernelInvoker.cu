@@ -95,8 +95,8 @@ cudaError_t invokeParallelSearch(
 
   // Adding timing
   // Timing calculation
-  unsigned int niterations = 4;
-  unsigned int nexperiments = 4;
+  unsigned int niterations = 1;
+  unsigned int nexperiments = 1;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -153,6 +153,33 @@ cudaError_t invokeParallelSearch(
     }
 
     DEBUG << std::endl;
+  }
+
+  if (PRINT_FILL_CANDIDATES) {
+    std::vector<int> hit_h0_candidates (2 * acc_hits);
+    std::vector<int> hit_h2_candidates (2 * acc_hits);
+    cudaCheck(cudaMemcpy(hit_h0_candidates.data(), dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(hit_h2_candidates.data(), dev_hit_h2_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+    
+    // Just print sensors 49, 47 and 45
+    auto info = EventInfo(input[0]);
+
+    std::vector<int> modules {51, 49, 47, 45};
+    for (auto module : modules) {
+      std::cout << "Module " << module << std::endl << " hit h0 candidates: ";
+      for (int i=info.sensor_hitStarts[module]; i<info.sensor_hitStarts[module]+info.sensor_hitNums[module]; ++i) {
+        std::cout << "(" << hit_h0_candidates[2*i] << ", " << hit_h0_candidates[2*i+1] << ") ";
+      }
+      std::cout << std::endl;
+    }
+    
+    for (auto module : modules) {
+      std::cout << "Module " << module << std::endl << " hit h2 candidates: ";
+      for (int i=info.sensor_hitStarts[module]; i<info.sensor_hitStarts[module]+info.sensor_hitNums[module]; ++i) {
+        std::cout << "(" << hit_h2_candidates[2*i] << ", " << hit_h2_candidates[2*i+1] << ") ";
+      }
+      std::cout << std::endl;
+    }
   }
 
   // Get results
