@@ -4,10 +4,9 @@ __device__ void processModules(
 #if USE_SHARED_FOR_HITS
   float* sh_hit_x,
   float* sh_hit_y,
-  float* sh_hit_z,
 #endif
   int* sh_hit_process,
-  int* sensor_data,
+  Sensor* sensor_data,
   const int starting_sensor,
   const int stride,
   bool* hit_used,
@@ -18,8 +17,7 @@ __device__ void processModules(
   const int* const sensor_hitNums,
   const float* const hit_Xs,
   const float* const hit_Ys,
-  const float* const hit_Zs,
-  const int* sensor_Zs,
+  const float* sensor_Zs,
   unsigned int* const weaktracks_insertPointer,
   unsigned int* const tracklets_insertPointer,
   unsigned int* const ttf_insertPointer,
@@ -47,18 +45,16 @@ __device__ void processModules(
     
     // Iterate in sensors
     // Load in shared
-    if (threadIdx.x < 3 && threadIdx.y == 0) {
+    if (threadIdx.x < 3) {
       const int sensor_number = first_sensor - threadIdx.x * 2;
-      sensor_data[threadIdx.x] = sensor_hitStarts[sensor_number];
+      sensor_data[threadIdx.x].hitStart = sensor_hitStarts[sensor_number];
+      sensor_data[threadIdx.x].hitNums = sensor_hitNums[sensor_number];
+      sensor_data[threadIdx.x].z = sensor_Zs[sensor_number];
     }
-    else if (threadIdx.x >= 3 && threadIdx.x < 6 && threadIdx.y == 0) {
-      const int sensor_number = first_sensor - (threadIdx.x - 3) * 2;
-      sensor_data[threadIdx.x] = sensor_hitNums[sensor_number];
-    }
-    else if (threadIdx.x == 6 && threadIdx.y == 0) {
+    else if (threadIdx.x == 4) {
       sh_hit_lastPointer[0] = 0;
     }
-    else if (threadIdx.x == 7 && threadIdx.y == 0) {
+    else if (threadIdx.x == 5) {
       max_numhits_to_process[0] = 0;
     }
 
@@ -73,17 +69,15 @@ __device__ void processModules(
 #if USE_SHARED_FOR_HITS
       (float*) &sh_hit_x[0],
       (float*) &sh_hit_y[0],
-      (float*) &sh_hit_z[0],
 #endif
       hit_Xs,
       hit_Ys,
-      hit_Zs,
       hit_used,
       tracks_insertPointer,
       ttf_insertPointer,
       weaktracks_insertPointer,
       blockDim_sh_hit,
-      (int*) &sensor_data[0],
+      sensor_data,
       diff_ttf,
       blockDim_product,
       tracks_to_follow,
@@ -91,7 +85,11 @@ __device__ void processModules(
       prev_ttf,
       tracklets,
       tracks,
-      number_of_hits
+      number_of_hits,
+      first_sensor,
+      sensor_Zs,
+      sensor_hitStarts,
+      sensor_hitNums
     );
 
     // Iterate in all hits for current sensor
@@ -103,15 +101,15 @@ __device__ void processModules(
 
     unsigned int sh_hit_prevPointer = 0;
     unsigned int shift_lastPointer = blockDim.x;
-    while (sh_hit_prevPointer < sensor_data[SENSOR_DATA_HITNUMS]) {
+    while (sh_hit_prevPointer < sensor_data[0].hitNums) {
 
       __syncthreads();
       if (threadIdx.y == 0) {
         // All threads in this context will add a hit to the 
         // shared elements, or exhaust the list
         int sh_element = sh_hit_prevPointer + threadIdx.x;
-        bool inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-        int h0_index = sensor_data[0] + sh_element;
+        bool inside_bounds = sh_element < sensor_data[0].hitNums;
+        int h0_index = sensor_data[0].hitStart + sh_element;
         bool is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
 
         // Find an unused element or exhaust the list,
@@ -120,8 +118,8 @@ __device__ void processModules(
           // Since it is used, find another element while we are inside bounds
           // This is a simple gather for those elements
           sh_element = sh_hit_prevPointer + shift_lastPointer + atomicAdd(sh_hit_lastPointer, 1);
-          inside_bounds = sh_element < sensor_data[SENSOR_DATA_HITNUMS];
-          h0_index = sensor_data[0] + sh_element;
+          inside_bounds = sh_element < sensor_data[0].hitNums;
+          h0_index = sensor_data[0].hitStart + sh_element;
           is_h0_used = inside_bounds ? hit_used[h0_index] : 1;
         }
 
@@ -140,12 +138,10 @@ __device__ void processModules(
 #if USE_SHARED_FOR_HITS
         (float*) &sh_hit_x[0],
         (float*) &sh_hit_y[0],
-        (float*) &sh_hit_z[0],
 #endif
         hit_Xs,
         hit_Ys,
-        hit_Zs,
-        (int*) &sensor_data[0],
+        sensor_data,
         hit_candidates,
         max_numhits_to_process,
         (int*) &sh_hit_process[0],
@@ -242,7 +238,7 @@ __global__ void searchByTriplet(
   const int data_offset = dev_event_offsets[event_number];
   const int* const no_sensors = (const int*) &dev_input[data_offset];
   const int* const no_hits = (const int*) (no_sensors + 1);
-  const int* const sensor_Zs = (const int*) (no_hits + 1);
+  const float* const sensor_Zs = (const float*) (no_hits + 1);
   const int number_of_sensors = no_sensors[0];
   const int number_of_hits = no_hits[0];
   const int* const sensor_hitStarts = (const int*) (sensor_Zs + number_of_sensors);
@@ -250,7 +246,6 @@ __global__ void searchByTriplet(
   const unsigned int* const hit_IDs = (const unsigned int*) (sensor_hitNums + number_of_sensors);
   const float* const hit_Xs = (const float*) (hit_IDs + number_of_hits);
   const float* const hit_Ys = (const float*) (hit_Xs + number_of_hits);
-  const float* const hit_Zs = (const float*) (hit_Ys + number_of_hits);
 
   // Per event datatypes
   Track* tracks = dev_tracks + tracks_offset;
@@ -280,13 +275,11 @@ __global__ void searchByTriplet(
 #if USE_SHARED_FOR_HITS
   __shared__ float sh_hit_x [NUMTHREADS_X * SH_HIT_MULT];
   __shared__ float sh_hit_y [NUMTHREADS_X * SH_HIT_MULT];
-  __shared__ float sh_hit_z [NUMTHREADS_X * SH_HIT_MULT];
 #endif
   __shared__ int sh_hit_process [NUMTHREADS_X];
-  __shared__ int sensor_data [6];
+  __shared__ int sensor_data [9];
 
-  const int cond_sh_hit_mult = USE_SHARED_FOR_HITS ? min(blockDim.y, SH_HIT_MULT) : blockDim.y;
-  const int blockDim_sh_hit = NUMTHREADS_X * cond_sh_hit_mult;
+  const int blockDim_sh_hit = NUMTHREADS_X;
 
   fillCandidates(hit_candidates,
     hit_h2_candidates,
@@ -295,7 +288,6 @@ __global__ void searchByTriplet(
     sensor_hitNums,
     hit_Xs,
     hit_Ys,
-    hit_Zs,
     sensor_Zs);
 
   // Process each side separately
@@ -303,12 +295,11 @@ __global__ void searchByTriplet(
 #if USE_SHARED_FOR_HITS
     (float*) &sh_hit_x[0],
     (float*) &sh_hit_y[0],
-    (float*) &sh_hit_z[0],
 #endif
     (int*) &sh_hit_process[0],
-    (int*) &sensor_data[0],
+    (Sensor*) &sensor_data[0],
     number_of_sensors-1,
-    2,
+    1,
     hit_used,
     hit_candidates,
     hit_h2_candidates,
@@ -317,7 +308,6 @@ __global__ void searchByTriplet(
     sensor_hitNums,
     hit_Xs,
     hit_Ys,
-    hit_Zs,
     sensor_Zs,
     weaktracks_insertPointer,
     tracklets_insertPointer,
@@ -335,43 +325,41 @@ __global__ void searchByTriplet(
     number_of_hits
   );
 
-  __syncthreads();
+//   __syncthreads();
 
-  processModules(
-#if USE_SHARED_FOR_HITS
-    (float*) &sh_hit_x[0],
-    (float*) &sh_hit_y[0],
-    (float*) &sh_hit_z[0],
-#endif
-    (int*) &sh_hit_process[0],
-    (int*) &sensor_data[0],
-    number_of_sensors-2,
-    2,
-    hit_used,
-    hit_candidates,
-    hit_h2_candidates,
-    number_of_sensors,
-    sensor_hitStarts,
-    sensor_hitNums,
-    hit_Xs,
-    hit_Ys,
-    hit_Zs,
-    sensor_Zs,
-    weaktracks_insertPointer,
-    tracklets_insertPointer,
-    ttf_insertPointer,
-    sh_hit_lastPointer,
-    max_numhits_to_process,
-    tracks_insertPointer,
-    blockDim_sh_hit,
-    blockDim_product,
-    tracks_to_follow,
-    weak_tracks,
-    tracklets,
-    best_fits,
-    tracks,
-    number_of_hits
-  );
+//   processModules(
+// #if USE_SHARED_FOR_HITS
+//     (float*) &sh_hit_x[0],
+//     (float*) &sh_hit_y[0],
+// #endif
+//     (int*) &sh_hit_process[0],
+//     (int*) &sensor_data[0],
+//     number_of_sensors-2,
+//     2,
+//     hit_used,
+//     hit_candidates,
+//     hit_h2_candidates,
+//     number_of_sensors,
+//     sensor_hitStarts,
+//     sensor_hitNums,
+//     hit_Xs,
+//     hit_Ys,
+//     sensor_Zs,
+//     weaktracks_insertPointer,
+//     tracklets_insertPointer,
+//     ttf_insertPointer,
+//     sh_hit_lastPointer,
+//     max_numhits_to_process,
+//     tracks_insertPointer,
+//     blockDim_sh_hit,
+//     blockDim_product,
+//     tracks_to_follow,
+//     weak_tracks,
+//     tracklets,
+//     best_fits,
+//     tracks,
+//     number_of_hits
+//   );
 
   __syncthreads();
 

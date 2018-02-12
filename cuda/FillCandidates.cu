@@ -10,7 +10,6 @@
  * @param sensor_hitNums    
  * @param hit_Xs            
  * @param hit_Ys            
- * @param hit_Zs            
  * @param sensor_Zs         
  */
 __device__ void fillCandidates(
@@ -21,8 +20,7 @@ __device__ void fillCandidates(
   const int* const sensor_hitNums,
   const float* const hit_Xs,
   const float* const hit_Ys,
-  const float* const hit_Zs,
-  const int* sensor_Zs
+  const float* sensor_Zs
 ) {
   const int blockDim_product = blockDim.x * blockDim.y;
   int first_sensor = number_of_sensors - 1;
@@ -34,6 +32,7 @@ __device__ void fillCandidates(
 
     // Sensor dependent calculations
     const int z_s0 = process_h2_candidates ? sensor_Zs[first_sensor + 2] : 0;
+    const int z_s1 = sensor_Zs[first_sensor];
     const int z_s2 = process_h2_candidates ? sensor_Zs[second_sensor] : 0;
 
     // Iterate in all hits in z0
@@ -46,7 +45,7 @@ __device__ void fillCandidates(
         bool first_h2_found = false, last_h2_found = false;
         const int h0_index = sensor_hitStarts[first_sensor] + h0_element;
         int h1_index;
-        const Hit h0 {hit_Xs[h0_index], 0.f, hit_Zs[h0_index]};
+        const Hit h0 {hit_Xs[h0_index], 0.f};
         const int hitstarts_s2 = sensor_hitStarts[second_sensor];
         const int hitnums_s2 = sensor_hitNums[second_sensor];
 
@@ -56,13 +55,13 @@ __device__ void fillCandidates(
           // of the notation is fine.
           
           // Min and max possible x0s
-          const float h_dist = fabs(h0.z - z_s0);
+          const float h_dist = fabs(z_s1 - z_s0);
           const float dxmax = PARAM_MAXXSLOPE_CANDIDATES * h_dist;
           const float x0_min = h0.x - dxmax;
           const float x0_max = h0.x + dxmax;
 
           // Min and max possible h1s for that h0
-          float z2_tz = (((float) z_s2 - z_s0)) / (h0.z - z_s0);
+          float z2_tz = (((float) z_s2 - z_s0)) / (z_s1 - z_s0);
           float x = x0_max + (h0.x - x0_max) * z2_tz;
           xmin_h2 = x - PARAM_TOLERANCE_CANDIDATES;
 
@@ -77,11 +76,11 @@ __device__ void fillCandidates(
 
             if (inside_bounds) {
               h1_index = hitstarts_s2 + h1_element;
-              const Hit h1 {hit_Xs[h1_index], 0.f, hit_Zs[h1_index]};
+              const Hit h1 {hit_Xs[h1_index], 0.f};
 
               if (process_h1_candidates && !last_h1_found) {
                 // Check if h0 and h1 are compatible
-                const float h_dist = fabs(h1.z - h0.z);
+                const float h_dist = fabs(z_s1 - z_s0);
                 const float dxmax = PARAM_MAXXSLOPE_CANDIDATES * h_dist;
                 const bool tol_condition = fabs(h1.x - h0.x) < dxmax;
                 
