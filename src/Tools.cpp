@@ -1,65 +1,11 @@
 #include "Tools.h"
 
 /**
- * @brief Orders hit_Xs, hit_Ys and hit_IDs in input
- *        according to the natural order in x.
+ * Checks file existence
+ * @param  name 
+ * @return      
  */
-void preorderByX(std::vector<std::vector<uint8_t>>& input) {
-  for (int i=0; i<input.size(); ++i) {
-    int acc_hitnums = 0;
-    auto eventInfo = EventInfo(input[i]);
-    for (int j=0; j<eventInfo.numberOfSensors; j++) {
-      const int hitnums = eventInfo.sensor_hitNums[j];
-      quicksort(eventInfo.hit_Xs, eventInfo.hit_Ys, eventInfo.hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
-      acc_hitnums += hitnums;
-    }
-  }
-}
-
-/**
- * @brief Quicksort using the first parameter, reorder b and c parameters too.
- */
-void quicksort(float* a, float* b, uint32_t* c, int start, int end) {
-  if (start < end) {
-    const int pivot = divide(a, b, c, start, end);
-    quicksort(a, b, c, start, pivot - 1);
-    quicksort(a, b, c, pivot + 1, end);
-  }
-}
-
-/**
- * @brief Helper function for quicksort.
- */
-int divide(float* a, float* b, uint32_t* c, int start, int end) {
-  int left;
-  int right;
-  float pivot;
-  pivot = a[start];
-  left = start;
-  right = end;
-  while (left < right) {
-    while (a[right] > pivot) {
-      right--;
-    }
-    while ((left < right) && (a[left] <= pivot)) {
-      left++;
-    }
-    if (left < right) {
-      std::swap(a[left], a[right]);
-      std::swap(b[left], b[right]);
-      std::swap(c[left], c[right]);
-    }
-  }
-  std::swap(a[right], a[start]);
-  std::swap(b[right], b[start]);
-  std::swap(c[right], c[start]);
-  return right;
-}
-
-/**
- * @brief Simple check for existence of a file.
- */
-bool fileExists(const std::string& name) {
+bool fileExists (const std::string& name) {
     if (FILE *file = fopen(name.c_str(), "r")) {
         fclose(file);
         return true;
@@ -140,4 +86,27 @@ std::vector<std::vector<uint8_t>> readFolder(
   }
   std::cout << std::endl << input.size() << " files read" << std::endl << std::endl;
   return input;
+}
+
+void statistics(
+  const std::vector<std::vector<uint8_t>>& input
+) {
+  unsigned int max_number_of_hits = 0;
+  unsigned int max_number_of_hits_in_module = 0;
+  unsigned int average_number_of_hits_in_module = 0;
+
+  for (size_t i=0; i<input.size(); ++i) {
+    EventInfo info (input[i]);
+    for (size_t j=0; j<info.numberOfSensors; ++j) {
+      max_number_of_hits_in_module = std::max(max_number_of_hits_in_module, info.sensor_hitNums[j]);
+      average_number_of_hits_in_module += info.sensor_hitNums[j];
+    }
+    max_number_of_hits = std::max(max_number_of_hits, info.numberOfHits);
+  }
+  average_number_of_hits_in_module /= input.size() * 52;
+
+  std::cout << "Statistics on opened events:" << std::endl
+    << " Max number of hits in event: " << max_number_of_hits << std::endl
+    << " Max number of hits in one module: " << max_number_of_hits_in_module << std::endl
+    << " Average number of hits in module: " << average_number_of_hits_in_module << std::endl << std::endl;
 }

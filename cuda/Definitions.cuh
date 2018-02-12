@@ -8,9 +8,9 @@
 #include <cfloat>
 #include <vector>
 
-#define NUMTHREADS_X 16
-#define MAX_NUMTHREADS_Y 32
-#define NUM_ATOMICS 5
+#define NUMTHREADS_X 64
+#define MAX_NUMTHREADS_Y 1
+#define NUM_ATOMICS 9
 #define USE_SHARED_FOR_HITS false
 #define SH_HIT_MULT 2
 
@@ -23,20 +23,20 @@
 #define MIN_FLOAT -FLT_MAX
 #define MAX_SKIPPED_MODULES 1
 #define TTF_MODULO 2000
-
+#define MAX_NUMHITS_IN_MODULE 300
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
-#define PARAM_MAXXSLOPE 0.4f
-#define PARAM_MAXYSLOPE 0.3f
-#define PARAM_MAXXSLOPE_CANDIDATES 0.3f
 
+// These parameters heavily impact the found tracks
+#define PARAM_TOLERANCE_ALPHA 0.2f
+#define PARAM_TOLERANCE_BETA 0.1f
 #define PARAM_TOLERANCE 0.6f
-#define PARAM_TOLERANCE_CANDIDATES 0.6f
-
 #define MAX_SCATTER 0.000016f
+
 #define SENSOR_DATA_HITNUMS 3
 #define RESULTS_FOLDER "results"
 
 #define PRINT_SOLUTION false
+#define PRINT_FILL_CANDIDATES false
 #define PRINT_VERBOSE false
 #define PRINT_BINARY false
 #define ASSERTS_ENABLED false
@@ -69,10 +69,10 @@ struct Hit {
 
 struct Track { // 4 + 24 * 4 = 100 B
 	int hitsNum;
-	int hits[MAX_TRACK_SIZE];
+	unsigned int hits[MAX_TRACK_SIZE];
 
     __device__ Track(){}
-    __device__ Track(const int _hitsNum, int _h0, int _h1, int _h2) : 
+    __device__ Track(const int _hitsNum, const unsigned int _h0, const unsigned int _h1, const unsigned int _h2) : 
         hitsNum(_hitsNum) {
         
         hits[0] = _h0;

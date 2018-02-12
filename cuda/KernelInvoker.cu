@@ -18,6 +18,9 @@ cudaError_t invokeParallelSearch(
   int*   dev_event_offsets;
   int*   dev_hit_offsets;
   float* dev_best_fits;
+  unsigned int* dev_best_h0s;
+  unsigned int* dev_best_h2s;
+  unsigned int* dev_local_unused_hits;
   int*   dev_hit_candidates;
   int*   dev_hit_h2_candidates;
 
@@ -32,7 +35,7 @@ cudaError_t invokeParallelSearch(
 
   // Some startup settings
   dim3 numBlocks(eventsToProcess);
-  dim3 numThreads(NUMTHREADS_X, 4);
+  dim3 numThreads(NUMTHREADS_X);
 
   // Allocate memory
   // Prepare event offset and hit offset
@@ -63,9 +66,12 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
-  cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * MAX_NUMTHREADS_Y * sizeof(float)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_candidates, 2 * acc_hits * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_h2_candidates, 2 * acc_hits * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * MAX_NUMHITS_IN_MODULE * sizeof(float)));
+  cudaCheck(cudaMalloc((void**)&dev_best_h0s, eventsToProcess * numThreads.x * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_best_h2s, eventsToProcess * numThreads.x * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_local_unused_hits, eventsToProcess * 4 * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_candidates, eventsToProcess * 2 * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_h2_candidates, eventsToProcess * 2 * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
 
   // Copy stuff from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_event_offsets, &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
@@ -79,8 +85,8 @@ cudaError_t invokeParallelSearch(
 
   // Adding timing
   // Timing calculation
-  unsigned int niterations = 3;
-  unsigned int nexperiments = 5;
+  unsigned int niterations = 1;
+  unsigned int nexperiments = 1;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -88,20 +94,14 @@ cudaError_t invokeParallelSearch(
   DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event" << (eventsToProcess>1 ? "s" : "") << std::endl 
 	  << " " << nexperiments << " experiments, " << niterations << " iterations" << std::endl;
 
-  if (nexperiments!=1) {
-    numThreads.y = 1;
-  }
-
   for (auto i=0; i<nexperiments; ++i) {
 
-    DEBUG << numThreads.x << ", " << numThreads.y << ": " << std::flush;
+    DEBUG << numThreads.x << ": " << std::flush;
 
     for (auto j=0; j<niterations; ++j) {
       // Initialize what we need
       cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
       cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * atomic_space * sizeof(int)));
-      cudaCheck(cudaMemset(dev_hit_candidates, -1, 2 * acc_hits * sizeof(int)));
-      cudaCheck(cudaMemset(dev_hit_h2_candidates, -1, 2 * acc_hits * sizeof(int)));
 
       // Just for debugging purposes
       cudaCheck(cudaMemset(dev_tracks, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
@@ -118,10 +118,23 @@ cudaError_t invokeParallelSearch(
 
       cudaEventRecord(start_searchByTriplet, 0 );
       
-      searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input,
-        dev_tracks_to_follow, dev_hit_used, dev_atomicsStorage, dev_tracklets,
-        dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits,
-        dev_hit_candidates, dev_hit_h2_candidates);
+      searchByTriplet<<<numBlocks, numThreads>>>(
+        dev_tracks,
+        (const char*) dev_input,
+        dev_tracks_to_follow,
+        dev_hit_used,
+        dev_atomicsStorage,
+        dev_tracklets,
+        dev_weak_tracks,
+        dev_event_offsets,
+        dev_hit_offsets,
+        dev_best_fits,
+        dev_best_h0s,
+        dev_best_h2s,
+        dev_hit_candidates,
+        dev_hit_h2_candidates,
+        dev_local_unused_hits
+      );
 
       cudaEventRecord( stop_searchByTriplet, 0 );
       cudaEventSynchronize( stop_searchByTriplet );
@@ -136,12 +149,35 @@ cudaError_t invokeParallelSearch(
 
       DEBUG << "." << std::flush;
     }
-    
-    if (nexperiments!=1) {
-      numThreads.y *= 2;
-    }
 
     DEBUG << std::endl;
+  }
+
+  if (PRINT_FILL_CANDIDATES) {
+    std::vector<int> hit_h0_candidates (2 * acc_hits);
+    std::vector<int> hit_h2_candidates (2 * acc_hits);
+    cudaCheck(cudaMemcpy(hit_h0_candidates.data(), dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(hit_h2_candidates.data(), dev_hit_h2_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+    
+    // Just print sensors 49, 47 and 45
+    auto info = EventInfo(input[0]);
+
+    std::vector<int> modules {49, 47, 45};
+    for (auto module : modules) {
+      std::cout << "Module " << module << std::endl << " hit h0 candidates: ";
+      for (int i=info.sensor_hitStarts[module]; i<info.sensor_hitStarts[module]+info.sensor_hitNums[module]; ++i) {
+        std::cout << "(" << hit_h0_candidates[2*i] << ", " << hit_h0_candidates[2*i+1] << ") ";
+      }
+      std::cout << std::endl;
+    }
+    
+    for (auto module : modules) {
+      std::cout << "Module " << module << std::endl << " hit h2 candidates: ";
+      for (int i=info.sensor_hitStarts[module]; i<info.sensor_hitStarts[module]+info.sensor_hitNums[module]; ++i) {
+        std::cout << "(" << hit_h2_candidates[2*i] << ", " << hit_h2_candidates[2*i+1] << ") ";
+      }
+      std::cout << std::endl;
+    }
   }
 
   // Get results
@@ -196,7 +232,7 @@ cudaError_t invokeParallelSearch(
   int exp = 1;
   for (auto i=0; i<nexperiments; ++i){
     mresults[i] = calcResults(time_values[i]);
-    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << (nexperiments==1 ? numThreads.y : exp) <<  "): "
+    DEBUG << " nthreads (" << NUMTHREADS_X << "): "
       << eventsToProcess / (mresults[i]["mean"] * 0.001) << " events/s, "
       << mresults[i]["mean"] << " ms (std dev " << mresults[i]["deviation"] << ")" << std::endl;
 

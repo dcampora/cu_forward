@@ -22,11 +22,11 @@
  * @brief Struct to typecast events.
  */
 struct EventInfo {
-  int32_t numberOfSensors;
-  int32_t numberOfHits;
+  uint32_t numberOfSensors;
+  uint32_t numberOfHits;
   float* sensor_Zs;
-  int32_t* sensor_hitStarts;
-  int32_t* sensor_hitNums;
+  uint32_t* sensor_hitStarts;
+  uint32_t* sensor_hitNums;
   uint32_t* hit_IDs;
   float* hit_Xs;
   float* hit_Ys;
@@ -38,11 +38,11 @@ struct EventInfo {
   EventInfo(const std::vector<uint8_t>& event) {
     uint8_t* input = (uint8_t*) event.data();
     
-    numberOfSensors  = *((int32_t*)input); input += sizeof(int32_t);
-    numberOfHits     = *((int32_t*)input); input += sizeof(int32_t);
+    numberOfSensors  = *((uint32_t*)input); input += sizeof(uint32_t);
+    numberOfHits     = *((uint32_t*)input); input += sizeof(uint32_t);
     sensor_Zs        = (float*)input; input += sizeof(float) * numberOfSensors;
-    sensor_hitStarts = (int32_t*)input; input += sizeof(int32_t) * numberOfSensors;
-    sensor_hitNums   = (int32_t*)input; input += sizeof(int32_t) * numberOfSensors;
+    sensor_hitStarts = (uint32_t*)input; input += sizeof(uint32_t) * numberOfSensors;
+    sensor_hitNums   = (uint32_t*)input; input += sizeof(uint32_t) * numberOfSensors;
     hit_IDs          = (uint32_t*)input; input += sizeof(uint32_t) * numberOfHits;
     hit_Xs           = (float*)  input; input += sizeof(float)   * numberOfHits;
     hit_Ys           = (float*)  input; input += sizeof(float)   * numberOfHits;

@@ -13,8 +13,8 @@ __device__ float fitHitToTrack(
 );
 
 __device__ void fillCandidates(
-  int* hit_candidates,
-  int* hit_h2_candidates,
+  int* h0_candidates,
+  int* h2_candidates,
   const int number_of_sensors,
   const int* sensor_hitStarts,
   const int* sensor_hitNums,
@@ -58,17 +58,21 @@ __device__ void trackSeeding(
   const float* hit_Xs,
   const float* hit_Ys,
   const Sensor* sensor_data,
-  const int* hit_candidates,
+  int* h0_candidates,
   unsigned int* max_numhits_to_process,
-  int* sh_hit_process,
   bool* hit_used,
-  const int* hit_h2_candidates,
+  int* h2_candidates,
   const int blockDim_sh_hit,
   float* best_fits,
+  unsigned int* best_h0s,
+  unsigned int* best_h2s,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
-  int* tracks_to_follow
+  int* tracks_to_follow,
+  unsigned int* local_number_of_hits,
+  unsigned int* local_unused_hits,
+  unsigned int number_of_hits
 );
 
 __device__ void processModules(
@@ -76,13 +80,12 @@ __device__ void processModules(
   float* sh_hit_x,
   float* sh_hit_y,
 #endif
-  int* sh_hit_process,
   Sensor* sensor_data,
   const int starting_sensor,
   const int stride,
   bool* hit_used,
-  const int* hit_candidates,
-  const int* hit_h2_candidates,
+  int* h0_candidates,
+  int* h2_candidates,
   const int number_of_sensors,
   const int* sensor_hitStarts,
   const int* sensor_hitNums,
@@ -101,8 +104,12 @@ __device__ void processModules(
   int* weak_tracks,
   Track* tracklets,
   float* best_fits,
+  unsigned int* best_h0s,
+  unsigned int* best_h2s,
   Track* tracks,
-  const int number_of_hits
+  const int number_of_hits,
+  unsigned int* local_number_of_hits,
+  unsigned int* local_unused_hits
 );
 
 __global__ void searchByTriplet(
@@ -116,6 +123,9 @@ __global__ void searchByTriplet(
   int* dev_event_offsets,
   int* dev_hit_offsets,
   float* dev_best_fits,
-  int* dev_hit_candidates,
-  int* dev_hit_h2_candidates
+  unsigned int* dev_best_h0s,
+  unsigned int* dev_best_h2s,
+  int* dev_h0_candidates,
+  int* dev_h2_candidates,
+  unsigned int* dev_local_unused_hits
 );

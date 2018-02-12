@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include "Common.h"
+#include <algorithm>
 
 /**
  * Generic StrException launcher
@@ -31,20 +32,6 @@ std::vector<std::vector<uint8_t>> readFolder(
   int fileNumber
 );
 
-void preorderByX(std::vector<std::vector<uint8_t>>& input);
-
-void quicksort(
-  float* a,
-  float* b,
-  uint32_t* c,
-  int start,
-  int end
+void statistics(
+  const std::vector<std::vector<uint8_t>>& input
 );
-
-int divide(float* a,
-  float* b,
-  uint32_t* c,
-  int first,
-  int last
-);
-
