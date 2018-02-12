@@ -1,8 +1,8 @@
 #pragma once
 
 #include <iostream>
-#include "Definitions.cuh"
-#include "SearchByTriplet.cuh"
+#include "../kernel/Definitions.cuh"
+#include "../kernel/SearchByTriplet.cuh"
 #include "Tools.cuh"
 #include "../src/Logger.h"
 #include "../src/Common.h"

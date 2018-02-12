@@ -8,9 +8,9 @@
 #include <cfloat>
 #include <vector>
 
-#define NUMTHREADS_X 16
+#define NUMTHREADS_X 32
 #define MAX_NUMTHREADS_Y 32
-#define NUM_ATOMICS 5
+#define NUM_ATOMICS 6
 #define USE_SHARED_FOR_HITS false
 #define SH_HIT_MULT 2
 
@@ -23,16 +23,15 @@
 #define MIN_FLOAT -FLT_MAX
 #define MAX_SKIPPED_MODULES 1
 #define TTF_MODULO 2000
-
+#define MAX_NUMHITS_IN_MODULE 300
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
-#define PARAM_MAXXSLOPE 0.4f
-#define PARAM_MAXYSLOPE 0.3f
-#define PARAM_MAXXSLOPE_CANDIDATES 0.3f
 
+// These parameters heavily impact the found tracks
+#define PARAM_TOLERANCE_ALPHA 0.2f
+#define PARAM_TOLERANCE_BETA 0.1f
 #define PARAM_TOLERANCE 0.6f
-#define PARAM_TOLERANCE_CANDIDATES 0.6f
-
 #define MAX_SCATTER 0.000016f
+
 #define SENSOR_DATA_HITNUMS 3
 #define RESULTS_FOLDER "results"
 

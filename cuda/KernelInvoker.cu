@@ -20,6 +20,7 @@ cudaError_t invokeParallelSearch(
   float* dev_best_fits;
   int*   dev_hit_candidates;
   int*   dev_hit_h2_candidates;
+  unsigned int* dev_rel_indices;
 
   // Choose which GPU to run on, change this on a multi-GPU system.
   const int device_number = 0;
@@ -69,6 +70,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * MAX_NUMTHREADS_Y * sizeof(float)));
   cudaCheck(cudaMalloc((void**)&dev_hit_candidates, 2 * acc_hits * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_h2_candidates, 2 * acc_hits * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_rel_indices, eventsToProcess * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
 
   // Copy stuff from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_event_offsets, &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
@@ -83,7 +85,7 @@ cudaError_t invokeParallelSearch(
   // Adding timing
   // Timing calculation
   unsigned int niterations = 3;
-  unsigned int nexperiments = 4;
+  unsigned int nexperiments = 1;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -119,10 +121,21 @@ cudaError_t invokeParallelSearch(
       cudaEventRecord(start_searchByTriplet, 0 );
       
       // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
-      searchByTriplet<<<numBlocks, numThreads>>>(dev_tracks, (const char*) dev_input,
-        dev_tracks_to_follow, dev_hit_used, dev_atomicsStorage, dev_tracklets,
-        dev_weak_tracks, dev_event_offsets, dev_hit_offsets, dev_best_fits,
-        dev_hit_candidates, dev_hit_h2_candidates);
+      searchByTriplet<<<numBlocks, numThreads>>>(
+        dev_tracks,
+        (const char*) dev_input,
+        dev_tracks_to_follow,
+        dev_hit_used,
+        dev_atomicsStorage,
+        dev_tracklets,
+        dev_weak_tracks,
+        dev_event_offsets,
+        dev_hit_offsets,
+        dev_best_fits,
+        dev_hit_candidates,
+        dev_hit_h2_candidates,
+        dev_rel_indices
+      );
 
       cudaEventRecord( stop_searchByTriplet, 0 );
       cudaEventSynchronize( stop_searchByTriplet );
