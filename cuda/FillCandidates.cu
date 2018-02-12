@@ -17,8 +17,10 @@ __device__ void fillCandidates(
   int module_h1_counter = 0;
   for (int sensor_index=2; sensor_index<=49; ++sensor_index) {
     const auto s1_hitNums = sensor_hitNums[sensor_index];
-    for (int h1_rel_index=0; h1_rel_index<s1_hitNums; ++h1_rel_index) {
-      if (threadIdx.x == (module_h1_counter++ % blockDim.x)) {
+    for (int i=0; i<(s1_hitNums + blockDim.x - 1) / blockDim.x; ++i) {
+      const auto h1_rel_index = i*blockDim.x + threadIdx.x;
+
+      if (h1_rel_index < s1_hitNums) {
         // Find for module sensor_index, hit h1_rel_index the candidates
         const auto s0_z = sensor_Zs[sensor_index+2];
         const auto s1_z = sensor_Zs[sensor_index];
