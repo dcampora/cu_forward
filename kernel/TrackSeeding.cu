@@ -58,11 +58,9 @@ __device__ void trackSeeding(
       const auto h0_last_candidate = h0_candidates[2*h1_index + 1];
       const auto h2_first_candidate = h2_candidates[2*h1_index];
       const auto h2_last_candidate = h2_candidates[2*h1_index + 1];
-      for (int h0_rel_index=h0_first_candidate; h0_rel_index<h0_last_candidate; ++h0_rel_index) {
-        const auto h0_index = sensor_data[0].hitStart + h0_rel_index;
+      for (int h0_index=h0_first_candidate; h0_index<h0_last_candidate; ++h0_index) {
         if (!hit_used[h0_index]) {
-          for (int h2_rel_index=h2_first_candidate; h2_rel_index<h2_last_candidate; ++h2_rel_index) {
-            const auto h2_index = sensor_data[2].hitStart + h2_rel_index;
+          for (int h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
             if (!hit_used[h2_index]) {
               // Our triplet is h0_index, h1_index, h2_index
               // Fit it and check if it's better than what this thread had

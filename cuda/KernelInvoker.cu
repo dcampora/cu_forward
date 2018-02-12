@@ -35,7 +35,7 @@ cudaError_t invokeParallelSearch(
 
   // Some startup settings
   dim3 numBlocks(eventsToProcess);
-  dim3 numThreads(NUMTHREADS_X, 4);
+  dim3 numThreads(NUMTHREADS_X);
 
   // Allocate memory
 
@@ -93,10 +93,9 @@ cudaError_t invokeParallelSearch(
   DEBUG << "Now, on your " << device_properties->name << ": searchByTriplet with " << eventsToProcess << " event" << (eventsToProcess>1 ? "s" : "") << std::endl 
 	  << " " << nexperiments << " experiments, " << niterations << " iterations" << std::endl;
 
-  numThreads.y = 1;
   for (auto i=0; i<nexperiments; ++i) {
 
-    DEBUG << numThreads.x << ", " << numThreads.y << ": " << std::flush;
+    DEBUG << numThreads.x << ": " << std::flush;
 
     for (auto j=0; j<niterations; ++j) {
       // Initialize what we need
@@ -153,7 +152,6 @@ cudaError_t invokeParallelSearch(
     }
 
     DEBUG << std::endl;
-    numThreads.y *= 2;
   }
 
   if (PRINT_FILL_CANDIDATES) {

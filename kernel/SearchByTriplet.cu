@@ -63,6 +63,9 @@ __device__ void processModules(
     last_ttf = ttf_insertPointer[0];
     const unsigned int diff_ttf = last_ttf - prev_ttf;
 
+    // Reset atomics
+    local_number_of_hits[0] = 0;
+
     __syncthreads();
 
     // 2a. Track forwarding

@@ -8,7 +8,7 @@
 #include <cfloat>
 #include <vector>
 
-#define NUMTHREADS_X 32
+#define NUMTHREADS_X 16
 #define MAX_NUMTHREADS_Y 32
 #define NUM_ATOMICS 6
 #define USE_SHARED_FOR_HITS false
