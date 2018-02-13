@@ -28,9 +28,6 @@ __device__ void processModules(
   int* tracks_to_follow,
   int* weak_tracks,
   Track* tracklets,
-  float* best_fits,
-  unsigned int* best_h0s,
-  unsigned int* best_h2s,
   Track* tracks,
   const int number_of_hits,
   unsigned int* h1_rel_indices,
@@ -110,9 +107,6 @@ __device__ void processModules(
       hit_used,
       hit_h2_candidates,
       blockDim_sh_hit,
-      best_fits,
-      best_h0s,
-      best_h2s,
       tracklets_insertPointer,
       ttf_insertPointer,
       tracklets,
@@ -163,9 +157,6 @@ __global__ void searchByTriplet(
   int* dev_weak_tracks,
   int* dev_event_offsets,
   int* dev_hit_offsets,
-  float* dev_best_fits,
-  unsigned int* dev_best_h0s,
-  unsigned int* dev_best_h2s,
   int* dev_hit_candidates,
   int* dev_hit_h2_candidates,
   unsigned int* dev_rel_indices
@@ -204,9 +195,6 @@ __global__ void searchByTriplet(
   int* tracks_to_follow = dev_tracks_to_follow + event_number * TTF_MODULO;
   int* weak_tracks = dev_weak_tracks + hit_offset;
   Track* tracklets = dev_tracklets + hit_offset;
-  float* best_fits = dev_best_fits + event_number * MAX_NUMHITS_IN_MODULE * blockDim_product;
-  unsigned int* best_h0s = dev_best_h0s + event_number * MAX_NUMHITS_IN_MODULE * blockDim_product;
-  unsigned int* best_h2s = dev_best_h2s + event_number * MAX_NUMHITS_IN_MODULE * blockDim_product;
   unsigned int* h1_rel_indices = dev_rel_indices + event_number * MAX_NUMHITS_IN_MODULE;
 
   // Initialize variables according to event number and sensor side
@@ -266,9 +254,6 @@ __global__ void searchByTriplet(
     tracks_to_follow,
     weak_tracks,
     tracklets,
-    best_fits,
-    best_h0s,
-    best_h2s,
     tracks,
     number_of_hits,
     h1_rel_indices,
@@ -306,7 +291,6 @@ __global__ void searchByTriplet(
 //     tracks_to_follow,
 //     weak_tracks,
 //     tracklets,
-//     best_fits,
 //     tracks,
 //     number_of_hits
 //   );

@@ -9,9 +9,6 @@ __device__ void trackSeeding(
   bool* hit_used,
   const int* h2_candidates,
   const int blockDim_sh_hit,
-  float* best_fits,
-  unsigned int* best_h0s,
-  unsigned int* best_h2s,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
@@ -19,12 +16,7 @@ __device__ void trackSeeding(
   unsigned int* h1_rel_indices,
   unsigned int* local_number_of_hits
 ) {
-  // Initialize best_fits to MAX_FLOAT (coalesced write pattern)
-  // We don't need to initialize best_h0s and best_h2s, since
-  // they will only be looked up if best_fit != MAX_FLOAT
-  for (int i=0; i<sensor_data[1].hitNums; ++i) {
-    best_fits[threadIdx.x*MAX_NUMHITS_IN_MODULE + i] = MAX_FLOAT;
-  }
+  __shared__ float shared_best_fits [NUMTHREADS_X];
 
   // Add to an array all non-used h1 hits with candidates
   for (int i=0; i<(sensor_data[1].hitNums + blockDim.x - 1) / blockDim.x; ++i) {
@@ -40,7 +32,7 @@ __device__ void trackSeeding(
     }
   }
 
-  // Due to h1_rel_indices and best_fits
+  // Due to h1_rel_indices
   __syncthreads();
 
   // Some constants of the calculation below
@@ -56,6 +48,12 @@ __device__ void trackSeeding(
   const auto last_iteration = (number_of_hits_h1 + MAX_CONCURRENT_H1 - 1) / MAX_CONCURRENT_H1;
   const auto num_hits_last_iteration = ((number_of_hits_h1 - 1) % MAX_CONCURRENT_H1) + 1;
   for (int i=0; i<last_iteration; ++i) {
+    // The output we are searching for
+    unsigned int best_h0 = 0;
+    unsigned int best_h2 = 0;
+    unsigned int h1_index = 0;
+    float best_fit = MAX_FLOAT;
+
     // Assign an adaptive x and y id for the current thread depending on the load.
     // This is not trivial because:
     // 
@@ -92,9 +90,10 @@ __device__ void trackSeeding(
     // On the fourth iteration, we should start from 3*MAX_CONCURRENT_H1 (24 + thread_id_x)
     const auto h1_rel_rel_index = i*MAX_CONCURRENT_H1 + thread_id_x;
     if (h1_rel_rel_index < number_of_hits_h1) {
-      // h1 index
+      // Fetch h1
       const auto h1_rel_index = h1_rel_indices[h1_rel_rel_index];
-      const auto h1_index = sensor_data[1].hitStart + h1_rel_index;
+      h1_index = sensor_data[1].hitStart + h1_rel_index;
+      const Hit h1 {hit_Xs[h1_index], hit_Ys[h1_index]};
 
       // Iterate over all h0, h2 combinations
       // Ignore used hits
@@ -110,16 +109,17 @@ __device__ void trackSeeding(
         if (h0_rel_candidate < h0_num_candidates) {
           const auto h0_index = h0_first_candidate + h0_rel_candidate;
           if (!hit_used[h0_index]) {
+            // Fetch h0
+            const Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index]};
+
             // Finally, iterate over all h2 indices
             for (int h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
               if (!hit_used[h2_index]) {
-                const auto best_fits_index = thread_id_y*MAX_NUMHITS_IN_MODULE + h1_rel_index;
+                // const auto best_fits_index = thread_id_y*MAX_NUMHITS_IN_MODULE + h1_rel_index;
 
                 // Our triplet is h0_index, h1_index, h2_index
                 // Fit it and check if it's better than what this thread had
                 // for any triplet with h1
-                const Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index]};
-                const Hit h1 {hit_Xs[h1_index], hit_Ys[h1_index]};
                 const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
 
                 // Calculate prediction
@@ -135,69 +135,50 @@ __device__ void trackSeeding(
                                        fabs(dx) < PARAM_TOLERANCE &&
                                        fabs(dy) < PARAM_TOLERANCE &&
                                        scatter < MAX_SCATTER &&
-                                       scatter < best_fits[best_fits_index];
+                                       scatter < best_fit;
 
                 // Populate fit, h0 and h2 in case we have found a better one
-                best_fits[best_fits_index] = condition*scatter + !condition*best_fits[best_fits_index];
-                best_h0s[best_fits_index] = condition*h0_index + !condition*best_h0s[best_fits_index];
-                best_h2s[best_fits_index] = condition*h2_index + !condition*best_h2s[best_fits_index];
+                best_fit = condition*scatter + !condition*best_fit;
+                best_h0 = condition*h0_index + !condition*best_h0;
+                best_h2 = condition*h2_index + !condition*best_h2;
               }
             }
           }
         }
       }
     }
-  }
-  
-  // Due to best_fits
-  __syncthreads();
 
-  // We have calculated all triplets
-  // Assign a thread for each h1
-  // const auto last_iteration = (number_of_hits_h1 + blockDim.x - 1) / blockDim.x;
-  // const auto num_hits_last_iteration = number_of_hits_h1 % blockDim.x;
-  for (int i=0; i<last_iteration; ++i) {
-    const auto is_last_iteration = i == last_iteration - 1;
-    const auto num_hits_iteration = is_last_iteration*num_hits_last_iteration + 
-                                    !is_last_iteration*MAX_CONCURRENT_H1;
+    shared_best_fits[threadIdx.x] = best_fit;
 
-    const auto h1_rel_rel_index = i*blockDim.x + threadIdx.x;
-    if (h1_rel_rel_index < number_of_hits_h1) {
-      const auto h1_rel_index = h1_rel_indices[h1_rel_rel_index];
-      const auto h1_index = sensor_data[1].hitStart + h1_rel_index;
+    // Due to shared_best_fits
+    __syncthreads();
 
-      // Traverse all fits done by all threads,
-      // and find the best one
-      float best_fit = MAX_FLOAT;
-      unsigned int best_h0 = 0;
-      unsigned int best_h2 = 0;
-
-      // Several threads have calculated the fits
-      // Use a simplified block_dim_y: The highest, regardless of the last block dimensions
-      const auto block_dim_y_simplified = (blockDim.x + num_hits_last_iteration - 1) / num_hits_last_iteration;
-      for (int i=0; i<block_dim_y_simplified; ++i) {
-        const auto current_index = i*MAX_NUMHITS_IN_MODULE + h1_rel_index;
-        if (best_fits[current_index] < best_fit) {
-          best_fit = best_fits[current_index];
-          best_h0 = best_h0s[current_index];
-          best_h2 = best_h2s[current_index];
-        }
-      }
-
-      // In case we found a best fit < MAX_FLOAT,
-      // add the triplet best_h0, h1_index, best_h2 to our forming tracks
-      if (best_fit < MAX_FLOAT) {
-        // Add the track to the bag of tracks
-        const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
-        // ASSERT(trackP < number_of_hits)
-        tracklets[trackP] = Track {3, best_h0, h1_index, best_h2};
-
-        // Add the tracks to the bag of tracks to_follow
-        // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
-        // and hence it is stored in tracklets
-        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
-        tracks_to_follow[ttfP] = 0x80000000 | trackP;
-      }
+    // We have calculated block_dim_x hits
+    // Find out if we (the current threadIdx.x) is the best,
+    // and if so, create and add a track
+    int winner_thread = -1;
+    best_fit = MAX_FLOAT;
+    for (int id_y=0; id_y<block_dim_y; ++id_y) {
+      const int shared_address = id_y * block_dim_x + thread_id_x;
+      const auto better_fit = shared_best_fits[shared_address] < best_fit;
+      winner_thread = better_fit*shared_address + !better_fit*winner_thread;
+      best_fit = better_fit*shared_best_fits[shared_address] + !better_fit*best_fit;
     }
+
+    // If this condition holds, then necessarily best_fit < MAX_FLOAT
+    if (threadIdx.x == winner_thread) {
+      // Add the track to the bag of tracks
+      const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
+      // ASSERT(trackP < number_of_hits)
+      tracklets[trackP] = Track {3, best_h0, h1_index, best_h2};
+
+      // Add the tracks to the bag of tracks to_follow
+      // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
+      // and hence it is stored in tracklets
+      const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+      tracks_to_follow[ttfP] = 0x80000000 | trackP;
+    }
+
+    __syncthreads();
   }
 }
