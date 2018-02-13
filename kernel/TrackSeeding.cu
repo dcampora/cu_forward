@@ -1,14 +1,16 @@
 #include "SearchByTriplet.cuh"
 
+/**
+ * @brief Search for compatible triplets in
+ *        three neighbouring sensors on one side
+ */
 __device__ void trackSeeding(
   const float* hit_Xs,
   const float* hit_Ys,
   const Sensor* sensor_data,
   const int* h0_candidates,
-  unsigned int* max_numhits_to_process,
-  bool* hit_used,
   const int* h2_candidates,
-  const int blockDim_sh_hit,
+  bool* hit_used,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
@@ -37,7 +39,7 @@ __device__ void trackSeeding(
 
   // Some constants of the calculation below
   const auto dymax = (PARAM_TOLERANCE_ALPHA + PARAM_TOLERANCE_BETA) * (sensor_data[0].z - sensor_data[1].z);
-  const auto scatterDenom = 1.f / (sensor_data[2].z - sensor_data[1].z);
+  const auto scatterDenom2 = 1.f / ((sensor_data[2].z - sensor_data[1].z) * (sensor_data[2].z - sensor_data[1].z));
   const auto z2_tz = (sensor_data[2].z - sensor_data[0].z) / (sensor_data[1].z - sensor_data[0].z);
 
   // Adaptive number of xthreads and ythreads,
@@ -130,7 +132,7 @@ __device__ void trackSeeding(
 
                 // Calculate fit
                 const auto scatterNum = (dx * dx) + (dy * dy);
-                const auto scatter = scatterNum * scatterDenom * scatterDenom;
+                const auto scatter = scatterNum * scatterDenom2;
                 const auto condition = fabs(h1.y - h0.y) < dymax &&
                                        fabs(dx) < PARAM_TOLERANCE &&
                                        fabs(dy) < PARAM_TOLERANCE &&

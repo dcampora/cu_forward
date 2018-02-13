@@ -1,8 +1,8 @@
 #include "SearchByTriplet.cuh"
 
 __device__ void fillCandidates(
-  int* hit_candidates,
-  int* hit_h2_candidates,
+  int* h0_candidates,
+  int* h2_candidates,
   const int number_of_sensors,
   const int* sensor_hitStarts,
   const int* sensor_hitNums,
@@ -48,16 +48,16 @@ __device__ void fillCandidates(
           const bool tolerance_condition = fabs(h1_x - h0_x) < tolerance_s0;
 
           if (!first_h0_found && tolerance_condition) {
-            hit_candidates[2*h1_index] = h0_index;
+            h0_candidates[2*h1_index] = h0_index;
             first_h0_found = true;
           }
           else if (first_h0_found && !last_h0_found && !tolerance_condition) {
-            hit_candidates[2*h1_index + 1] = h0_index;
+            h0_candidates[2*h1_index + 1] = h0_index;
             last_h0_found = true;
           }
         }
         if (first_h0_found && !last_h0_found) {
-          hit_candidates[2*h1_index + 1] = s0_hitStarts + s0_hitNums;
+          h0_candidates[2*h1_index + 1] = s0_hitStarts + s0_hitNums;
         }
 
         // Add h2 candidates
@@ -66,16 +66,16 @@ __device__ void fillCandidates(
           const bool tolerance_condition = fabs(h1_x - h2_x) < tolerance_s2;
 
           if (!first_h2_found && tolerance_condition) {
-            hit_h2_candidates[2*h1_index] = h2_index;
+            h2_candidates[2*h1_index] = h2_index;
             first_h2_found = true;
           }
           else if (first_h2_found && !last_h2_found && !tolerance_condition) {
-            hit_h2_candidates[2*h1_index + 1] = h2_index;
+            h2_candidates[2*h1_index + 1] = h2_index;
             last_h2_found = true;
           }
         }
         if (first_h2_found && !last_h2_found) {
-          hit_h2_candidates[2*h1_index + 1] = s2_hitStarts + s2_hitNums;
+          h2_candidates[2*h1_index + 1] = s2_hitStarts + s2_hitNums;
         }
       }
     }

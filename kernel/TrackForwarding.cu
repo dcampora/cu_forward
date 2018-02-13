@@ -50,11 +50,11 @@ __device__ float fitHitToTrack(
  * @param hit_Ys           
  * @param hit_Zs           
  * @param sensor_data      
- * @param sh_hit_x         
- * @param sh_hit_y         
+ * @param shared_hit_x         
+ * @param shared_hit_y         
  * @param sh_hit_z         
  * @param diff_ttf         
- * @param blockDim_product 
+ * @param blockDim.x 
  * @param tracks_to_follow 
  * @param weak_tracks      
  * @param prev_ttf         
@@ -64,8 +64,8 @@ __device__ float fitHitToTrack(
  */
 __device__ void trackForwarding(
 #if USE_SHARED_FOR_HITS
-  float* sh_hit_x,
-  float* sh_hit_y,
+  float* shared_hit_x,
+  float* shared_hit_y,
 #endif
   const float* hit_Xs,
   const float* hit_Ys,
@@ -73,10 +73,8 @@ __device__ void trackForwarding(
   unsigned int* tracks_insertPointer,
   unsigned int* ttf_insertPointer,
   unsigned int* weaktracks_insertPointer,
-  const int blockDim_sh_hit,
   const Sensor* sensor_data,
   const unsigned int diff_ttf,
-  const int blockDim_product,
   int* tracks_to_follow,
   int* weak_tracks,
   const unsigned int prev_ttf,
@@ -88,8 +86,8 @@ __device__ void trackForwarding(
   const int* sensor_hitStarts,
   const int* sensor_hitNums
 ) {
-  for (int i=0; i<(diff_ttf + blockDim_product - 1) / blockDim_product; ++i) {
-    const unsigned int ttf_element = blockDim_product * i + threadIdx.y * blockDim.x + threadIdx.x;
+  for (int i=0; i<(diff_ttf + blockDim.x - 1) / blockDim.x; ++i) {
+    const unsigned int ttf_element = blockDim.x * i + threadIdx.y * blockDim.x + threadIdx.x;
 
     // These variables need to go here, shared memory and scope requirements
     float tx, ty, h1_z, h0_z;
@@ -159,31 +157,31 @@ __device__ void trackForwarding(
     // Tiled memory access on h2
     // Only load for threadIdx.y == 0
     float best_fit = MAX_FLOAT;
-    for (int k=0; k<(sensor_data[2].hitNums + blockDim_sh_hit - 1) / blockDim_sh_hit; ++k) {
+    for (int k=0; k<(sensor_data[2].hitNums + blockDim.x - 1) / blockDim.x; ++k) {
       
 #if USE_SHARED_FOR_HITS
       __syncthreads();
       const int tid = threadIdx.y * blockDim.x + threadIdx.x;
-      const int sh_hit_no = blockDim_sh_hit * k + tid;
-      if (threadIdx.y < SH_HIT_MULT && sh_hit_no < sensor_data[2].hitNums) {
-        const int h2_index = sensor_data[2].hitStart + sh_hit_no;
+      const int shared_hit_no = blockDim.x * k + tid;
+      if (threadIdx.y < SH_HIT_MULT && shared_hit_no < sensor_data[2].hitNums) {
+        const int h2_index = sensor_data[2].hitStart + shared_hit_no;
 
         // Coalesced memory accesses
-        ASSERT(tid < blockDim_sh_hit)
-        sh_hit_x[tid] = hit_Xs[h2_index];
-        sh_hit_y[tid] = hit_Ys[h2_index];
+        ASSERT(tid < blockDim.x)
+        shared_hit_x[tid] = hit_Xs[h2_index];
+        shared_hit_y[tid] = hit_Ys[h2_index];
       }
       __syncthreads();
 #endif
-
+      
       if (ttf_condition) {
-        const int last_hit_h2 = min(blockDim_sh_hit * (k + 1), sensor_data[2].hitNums);
-        for (int kk=blockDim_sh_hit * k; kk<last_hit_h2; ++kk) {
+        const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[2].hitNums);
+        for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
           
           const int h2_index = sensor_data[2].hitStart + kk;
 #if USE_SHARED_FOR_HITS
-          const int sh_h2_index = kk % blockDim_sh_hit;
-          const Hit h2 {sh_hit_x[sh_h2_index], sh_hit_y[sh_h2_index]};
+          const int shared_h2_index = kk % blockDim.x;
+          const Hit h2 {shared_hit_x[shared_h2_index], shared_hit_y[shared_h2_index]};
 #else
           const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
 #endif

@@ -15,7 +15,7 @@
 // It should be a divisor of NUMTHREADS_X
 #define MAX_CONCURRENT_H1 16
 
-#define NUM_ATOMICS 6
+#define NUM_ATOMICS 5
 #define USE_SHARED_FOR_HITS false
 #define SH_HIT_MULT 2
 

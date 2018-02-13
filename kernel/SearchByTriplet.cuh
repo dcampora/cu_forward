@@ -11,16 +11,12 @@ __device__ float fitHitToTrack(
 );
 
 __device__ void processModules(
-#if USE_SHARED_FOR_HITS
-  float* sh_hit_x,
-  float* sh_hit_y,
-#endif
   Sensor* sensor_data,
   const int starting_sensor,
   const int stride,
   bool* hit_used,
-  const int* hit_candidates,
-  const int* hit_h2_candidates,
+  const int* h0_candidates,
+  const int* h2_candidates,
   const int number_of_sensors,
   const int* sensor_hitStarts,
   const int* sensor_hitNums,
@@ -31,10 +27,7 @@ __device__ void processModules(
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   unsigned int* sh_hit_lastPointer,
-  unsigned int* max_numhits_to_process,
   unsigned int* tracks_insertPointer,
-  const int blockDim_sh_hit,
-  const int blockDim_product,
   int* tracks_to_follow,
   int* weak_tracks,
   Track* tracklets,
@@ -45,8 +38,8 @@ __device__ void processModules(
 );
 
 __device__ void fillCandidates(
-  int* hit_candidates,
-  int* hit_h2_candidates,
+  int* h0_candidates,
+  int* h2_candidates,
   const int number_of_sensors,
   const int* sensor_hitStarts,
   const int* sensor_hitNums,
@@ -56,20 +49,14 @@ __device__ void fillCandidates(
 );
 
 __device__ void trackForwarding(
-#if USE_SHARED_FOR_HITS
-  float* sh_hit_x,
-  float* sh_hit_y,
-#endif
   const float* hit_Xs,
   const float* hit_Ys,
   bool* hit_used,
   unsigned int* tracks_insertPointer,
   unsigned int* ttf_insertPointer,
   unsigned int* weaktracks_insertPointer,
-  const int blockDim_sh_hit,
   const Sensor* sensor_data,
   const unsigned int diff_ttf,
-  const int blockDim_product,
   int* tracks_to_follow,
   int* weak_tracks,
   const unsigned int prev_ttf,
@@ -86,11 +73,9 @@ __device__ void trackSeeding(
   const float* hit_Xs,
   const float* hit_Ys,
   const Sensor* sensor_data,
-  const int* hit_candidates,
-  unsigned int* max_numhits_to_process,
+  const int* h0_candidates,
+  const int* h2_candidates,
   bool* hit_used,
-  const int* hit_h2_candidates,
-  const int blockDim_sh_hit,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
@@ -109,7 +94,7 @@ __global__ void searchByTriplet(
   int* dev_weak_tracks,
   int* dev_event_offsets,
   int* dev_hit_offsets,
-  int* dev_hit_candidates,
-  int* dev_hit_h2_candidates,
+  int* dev_h0_candidates,
+  int* dev_h2_candidates,
   unsigned int* dev_rel_indices
 );
