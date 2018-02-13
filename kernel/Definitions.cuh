@@ -9,11 +9,11 @@
 #include <vector>
 
 // Number of threads
-#define NUMTHREADS_X 64
+#define NUMTHREADS_X 32
 
 // How many concurrent h1s to process max
 // It should be a divisor of NUMTHREADS_X
-#define MAX_CONCURRENT_H1 16
+#define MAX_CONCURRENT_H1 8
 
 #define NUM_ATOMICS 6
 #define USE_SHARED_FOR_HITS false
@@ -40,7 +40,7 @@
 #define SENSOR_DATA_HITNUMS 3
 #define RESULTS_FOLDER "results"
 
-#define PRINT_SOLUTION false
+#define PRINT_SOLUTION true
 #define PRINT_FILL_CANDIDATES false
 #define PRINT_VERBOSE false
 #define PRINT_BINARY false

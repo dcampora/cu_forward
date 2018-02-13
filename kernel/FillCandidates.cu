@@ -61,8 +61,8 @@ __device__ void fillCandidates(
         }
 
         // Add h2 candidates
-        for (int h2_index=s2_hitStarts; h2_index < s2_hitStarts + s2_hitNums; ++h2_index) {
-          const auto h2_x = hit_Xs[h2_index];
+        for (int h2_index=0; h2_index < s2_hitNums; ++h2_index) {
+          const auto h2_x = hit_Xs[s2_hitStarts + h2_index];
           const bool tolerance_condition = fabs(h1_x - h2_x) < tolerance_s2;
 
           if (!first_h2_found && tolerance_condition) {
@@ -75,7 +75,7 @@ __device__ void fillCandidates(
           }
         }
         if (first_h2_found && !last_h2_found) {
-          hit_h2_candidates[2*h1_index + 1] = s2_hitStarts + s2_hitNums;
+          hit_h2_candidates[2*h1_index + 1] = s2_hitNums;
         }
       }
     }
