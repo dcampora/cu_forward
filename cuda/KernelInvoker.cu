@@ -18,6 +18,8 @@ cudaError_t invokeParallelSearch(
   int*   dev_event_offsets;
   int*   dev_hit_offsets;
   float* dev_best_fits;
+  unsigned int* dev_best_h0s;
+  unsigned int* dev_best_h2s;
   int*   dev_hit_candidates;
   int*   dev_hit_h2_candidates;
   unsigned int* dev_rel_indices;
@@ -67,7 +69,9 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
-  cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * numThreads.x * MAX_NUMTHREADS_Y * sizeof(float)));
+  cudaCheck(cudaMalloc((void**)&dev_best_fits, eventsToProcess * MAX_NUMHITS_IN_MODULE * numThreads.x * sizeof(float)));
+  cudaCheck(cudaMalloc((void**)&dev_best_h0s, eventsToProcess * MAX_NUMHITS_IN_MODULE * numThreads.x * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_best_h2s, eventsToProcess * MAX_NUMHITS_IN_MODULE * numThreads.x * sizeof(unsigned int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_candidates, 2 * acc_hits * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_hit_h2_candidates, 2 * acc_hits * sizeof(int)));
   cudaCheck(cudaMalloc((void**)&dev_rel_indices, eventsToProcess * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
@@ -131,6 +135,8 @@ cudaError_t invokeParallelSearch(
         dev_event_offsets,
         dev_hit_offsets,
         dev_best_fits,
+        dev_best_h0s,
+        dev_best_h2s,
         dev_hit_candidates,
         dev_hit_h2_candidates,
         dev_rel_indices

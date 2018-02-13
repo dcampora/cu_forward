@@ -8,8 +8,13 @@
 #include <cfloat>
 #include <vector>
 
-#define NUMTHREADS_X 16
-#define MAX_NUMTHREADS_Y 32
+// Number of threads
+#define NUMTHREADS_X 64
+
+// How many concurrent h1s to process max
+// It should be a divisor of NUMTHREADS_X
+#define MAX_CONCURRENT_H1 16
+
 #define NUM_ATOMICS 6
 #define USE_SHARED_FOR_HITS false
 #define SH_HIT_MULT 2
