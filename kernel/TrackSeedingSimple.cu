@@ -17,13 +17,6 @@ __device__ void trackSeeding(
   unsigned int* h1_rel_indices,
   unsigned int* local_number_of_hits
 ) {
-  // Initialize best_fits to MAX_FLOAT (coalesced write pattern)
-  // We don't need to initialize best_h0s and best_h2s, since
-  // they will only be looked up if best_fit != MAX_FLOAT
-  for (int i=0; i<MAX_NUMHITS_IN_MODULE; ++i) {
-    best_fits[i*blockDim.x + threadIdx.x] = MAX_FLOAT;
-  }
-
   // Add to an array all non-used h1 hits with candidates
   for (int i=0; i<(sensor_data[1].hitNums + blockDim.x - 1) / blockDim.x; ++i) {
     const auto h1_rel_index = i*blockDim.x + threadIdx.x;
@@ -46,24 +39,6 @@ __device__ void trackSeeding(
   const auto scatterDenom = 1.f / (sensor_data[2].z - sensor_data[1].z);
   const auto z2_tz = (sensor_data[2].z - sensor_data[0].z) / (sensor_data[1].z - sensor_data[0].z);
 
-  // Adaptive number of xthreads and ythreads,
-  // depending on number of hits in h1 to process
-
-  // Process at a time a maximum of blockDim.x elements
-  const auto last_iteration = ((local_number_of_hits[0] - 1) / blockDim.x) + 1;
-  const auto num_hits_last_iteration = local_number_of_hits[0] % blockDim.x;
-  for (int i=0; i<last_iteration; ++i) {
-    // Assign a x and y for the current thread
-    const auto is_last_iteration = i==last_iteration-1;
-    const auto thread_id_x = is_last_iteration*(threadIdx.x % num_hits_last_iteration) + !is_last_iteration*threadIdx.x;
-    const auto thread_id_y = is_last_iteration*(threadIdx.x / num_hits_last_iteration) + !is_last_iteration*1;
-    const auto block_dim_x = is_last_iteration*num_hits_last_iteration + !is_last_iteration*blockDim.x;
-    const auto block_dim_y = is_last_iteration*num_hits_last_iteration + !is_last_iteration*1;
-
-    // Work with thread_id_x and thread_id_y from now on
-
-  }
-  
   // Simple implementation: Each h1 is associated with a thread
   // There may be threads that have no work to do
   for (int i=0; i<(local_number_of_hits[0] + blockDim.x - 1) / blockDim.x; ++i) {
@@ -134,3 +109,27 @@ __device__ void trackSeeding(
     }
   }
 }
+  // // Initialize best_fits to MAX_FLOAT (coalesced write pattern)
+  // // We don't need to initialize best_h0s and best_h2s, since
+  // // they will only be looked up if best_fit != MAX_FLOAT
+  // for (int i=0; i<MAX_NUMHITS_IN_MODULE; ++i) {
+  //   best_fits[i*blockDim.x + threadIdx.x] = MAX_FLOAT;
+  // }
+
+  // Adaptive number of xthreads and ythreads,
+  // depending on number of hits in h1 to process
+
+  // // Process at a time a maximum of blockDim.x elements
+  // const auto last_iteration = ((local_number_of_hits[0] - 1) / blockDim.x) + 1;
+  // const auto num_hits_last_iteration = local_number_of_hits[0] % blockDim.x;
+  // for (int i=0; i<last_iteration; ++i) {
+  //   // Assign a x and y for the current thread
+  //   const auto is_last_iteration = i==last_iteration-1;
+  //   const auto thread_id_x = is_last_iteration*(threadIdx.x % num_hits_last_iteration) + !is_last_iteration*threadIdx.x;
+  //   const auto thread_id_y = is_last_iteration*(threadIdx.x / num_hits_last_iteration) + !is_last_iteration*1;
+  //   const auto block_dim_x = is_last_iteration*num_hits_last_iteration + !is_last_iteration*blockDim.x;
+  //   const auto block_dim_y = is_last_iteration*num_hits_last_iteration + !is_last_iteration*1;
+
+  //   // Work with thread_id_x and thread_id_y from now on
+
+  // }
