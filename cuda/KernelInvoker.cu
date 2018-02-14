@@ -156,13 +156,13 @@ cudaError_t invokeParallelSearch(
     cudaCheck(cudaMemcpy(hit_h0_candidates.data(), dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
     cudaCheck(cudaMemcpy(hit_h2_candidates.data(), dev_hit_h2_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
     
-    // Just print sensors 49, 47 and 45
+    // Just print modules 49, 47 and 45
     auto info = EventInfo(input[0]);
 
     std::vector<int> modules {49, 47, 45};
     for (auto module : modules) {
       std::cout << "Module " << module << std::endl << " hit h0 candidates: ";
-      for (int i=info.sensor_hitStarts[module]; i<info.sensor_hitStarts[module]+info.sensor_hitNums[module]; ++i) {
+      for (int i=info.module_hitStarts[module]; i<info.module_hitStarts[module]+info.module_hitNums[module]; ++i) {
         std::cout << "(" << hit_h0_candidates[2*i] << ", " << hit_h0_candidates[2*i+1] << ") ";
       }
       std::cout << std::endl;
@@ -170,7 +170,7 @@ cudaError_t invokeParallelSearch(
     
     for (auto module : modules) {
       std::cout << "Module " << module << std::endl << " hit h2 candidates: ";
-      for (int i=info.sensor_hitStarts[module]; i<info.sensor_hitStarts[module]+info.sensor_hitNums[module]; ++i) {
+      for (int i=info.module_hitStarts[module]; i<info.module_hitStarts[module]+info.module_hitNums[module]; ++i) {
         std::cout << "(" << hit_h2_candidates[2*i] << ", " << hit_h2_candidates[2*i+1] << ") ";
       }
       std::cout << std::endl;

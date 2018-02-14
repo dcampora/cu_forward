@@ -7,8 +7,8 @@ void preorderByX(std::vector<std::vector<uint8_t>>& input) {
     int acc_hitnums = 0;
     auto eventInfo = EventInfo(input[i]);
 
-    for (int j=0; j<eventInfo.numberOfSensors; j++) {
-      const int hitnums = eventInfo.sensor_hitNums[j];
+    for (int j=0; j<eventInfo.numberOfModules; j++) {
+      const int hitnums = eventInfo.module_hitNums[j];
       quicksort(eventInfo.hit_Xs, eventInfo.hit_Ys, eventInfo.hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
       acc_hitnums += hitnums;
     }
@@ -122,9 +122,9 @@ std::vector<std::vector<uint8_t>> readFolder(
     std::string readingFile = folderContents[i % folderContents.size()];
     std::vector<uint8_t> inputContents;
     readFileIntoVector(foldername + "/" + readingFile, inputContents);
-    // Check the number of sensors is correct, otherwise ignore it
+    // Check the number of modules is correct, otherwise ignore it
     auto eventInfo = EventInfo(inputContents);
-    if (eventInfo.numberOfSensors == NUMBER_OF_SENSORS) {
+    if (eventInfo.numberOfModules == NUMBER_OF_SENSORS) {
       // Make inputContents only the reported size by eventInfo
       inputContents.resize(eventInfo.size);
       input.push_back(inputContents);
@@ -150,9 +150,9 @@ void statistics(
 
   for (size_t i=0; i<input.size(); ++i) {
     EventInfo info (input[i]);
-    for (size_t j=0; j<info.numberOfSensors; ++j) {
-      max_number_of_hits_in_module = std::max(max_number_of_hits_in_module, info.sensor_hitNums[j]);
-      average_number_of_hits_in_module += info.sensor_hitNums[j];
+    for (size_t j=0; j<info.numberOfModules; ++j) {
+      max_number_of_hits_in_module = std::max(max_number_of_hits_in_module, info.module_hitNums[j]);
+      average_number_of_hits_in_module += info.module_hitNums[j];
     }
     max_number_of_hits = std::max(max_number_of_hits, info.numberOfHits);
   }

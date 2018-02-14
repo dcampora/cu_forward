@@ -26,14 +26,14 @@ __global__ void searchByTriplet(
 
   // Pointers to data within the event
   const int data_offset = dev_event_offsets[event_number];
-  const int* no_sensors = (const int*) &dev_input[data_offset];
-  const int* no_hits = (const int*) (no_sensors + 1);
-  const float* sensor_Zs = (const float*) (no_hits + 1);
-  const int number_of_sensors = no_sensors[0];
+  const int* no_modules = (const int*) &dev_input[data_offset];
+  const int* no_hits = (const int*) (no_modules + 1);
+  const float* module_Zs = (const float*) (no_hits + 1);
+  const int number_of_modules = no_modules[0];
   const int number_of_hits = no_hits[0];
-  const int* sensor_hitStarts = (const int*) (sensor_Zs + number_of_sensors);
-  const int* sensor_hitNums = (const int*) (sensor_hitStarts + number_of_sensors);
-  const unsigned int* hit_IDs = (const unsigned int*) (sensor_hitNums + number_of_sensors);
+  const int* module_hitStarts = (const int*) (module_Zs + number_of_modules);
+  const int* module_hitNums = (const int*) (module_hitStarts + number_of_modules);
+  const unsigned int* hit_IDs = (const unsigned int*) (module_hitNums + number_of_modules);
   const float* hit_Xs = (const float*) (hit_IDs + number_of_hits);
   const float* hit_Ys = (const float*) (hit_Xs + number_of_hits);
 
@@ -52,7 +52,7 @@ __global__ void searchByTriplet(
   Track* tracklets = dev_tracklets + hit_offset;
   unsigned int* h1_rel_indices = dev_rel_indices + event_number * MAX_NUMHITS_IN_MODULE;
 
-  // Initialize variables according to event number and sensor side
+  // Initialize variables according to event number and module side
   // Insert pointers (atomics)
   const int ip_shift = events_under_process + event_number * NUM_ATOMICS;
   unsigned int* weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
@@ -61,35 +61,35 @@ __global__ void searchByTriplet(
   unsigned int* sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
   unsigned int* local_number_of_hits = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
 
-  __shared__ int sensor_data [9];
+  __shared__ int module_data [9];
 
   // Fill candidates for both sides
   fillCandidates(
     h0_candidates,
     h2_candidates,
-    number_of_sensors,
-    sensor_hitStarts,
-    sensor_hitNums,
+    number_of_modules,
+    module_hitStarts,
+    module_hitNums,
     hit_Xs,
     hit_Ys,
-    sensor_Zs
+    module_Zs
   );
 
   // Process each side separately
   // A-side
   processModules(
-    (Sensor*) &sensor_data[0],
-    number_of_sensors-1,
+    (Module*) &module_data[0],
+    number_of_modules-1,
     2,
     hit_used,
     h0_candidates,
     h2_candidates,
-    number_of_sensors,
-    sensor_hitStarts,
-    sensor_hitNums,
+    number_of_modules,
+    module_hitStarts,
+    module_hitNums,
     hit_Xs,
     hit_Ys,
-    sensor_Zs,
+    module_Zs,
     weaktracks_insertPointer,
     tracklets_insertPointer,
     ttf_insertPointer,
@@ -106,18 +106,18 @@ __global__ void searchByTriplet(
 
   // B-side
   processModules(
-    (Sensor*) &sensor_data[0],
-    number_of_sensors-2,
+    (Module*) &module_data[0],
+    number_of_modules-2,
     2,
     hit_used,
     h0_candidates,
     h2_candidates,
-    number_of_sensors,
-    sensor_hitStarts,
-    sensor_hitNums,
+    number_of_modules,
+    module_hitStarts,
+    module_hitNums,
     hit_Xs,
     hit_Ys,
-    sensor_Zs,
+    module_Zs,
     weaktracks_insertPointer,
     tracklets_insertPointer,
     ttf_insertPointer,

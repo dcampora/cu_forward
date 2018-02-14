@@ -2,12 +2,12 @@
 
 /**
  * @brief Search for compatible triplets in
- *        three neighbouring sensors on one side
+ *        three neighbouring modules on one side
  */
 __device__ void trackSeeding(
   const float* hit_Xs,
   const float* hit_Ys,
-  const Sensor* sensor_data,
+  const Module* module_data,
   const int* h0_candidates,
   const int* h2_candidates,
   bool* hit_used,
@@ -21,10 +21,10 @@ __device__ void trackSeeding(
   __shared__ float shared_best_fits [NUMTHREADS_X];
 
   // Add to an array all non-used h1 hits with candidates
-  for (int i=0; i<(sensor_data[1].hitNums + blockDim.x - 1) / blockDim.x; ++i) {
+  for (int i=0; i<(module_data[1].hitNums + blockDim.x - 1) / blockDim.x; ++i) {
     const auto h1_rel_index = i*blockDim.x + threadIdx.x;
-    if (h1_rel_index < sensor_data[1].hitNums) {
-      const auto h1_index = sensor_data[1].hitStart + h1_rel_index;
+    if (h1_rel_index < module_data[1].hitNums) {
+      const auto h1_index = module_data[1].hitStart + h1_rel_index;
       const auto h0_first_candidate = h0_candidates[2*h1_index];
       const auto h2_first_candidate = h2_candidates[2*h1_index];
       if (!hit_used[h1_index] && h0_first_candidate!=-1 && h2_first_candidate!=-1) {
@@ -38,9 +38,9 @@ __device__ void trackSeeding(
   __syncthreads();
 
   // Some constants of the calculation below
-  const auto dymax = (PARAM_TOLERANCE_ALPHA + PARAM_TOLERANCE_BETA) * (sensor_data[0].z - sensor_data[1].z);
-  const auto scatterDenom2 = 1.f / ((sensor_data[2].z - sensor_data[1].z) * (sensor_data[2].z - sensor_data[1].z));
-  const auto z2_tz = (sensor_data[2].z - sensor_data[0].z) / (sensor_data[1].z - sensor_data[0].z);
+  const auto dymax = (PARAM_TOLERANCE_ALPHA + PARAM_TOLERANCE_BETA) * (module_data[0].z - module_data[1].z);
+  const auto scatterDenom2 = 1.f / ((module_data[2].z - module_data[1].z) * (module_data[2].z - module_data[1].z));
+  const auto z2_tz = (module_data[2].z - module_data[0].z) / (module_data[1].z - module_data[0].z);
 
   // Adaptive number of xthreads and ythreads,
   // depending on number of hits in h1 to process
@@ -94,7 +94,7 @@ __device__ void trackSeeding(
     if (h1_rel_rel_index < number_of_hits_h1) {
       // Fetch h1
       const auto h1_rel_index = h1_rel_indices[h1_rel_rel_index];
-      h1_index = sensor_data[1].hitStart + h1_rel_index;
+      h1_index = module_data[1].hitStart + h1_rel_index;
       const Hit h1 {hit_Xs[h1_index], hit_Ys[h1_index]};
 
       // Iterate over all h0, h2 combinations

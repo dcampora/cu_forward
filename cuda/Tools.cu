@@ -71,9 +71,9 @@ void printTrack(
     const float y = info.hit_Ys[hitNumber];
 
     int module = 0;
-    for (int i=0; i<info.numberOfSensors; ++i) {
-      if (hitNumber >= info.sensor_hitStarts[i] &&
-          hitNumber < info.sensor_hitStarts[i] + info.sensor_hitNums[i]) {
+    for (int i=0; i<info.numberOfModules; ++i) {
+      if (hitNumber >= info.module_hitStarts[i] &&
+          hitNumber < info.module_hitStarts[i] + info.module_hitNums[i]) {
         module = i;
       }
     }
@@ -82,18 +82,18 @@ void printTrack(
       << " module " << std::setw(2) << module
       << ", x " << std::setw(6) << x
       << ", y " << std::setw(6) << y
-      << ", z " << std::setw(6) << info.sensor_Zs[module]
+      << ", z " << std::setw(6) << info.module_Zs[module]
       << std::endl;
   }
 
   outstream << std::endl;
 }
 
-void printOutAllSensorHits(const EventInfo& info, int* prevs, int* nexts) {
-  DEBUG << "All valid sensor hits: " << std::endl;
-  for(int i=0; i<info.numberOfSensors; ++i){
-    for(int j=0; j<info.sensor_hitNums[i]; ++j){
-      int hit = info.sensor_hitStarts[i] + j;
+void printOutAllModuleHits(const EventInfo& info, int* prevs, int* nexts) {
+  DEBUG << "All valid module hits: " << std::endl;
+  for(int i=0; i<info.numberOfModules; ++i){
+    for(int j=0; j<info.module_hitNums[i]; ++j){
+      int hit = info.module_hitStarts[i] + j;
 
       if(nexts[hit] != -1){
         DEBUG << hit << ", " << nexts[hit] << std::endl;
@@ -102,26 +102,26 @@ void printOutAllSensorHits(const EventInfo& info, int* prevs, int* nexts) {
   }
 }
 
-void printOutSensorHits(const EventInfo& info, int sensorNumber, int* prevs, int* nexts){
-  for(int i=0; i<info.sensor_hitNums[sensorNumber]; ++i){
-    int hstart = info.sensor_hitStarts[sensorNumber];
+void printOutModuleHits(const EventInfo& info, int moduleNumber, int* prevs, int* nexts){
+  for(int i=0; i<info.module_hitNums[moduleNumber]; ++i){
+    int hstart = info.module_hitStarts[moduleNumber];
 
     DEBUG << hstart + i << ": " << prevs[hstart + i] << ", " << nexts[hstart + i] << std::endl;
   }
 }
 
-void printInfo(const EventInfo& info, int numberOfSensors, int numberOfHits) {
-  numberOfSensors = numberOfSensors>52 ? 52 : numberOfSensors;
+void printInfo(const EventInfo& info, int numberOfModules, int numberOfHits) {
+  numberOfModules = numberOfModules>52 ? 52 : numberOfModules;
 
   DEBUG << "Read info:" << std::endl
-    << " no sensors: " << info.numberOfSensors << std::endl
+    << " no modules: " << info.numberOfModules << std::endl
     << " no hits: " << info.numberOfHits << std::endl
-    << numberOfSensors << " sensors: " << std::endl;
+    << numberOfModules << " modules: " << std::endl;
 
-  for (int i=0; i<numberOfSensors; ++i){
-    DEBUG << " Zs: " << info.sensor_Zs[i] << std::endl
-      << " hitStarts: " << info.sensor_hitStarts[i] << std::endl
-      << " hitNums: " << info.sensor_hitNums[i] << std::endl << std::endl;
+  for (int i=0; i<numberOfModules; ++i){
+    DEBUG << " Zs: " << info.module_Zs[i] << std::endl
+      << " hitStarts: " << info.module_hitStarts[i] << std::endl
+      << " hitNums: " << info.module_hitNums[i] << std::endl << std::endl;
   }
 
   DEBUG << numberOfHits << " hits: " << std::endl;

@@ -37,7 +37,7 @@
 #define PARAM_TOLERANCE 0.6f
 #define MAX_SCATTER 0.000016f
 
-#define SENSOR_DATA_HITNUMS 3
+#define MODULE_DATA_HITNUMS 3
 #define RESULTS_FOLDER "results"
 
 #define PRINT_SOLUTION false
@@ -53,13 +53,13 @@
 #define ASSERT(EXPR) 
 #endif
 
-struct Sensor {
+struct Module {
     unsigned int hitStart;
     unsigned int hitNums;
     float z;
 
-    __device__ Sensor(){}
-    __device__ Sensor(const unsigned int _hitStart, const unsigned int _hitNums, const float _z) : 
+    __device__ Module(){}
+    __device__ Module(const unsigned int _hitStart, const unsigned int _hitNums, const float _z) : 
         hitStart(_hitStart), hitNums(_hitNums), z(_z) {}
 };
 

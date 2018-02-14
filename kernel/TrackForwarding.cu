@@ -2,16 +2,10 @@
 
 /**
  * @brief Fits hits to tracks.
+ * 
  * @details In case the tolerances constraints are met,
  *          returns the chi2 weight of the track. Otherwise,
  *          returns MAX_FLOAT.
- * 
- * @param tx 
- * @param ty 
- * @param h0 
- * @param h1_z
- * @param h2 
- * @return 
  */
 __device__ float fitHitToTrack(
   const float tx,
@@ -44,23 +38,7 @@ __device__ float fitHitToTrack(
 }
 
 /**
- * @brief Performs the track forwarding.
- *
- * @param hit_Xs           
- * @param hit_Ys           
- * @param hit_Zs           
- * @param sensor_data      
- * @param shared_hit_x         
- * @param shared_hit_y         
- * @param sh_hit_z         
- * @param diff_ttf         
- * @param blockDim.x 
- * @param tracks_to_follow 
- * @param weak_tracks      
- * @param prev_ttf         
- * @param tracklets        
- * @param tracks           
- * @param number_of_hits   
+ * @brief Performs the track forwarding of forming tracks
  */
 __device__ void trackForwarding(
 #if USE_SHARED_FOR_HITS
@@ -73,7 +51,7 @@ __device__ void trackForwarding(
   unsigned int* tracks_insertPointer,
   unsigned int* ttf_insertPointer,
   unsigned int* weaktracks_insertPointer,
-  const Sensor* sensor_data,
+  const Module* module_data,
   const unsigned int diff_ttf,
   int* tracks_to_follow,
   int* weak_tracks,
@@ -81,10 +59,10 @@ __device__ void trackForwarding(
   Track* tracklets,
   Track* tracks,
   const int number_of_hits,
-  const int first_sensor,
-  const float* sensor_Zs,
-  const int* sensor_hitStarts,
-  const int* sensor_hitNums
+  const int first_module,
+  const float* module_Zs,
+  const int* module_hitStarts,
+  const int* module_hitNums
 ) {
   for (int i=0; i<(diff_ttf + blockDim.x - 1) / blockDim.x; ++i) {
     const unsigned int ttf_element = blockDim.x * i + threadIdx.y * blockDim.x + threadIdx.x;
@@ -123,21 +101,21 @@ __device__ void trackForwarding(
       const float h1_x = hit_Xs[h1_num];
       const float h1_y = hit_Ys[h1_num];
 
-      // 99% of the times the last two hits came from consecutive sensors
-      if (h0_num < sensor_data[0].hitStart + sensor_data[0].hitNums) {
-        h0_z = sensor_data[0].z;
-        h1_z = sensor_data[1].z;
+      // 99% of the times the last two hits came from consecutive modules
+      if (h0_num < module_data[0].hitStart + module_data[0].hitNums) {
+        h0_z = module_data[0].z;
+        h1_z = module_data[1].z;
       } else {
         // Oh boy.
         // We assume only one module can be skipped
-        h1_z = (h1_num < sensor_data[1].hitStart + sensor_data[1].hitNums) ? sensor_data[1].z : sensor_data[0].z;
+        h1_z = (h1_num < module_data[1].hitStart + module_data[1].hitNums) ? module_data[1].z : module_data[0].z;
 
-        // We do not know if h0 was in the previous sensor or the previous-previous one.
+        // We do not know if h0 was in the previous module or the previous-previous one.
         // So we have to pay the price and ask the question
-        if (h0_num < sensor_hitStarts[first_sensor+2] + sensor_hitNums[first_sensor+2]) {
-          h0_z = sensor_Zs[first_sensor+2];
+        if (h0_num < module_hitStarts[first_module+2] + module_hitNums[first_module+2]) {
+          h0_z = module_Zs[first_module+2];
         } else {
-          h0_z = sensor_Zs[first_sensor+4];
+          h0_z = module_Zs[first_module+4];
         }
       }
 
@@ -157,14 +135,14 @@ __device__ void trackForwarding(
     // Tiled memory access on h2
     // Only load for threadIdx.y == 0
     float best_fit = MAX_FLOAT;
-    for (int k=0; k<(sensor_data[2].hitNums + blockDim.x - 1) / blockDim.x; ++k) {
+    for (int k=0; k<(module_data[2].hitNums + blockDim.x - 1) / blockDim.x; ++k) {
       
 #if USE_SHARED_FOR_HITS
       __syncthreads();
       const int tid = threadIdx.y * blockDim.x + threadIdx.x;
       const int shared_hit_no = blockDim.x * k + tid;
-      if (threadIdx.y < SH_HIT_MULT && shared_hit_no < sensor_data[2].hitNums) {
-        const int h2_index = sensor_data[2].hitStart + shared_hit_no;
+      if (threadIdx.y < SH_HIT_MULT && shared_hit_no < module_data[2].hitNums) {
+        const int h2_index = module_data[2].hitStart + shared_hit_no;
 
         // Coalesced memory accesses
         ASSERT(tid < blockDim.x)
@@ -175,10 +153,10 @@ __device__ void trackForwarding(
 #endif
       
       if (ttf_condition) {
-        const int last_hit_h2 = min(blockDim.x * (k + 1), sensor_data[2].hitNums);
+        const int last_hit_h2 = min(blockDim.x * (k + 1), module_data[2].hitNums);
         for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
           
-          const int h2_index = sensor_data[2].hitStart + kk;
+          const int h2_index = module_data[2].hitStart + kk;
 #if USE_SHARED_FOR_HITS
           const int shared_h2_index = kk % blockDim.x;
           const Hit h2 {shared_hit_x[shared_h2_index], shared_hit_y[shared_h2_index]};
@@ -186,7 +164,7 @@ __device__ void trackForwarding(
           const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
 #endif
 
-          const float fit = fitHitToTrack(tx, ty, h0, h0_z, h1_z, h2, sensor_data[2].z);
+          const float fit = fitHitToTrack(tx, ty, h0, h0_z, h1_z, h2, module_data[2].z);
           const bool fit_is_better = fit < best_fit;
 
           best_fit = fit_is_better ? fit : best_fit;

@@ -11,18 +11,18 @@ __device__ float fitHitToTrack(
 );
 
 __device__ void processModules(
-  Sensor* sensor_data,
-  const int starting_sensor,
+  Module* module_data,
+  const int starting_module,
   const int stride,
   bool* hit_used,
   const int* h0_candidates,
   const int* h2_candidates,
-  const int number_of_sensors,
-  const int* sensor_hitStarts,
-  const int* sensor_hitNums,
+  const int number_of_modules,
+  const int* module_hitStarts,
+  const int* module_hitNums,
   const float* hit_Xs,
   const float* hit_Ys,
-  const float* sensor_Zs,
+  const float* module_Zs,
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
@@ -40,12 +40,12 @@ __device__ void processModules(
 __device__ void fillCandidates(
   int* h0_candidates,
   int* h2_candidates,
-  const int number_of_sensors,
-  const int* sensor_hitStarts,
-  const int* sensor_hitNums,
+  const int number_of_modules,
+  const int* module_hitStarts,
+  const int* module_hitNums,
   const float* hit_Xs,
   const float* hit_Ys,
-  const float* sensor_Zs
+  const float* module_Zs
 );
 
 __device__ void trackForwarding(
@@ -55,7 +55,7 @@ __device__ void trackForwarding(
   unsigned int* tracks_insertPointer,
   unsigned int* ttf_insertPointer,
   unsigned int* weaktracks_insertPointer,
-  const Sensor* sensor_data,
+  const Module* module_data,
   const unsigned int diff_ttf,
   int* tracks_to_follow,
   int* weak_tracks,
@@ -63,16 +63,16 @@ __device__ void trackForwarding(
   Track* tracklets,
   Track* tracks,
   const int number_of_hits,
-  const int first_sensor,
-  const float* sensor_Zs,
-  const int* sensor_hitStarts,
-  const int* sensor_hitNums
+  const int first_module,
+  const float* module_Zs,
+  const int* module_hitStarts,
+  const int* module_hitNums
 );
 
 __device__ void trackSeeding(
   const float* hit_Xs,
   const float* hit_Ys,
-  const Sensor* sensor_data,
+  const Module* module_data,
   const int* h0_candidates,
   const int* h2_candidates,
   bool* hit_used,

@@ -23,13 +23,12 @@ public:
     FileStdLogger() : std::ostream(b) {}
 };
 
-// Can't believe this is so simple
+// This is relatively simple
 class MessageLogger : public std::streambuf {
 public:
     std::string _buf;
     std::ofstream* _file_io;
     FileStdLogger* _file_std_io;
-
     std::streambuf* _old;
 
     MessageLogger(std::ofstream* file_io, FileStdLogger* file_std_io) :
