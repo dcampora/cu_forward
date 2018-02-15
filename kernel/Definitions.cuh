@@ -9,33 +9,33 @@
 #include <vector>
 
 // Number of threads
-#define NUMTHREADS_X 64
+#define NUMTHREADS_X 32
 
 // How many concurrent h1s to process max
 // It should be a divisor of NUMTHREADS_X
 #define MAX_CONCURRENT_H1 16
 
+// Maximum / minimum acceptable phi
+#define PHI_EXTRAPOLATION 0.1
+
+// These parameters heavily impact the found tracks
+#define PARAM_TOLERANCE_ALPHA 0.5f
+#define PARAM_TOLERANCE 0.6f
+#define MAX_SCATTER 0.000016f
+
 #define NUM_ATOMICS 5
 #define USE_SHARED_FOR_HITS false
 #define SH_HIT_MULT 2
-
 #define MAX_TRACKS 3000
 #define MAX_TRACK_SIZE 24
-
 #define REQUIRED_UNIQUES 0.6f
 #define MIN_HITS_TRACK 3
 #define MAX_FLOAT FLT_MAX
 #define MIN_FLOAT -FLT_MAX
-#define MAX_SKIPPED_MODULES 1
+#define MAX_SKIPPED_MODULES 3
 #define TTF_MODULO 2000
 #define MAX_NUMHITS_IN_MODULE 300
 #define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
-
-// These parameters heavily impact the found tracks
-#define PARAM_TOLERANCE_ALPHA 0.2f
-#define PARAM_TOLERANCE_BETA 0.1f
-#define PARAM_TOLERANCE 0.6f
-#define MAX_SCATTER 0.000016f
 
 #define MODULE_DATA_HITNUMS 3
 #define RESULTS_FOLDER "results"

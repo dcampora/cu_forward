@@ -36,6 +36,7 @@ __global__ void searchByTriplet(
   const unsigned int* hit_IDs = (const unsigned int*) (module_hitNums + number_of_modules);
   const float* hit_Xs = (const float*) (hit_IDs + number_of_hits);
   const float* hit_Ys = (const float*) (hit_Xs + number_of_hits);
+  const float* hit_Phis = (const float*) (hit_Ys + number_of_hits);
 
   // Per event datatypes
   Track* tracks = dev_tracks + tracks_offset;
@@ -70,9 +71,7 @@ __global__ void searchByTriplet(
     number_of_modules,
     module_hitStarts,
     module_hitNums,
-    hit_Xs,
-    hit_Ys,
-    module_Zs
+    hit_Phis
   );
 
   // Process each side separately
@@ -80,7 +79,7 @@ __global__ void searchByTriplet(
   processModules(
     (Module*) &module_data[0],
     number_of_modules-1,
-    2,
+    1,
     hit_used,
     h0_candidates,
     h2_candidates,
@@ -104,33 +103,33 @@ __global__ void searchByTriplet(
     local_number_of_hits
   );
 
-  // B-side
-  processModules(
-    (Module*) &module_data[0],
-    number_of_modules-2,
-    2,
-    hit_used,
-    h0_candidates,
-    h2_candidates,
-    number_of_modules,
-    module_hitStarts,
-    module_hitNums,
-    hit_Xs,
-    hit_Ys,
-    module_Zs,
-    weaktracks_insertPointer,
-    tracklets_insertPointer,
-    ttf_insertPointer,
-    sh_hit_lastPointer,
-    tracks_insertPointer,
-    tracks_to_follow,
-    weak_tracks,
-    tracklets,
-    tracks,
-    number_of_hits,
-    h1_rel_indices,
-    local_number_of_hits
-  );
+  // // B-side
+  // processModules(
+  //   (Module*) &module_data[0],
+  //   number_of_modules-2,
+  //   2,
+  //   hit_used,
+  //   h0_candidates,
+  //   h2_candidates,
+  //   number_of_modules,
+  //   module_hitStarts,
+  //   module_hitNums,
+  //   hit_Xs,
+  //   hit_Ys,
+  //   module_Zs,
+  //   weaktracks_insertPointer,
+  //   tracklets_insertPointer,
+  //   ttf_insertPointer,
+  //   sh_hit_lastPointer,
+  //   tracks_insertPointer,
+  //   tracks_to_follow,
+  //   weak_tracks,
+  //   tracklets,
+  //   tracks,
+  //   number_of_hits,
+  //   h1_rel_indices,
+  //   local_number_of_hits
+  // );
 
   __syncthreads();
 

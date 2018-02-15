@@ -43,9 +43,7 @@ __device__ void fillCandidates(
   const int number_of_modules,
   const int* module_hitStarts,
   const int* module_hitNums,
-  const float* hit_Xs,
-  const float* hit_Ys,
-  const float* module_Zs
+  const float* hit_Phis
 );
 
 __device__ void trackForwarding(

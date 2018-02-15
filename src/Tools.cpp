@@ -1,88 +1,78 @@
 #include "Tools.h"
 
-void preorderByX(std::vector<std::vector<uint8_t>>& input) {
-  // Order *all* the input vectors by h_hit_Xs natural order
-  // per module
+/**
+ * @brief Orders all the input vectors by phi per module
+ */
+void sort_by_phi(std::vector<std::vector<uint8_t>>& input) {
   for (int i=0; i<input.size(); ++i) {
-    int acc_hitnums = 0;
     auto eventInfo = EventInfo(input[i]);
-
-    for (int j=0; j<eventInfo.numberOfModules; j++) {
-      const int hitnums = eventInfo.module_hitNums[j];
-      quicksort(eventInfo.hit_Xs, eventInfo.hit_Ys, eventInfo.hit_IDs, acc_hitnums, acc_hitnums + hitnums - 1);
-      acc_hitnums += hitnums;
+    // Repurpose hit_Zs and calculate phi instead
+    auto phi_container = eventInfo.hit_Zs;
+    for (int j=0; j<eventInfo.numberOfModules; ++j) {
+      for (int k=0; k<eventInfo.module_hitNums[j]; ++k) {
+        const auto index = eventInfo.module_hitStarts[j] + k;
+        phi_container[index] = hit_phi(eventInfo.hit_Xs[index], eventInfo.hit_Ys[index], j%2);
+      }
+    }
+    // Calculate the permutation we need
+    const auto permutation = sort_permutation(
+      phi_container,
+      eventInfo.numberOfHits,
+      eventInfo.module_hitStarts,
+      eventInfo.module_hitNums,
+      [] (const float& a, const float& b) { return a<b; }
+    );
+    // Sort all vectors in place with the calculated permutation vector
+    for (int j=0; j<eventInfo.numberOfModules; ++j) {
+      const auto start = eventInfo.module_hitStarts[j];
+      const auto hitnums = eventInfo.module_hitNums[j];
+      apply_permutation_in_place(eventInfo.hit_Xs, permutation.data(), start, hitnums);
+      apply_permutation_in_place(eventInfo.hit_Ys, permutation.data(), start, hitnums);
+      apply_permutation_in_place(eventInfo.hit_Zs, permutation.data(), start, hitnums);
+      apply_permutation_in_place(eventInfo.hit_IDs, permutation.data(), start, hitnums);
     }
   }
 }
 
-void quicksort (float* a, float* b, unsigned int* c, int start, int end) {
-    if (start < end) {
-        const int pivot = divide(a, b, c, start, end);
-        quicksort(a, b, c, start, pivot - 1);
-        quicksort(a, b, c, pivot + 1, end);
-    }
+/**
+ * @brief Calculate a single hit phi
+ */
+float hit_phi(const float x, const float y, const bool odd) {
+  const float phi = atan2(y, x);
+  const auto greater_than_zero = phi > 0.f;
+  return odd*phi +
+         !odd*greater_than_zero*phi +
+         !odd*!greater_than_zero*(phi + 2*M_PI);
 }
 
-int divide (float* a, float* b, unsigned int* c, int start, int end) {
-    int left;
-    int right;
-    float pivot;
- 
-    pivot = a[start];
-    left = start;
-    right = end;
- 
-    while (left < right) {
-        while (a[right] > pivot) {
-            right--;
-        }
- 
-        while ((left < right) && (a[left] <= pivot)) {
-            left++;
-        }
- 
-        if (left < right) {
-            std::swap(a[left], a[right]);
-            std::swap(b[left], b[right]);
-            std::swap(c[left], c[right]);
-        }
-    }
- 
-    std::swap(a[right], a[start]);
-    std::swap(b[right], b[start]);
-    std::swap(c[right], c[start]);
- 
-    return right;
-}
-
-bool fileExists (const std::string& name) {
-    if (FILE *file = fopen(name.c_str(), "r")) {
-        fclose(file);
-        return true;
-    } else {
-        return false;
-    }   
+bool fileExists(const std::string& name) {
+  if (FILE *file = fopen(name.c_str(), "r")) {
+    fclose(file);
+    return true;
+  } else {
+    return false;
+  }   
 }
 
 /**
  * @brief Read files into vectors.
  */
 void readFileIntoVector(const std::string& filename, std::vector<uint8_t>& output) {
-    // Check if file exists
-    if (!fileExists(filename)){
-        throw StrException("Error: File " + filename + " does not exist.");
-    }
+  // Check if file exists
+  if (!fileExists(filename)){
+    throw StrException("Error: File " + filename + " does not exist.");
+  }
 
-    std::ifstream infile(filename.c_str(), std::ifstream::binary);
-    infile.seekg(0, std::ios::end);
-    auto end = infile.tellg();
-    infile.seekg(0, std::ios::beg);
-    auto dataSize = end - infile.tellg();
+  std::ifstream infile(filename.c_str(), std::ifstream::binary);
+  infile.seekg(0, std::ios::end);
+  auto end = infile.tellg();
+  infile.seekg(0, std::ios::beg);
+  auto dataSize = end - infile.tellg();
 
-    // read content of infile with a vector
-    output.resize(dataSize);
-    infile.read ((char*) &(output[0]), dataSize);
-    infile.close();
+  // read content of infile with a vector
+  output.resize(dataSize);
+  infile.read ((char*) &(output[0]), dataSize);
+  infile.close();
 }
 
 /**

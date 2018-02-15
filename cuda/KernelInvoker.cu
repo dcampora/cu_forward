@@ -212,7 +212,7 @@ cudaError_t invokeParallelSearch(
       const int numberOfTracks = output[i].size() / sizeof(Track);
       Track* tracks_in_solution = (Track*) &(output[i])[0];
 
-      std::ofstream outfile (std::string(RESULTS_FOLDER) + std::string("/tracks_") + std::to_string(i) + std::string(".bin"), std::ios::binary);
+      std::ofstream outfile (std::string(RESULTS_FOLDER) + std::string("/") + std::to_string(i) + std::string(".bin"), std::ios::binary);
       outfile.write((char*) &numberOfTracks, sizeof(int32_t));
       for(int j=0; j<numberOfTracks; ++j){
         writeBinaryTrack(EventInfo(input[i]), tracks_in_solution[j], outfile);

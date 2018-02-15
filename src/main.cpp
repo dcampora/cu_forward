@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
     statistics(input);
 
     // Preorder events by X
-    preorderByX(input);
+    sort_by_phi(input);
 
     // Attempt to execute all in one go
     cudaCheck(invokeParallelSearch(input, output));

@@ -38,7 +38,7 @@ __device__ void trackSeeding(
   __syncthreads();
 
   // Some constants of the calculation below
-  const auto dymax = (PARAM_TOLERANCE_ALPHA + PARAM_TOLERANCE_BETA) * (module_data[0].z - module_data[1].z);
+  const auto dmax = PARAM_TOLERANCE_ALPHA * (module_data[0].z - module_data[1].z);
   const auto scatterDenom2 = 1.f / ((module_data[2].z - module_data[1].z) * (module_data[2].z - module_data[1].z));
   const auto z2_tz = (module_data[2].z - module_data[0].z) / (module_data[1].z - module_data[0].z);
 
@@ -133,7 +133,8 @@ __device__ void trackSeeding(
                 // Calculate fit
                 const auto scatterNum = (dx * dx) + (dy * dy);
                 const auto scatter = scatterNum * scatterDenom2;
-                const auto condition = fabs(h1.y - h0.y) < dymax &&
+                const auto condition = fabs(h1.x - h0.x) < dmax &&
+                                       fabs(h1.y - h0.y) < dmax &&
                                        fabs(dx) < PARAM_TOLERANCE &&
                                        fabs(dy) < PARAM_TOLERANCE &&
                                        scatter < MAX_SCATTER &&

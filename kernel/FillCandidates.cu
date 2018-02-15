@@ -6,9 +6,7 @@ __device__ void fillCandidates(
   const int number_of_modules,
   const int* module_hitStarts,
   const int* module_hitNums,
-  const float* hit_Xs,
-  const float* hit_Ys,
-  const float* module_Zs
+  const float* hit_Phis
 ) {
   // Notation is m0, m1, m2 in reverse order for each module
   // A hit in those is h0, h1, h2 respectively
@@ -22,21 +20,14 @@ __device__ void fillCandidates(
 
       if (h1_rel_index < m1_hitNums) {
         // Find for module module_index, hit h1_rel_index the candidates
-        const auto m0_z = module_Zs[module_index+2];
-        const auto m1_z = module_Zs[module_index];
-        const auto m2_z = module_Zs[module_index-2];
         const auto m0_hitStarts = module_hitStarts[module_index+2];
         const auto m2_hitStarts = module_hitStarts[module_index-2];
         const auto m0_hitNums = module_hitNums[module_index+2];
         const auto m2_hitNums = module_hitNums[module_index-2];
         const auto h1_index = module_hitStarts[module_index] + h1_rel_index;
-        const auto h1_x = hit_Xs[h1_index];
 
-        // Calculate x limits in h0 and h2
-        // Note: f0(z) = alpha*z
-        //       f2(z) = (alpha+beta)*z
-        const auto tolerance_m0 = PARAM_TOLERANCE_ALPHA * (m0_z - m1_z);
-        const auto tolerance_m2 = (PARAM_TOLERANCE_ALPHA + PARAM_TOLERANCE_BETA) * (m1_z - m2_z);
+        // Calculate phi limits
+        const float h1_phi = hit_Phis[h1_index];
 
         // Find candidates
         bool first_h0_found = false, last_h0_found = false;
@@ -44,8 +35,8 @@ __device__ void fillCandidates(
         
         // Add h0 candidates
         for (int h0_index=m0_hitStarts; h0_index < m0_hitStarts + m0_hitNums; ++h0_index) {
-          const auto h0_x = hit_Xs[h0_index];
-          const bool tolerance_condition = fabs(h1_x - h0_x) < tolerance_m0;
+          const auto h0_phi = hit_Phis[h0_index];
+          const bool tolerance_condition = fabs(h1_phi - h0_phi) < PHI_EXTRAPOLATION;
 
           if (!first_h0_found && tolerance_condition) {
             h0_candidates[2*h1_index] = h0_index;
@@ -62,8 +53,8 @@ __device__ void fillCandidates(
 
         // Add h2 candidates
         for (int h2_index=m2_hitStarts; h2_index < m2_hitStarts + m2_hitNums; ++h2_index) {
-          const auto h2_x = hit_Xs[h2_index];
-          const bool tolerance_condition = fabs(h1_x - h2_x) < tolerance_m2;
+          const auto h2_phi = hit_Phis[h2_index];
+          const bool tolerance_condition = fabs(h1_phi - h2_phi) < PHI_EXTRAPOLATION;
 
           if (!first_h2_found && tolerance_condition) {
             h2_candidates[2*h1_index] = h2_index;
