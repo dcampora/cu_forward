@@ -54,7 +54,7 @@ __device__ void trackSeeding(
     unsigned int best_h0 = 0;
     unsigned int best_h2 = 0;
     unsigned int h1_index = 0;
-    float best_fit = MAX_FLOAT;
+    float best_fit = FLT_MAX;
 
     // Assign an adaptive x and y id for the current thread depending on the load.
     // This is not trivial because:
@@ -160,7 +160,7 @@ __device__ void trackSeeding(
     // Find out if we (the current threadIdx.x) is the best,
     // and if so, create and add a track
     int winner_thread = -1;
-    best_fit = MAX_FLOAT;
+    best_fit = FLT_MAX;
     for (int id_y=0; id_y<block_dim_y; ++id_y) {
       const int shared_address = id_y * block_dim_x + thread_id_x;
       const auto better_fit = shared_best_fits[shared_address] < best_fit;
@@ -168,7 +168,7 @@ __device__ void trackSeeding(
       best_fit = better_fit*shared_best_fits[shared_address] + !better_fit*best_fit;
     }
 
-    // If this condition holds, then necessarily best_fit < MAX_FLOAT
+    // If this condition holds, then necessarily best_fit < FLT_MAX
     if (threadIdx.x == winner_thread) {
       // Add the track to the bag of tracks
       const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);

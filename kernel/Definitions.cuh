@@ -15,36 +15,46 @@
 // It should be a divisor of NUMTHREADS_X
 #define MAX_CONCURRENT_H1 16
 
+// These parameters impact the found tracks
 // Maximum / minimum acceptable phi
-#define PHI_EXTRAPOLATION 0.1
+// This impacts enourmously the speed of track seeding
+#define PHI_EXTRAPOLATION 0.08
 
-// These parameters heavily impact the found tracks
-#define PARAM_TOLERANCE_ALPHA 0.5f
+// Tolerance angle for forming triplets
+#define PARAM_TOLERANCE_ALPHA 0.3f
 #define PARAM_TOLERANCE 0.6f
+
+// Maximum scatter of each three hits
 #define MAX_SCATTER 0.000016f
 
+// Maximum number of skipped modules allowed for a track
+// before storing it
+#define MAX_SKIPPED_MODULES 3
+
+// Total number of atomics required
+// This is just a constant (that I keep changing)
 #define NUM_ATOMICS 5
-#define USE_SHARED_FOR_HITS false
-#define SH_HIT_MULT 2
+
+// Constants for requested storage on device
 #define MAX_TRACKS 3000
 #define MAX_TRACK_SIZE 24
-#define REQUIRED_UNIQUES 0.6f
-#define MIN_HITS_TRACK 3
-#define MAX_FLOAT FLT_MAX
-#define MIN_FLOAT -FLT_MAX
-#define MAX_SKIPPED_MODULES 3
-#define TTF_MODULO 2000
 #define MAX_NUMHITS_IN_MODULE 300
-#define PARAM_W 3966.94f // 0.050 / sqrt( 12. )
 
-#define MODULE_DATA_HITNUMS 3
-#define RESULTS_FOLDER "results"
+// Maximum number of tracks to follow at a time
+#define TTF_MODULO 2000
 
+// Run over same data several times
+// (ie. increase the runtime of kernels)
+#define DO_REPEATED_EXECUTION false
+#define REPEAT_ITERATIONS 100
+
+// Parameters to print out solutions
 #define PRINT_SOLUTION false
 #define PRINT_FILL_CANDIDATES false
 #define PRINT_VERBOSE false
 #define PRINT_BINARY false
 #define ASSERTS_ENABLED false
+#define RESULTS_FOLDER "results"
 
 #if ASSERTS_ENABLED == true
 #include "assert.h"

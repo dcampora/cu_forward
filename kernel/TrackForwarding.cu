@@ -5,7 +5,7 @@
  * 
  * @details In case the tolerances constraints are met,
  *          returns the chi2 weight of the track. Otherwise,
- *          returns MAX_FLOAT.
+ *          returns FLT_MAX.
  */
 __device__ float fitHitToTrack(
   const float tx,
@@ -34,17 +34,13 @@ __device__ float fitHitToTrack(
   const bool scatter_condition = scatter < MAX_SCATTER;
   const bool condition = tolx_condition && toly_condition && scatter_condition;
 
-  return condition * scatter + !condition * MAX_FLOAT;
+  return condition * scatter + !condition * FLT_MAX;
 }
 
 /**
  * @brief Performs the track forwarding of forming tracks
  */
 __device__ void trackForwarding(
-#if USE_SHARED_FOR_HITS
-  float* shared_hit_x,
-  float* shared_hit_y,
-#endif
   const float* hit_Xs,
   const float* hit_Ys,
   bool* hit_used,
@@ -134,14 +130,13 @@ __device__ void trackForwarding(
     // Iterate in the third list of hits
     // Tiled memory access on h2
     // Only load for threadIdx.y == 0
-    float best_fit = MAX_FLOAT;
+    float best_fit = FLT_MAX;
     for (int k=0; k<(module_data[2].hitNums + blockDim.x - 1) / blockDim.x; ++k) {
       
 #if USE_SHARED_FOR_HITS
       __syncthreads();
-      const int tid = threadIdx.y * blockDim.x + threadIdx.x;
-      const int shared_hit_no = blockDim.x * k + tid;
-      if (threadIdx.y < SH_HIT_MULT && shared_hit_no < module_data[2].hitNums) {
+      const int shared_hit_no = blockDim.x * k + threadIdx.x;
+      if (shared_hit_no < module_data[2].hitNums) {
         const int h2_index = module_data[2].hitStart + shared_hit_no;
 
         // Coalesced memory accesses
@@ -176,7 +171,7 @@ __device__ void trackForwarding(
     // We have a best fit!
     // Fill in t, ONLY in case the best fit is acceptable
     if (ttf_condition) {
-      if (best_fit != MAX_FLOAT) {
+      if (best_fit != FLT_MAX) {
         // Mark h2 as used
         ASSERT(best_hit_h2 < number_of_hits)
         hit_used[best_hit_h2] = true;

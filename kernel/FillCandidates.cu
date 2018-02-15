@@ -49,6 +49,9 @@ __device__ void fillCandidates(
         }
         if (first_h0_found && !last_h0_found) {
           h0_candidates[2*h1_index + 1] = m0_hitStarts + m0_hitNums;
+        } else if (!first_h0_found) {
+          h0_candidates[2*h1_index] = -1;
+          h0_candidates[2*h1_index + 1] = -1;
         }
 
         // Add h2 candidates
@@ -67,6 +70,9 @@ __device__ void fillCandidates(
         }
         if (first_h2_found && !last_h2_found) {
           h2_candidates[2*h1_index + 1] = m2_hitStarts + m2_hitNums;
+        } else if (!first_h2_found) {
+          h2_candidates[2*h1_index] = -1;
+          h2_candidates[2*h1_index + 1] = -1;
         }
       }
     }

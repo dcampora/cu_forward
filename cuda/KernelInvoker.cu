@@ -95,18 +95,10 @@ cudaError_t invokeParallelSearch(
     DEBUG << numThreads.x << ": " << std::flush;
 
     for (auto j=0; j<niterations; ++j) {
-      // Initialize what we need
+      // Initialize just what we need
       cudaCheck(cudaMemset(dev_hit_used, false, acc_hits * sizeof(bool)));
       cudaCheck(cudaMemset(dev_atomicsStorage, 0, eventsToProcess * atomic_space * sizeof(int)));
-      cudaCheck(cudaMemset(dev_hit_candidates, -1, 2 * acc_hits * sizeof(int)));
-      cudaCheck(cudaMemset(dev_hit_h2_candidates, -1, 2 * acc_hits * sizeof(int)));
-
-      // Just for debugging purposes
-      cudaCheck(cudaMemset(dev_tracks, 0, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-      cudaCheck(cudaMemset(dev_tracklets, 0, acc_hits * sizeof(Track)));
-      cudaCheck(cudaMemset(dev_tracks_to_follow, 0, eventsToProcess * TTF_MODULO * sizeof(int)));
-      cudaCheck(cudaDeviceSynchronize());
-
+      
       // searchByTriplet
       cudaEvent_t start_searchByTriplet, stop_searchByTriplet;
       float t0;

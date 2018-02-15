@@ -17,7 +17,6 @@ __global__ void searchByTriplet(
   int* dev_h2_candidates,
   unsigned int* dev_rel_indices
 ) {
-  
   /* Data initialization */
   // Each event is treated with two blocks, one for each side.
   const int event_number = blockIdx.x;
@@ -63,6 +62,22 @@ __global__ void searchByTriplet(
   unsigned int* local_number_of_hits = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
 
   __shared__ int module_data [9];
+
+#if DO_REPEATED_EXECUTION
+  for (int repetitions=0; repetitions<REPEAT_ITERATIONS; ++repetitions) {
+  // Initialize hit_used
+  for (int i=0; i<(number_of_hits + blockDim.x - 1) / blockDim.x; ++i) {
+    const auto index = i*blockDim.x + threadIdx.x;
+    if (index < number_of_hits) {
+      hit_used[index] = false;
+    }
+  }
+  // Initialize atomics
+  tracks_insertPointer[0] = 0;
+  if (threadIdx.x < NUM_ATOMICS-1) {
+    dev_atomicsStorage[threadIdx.x + ip_shift + 1] = 0;
+  }
+#endif
 
   // Fill candidates for both sides
   fillCandidates(
@@ -152,4 +167,9 @@ __global__ void searchByTriplet(
       }
     }
   }
+
+#if DO_REPEATED_EXECUTION
+  __syncthreads();
+  }
+#endif
 }
