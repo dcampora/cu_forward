@@ -1,41 +1,24 @@
 #include "SearchByTriplet.cuh"
 
 /**
- * @brief Search for compatible triplets in
- *        three neighbouring modules on one side
+ * @brief  First iteration of seeding
+ * 
+ * @detail Due to the higher amount of triplets and the
+ *         abscence of flagged hits at this stage, there is
+ *         a specialized algorithm for it
  */
-__device__ void trackSeeding(
+__device__ void trackSeedingFirst(
   float* shared_best_fits,
   const float* hit_Xs,
   const float* hit_Ys,
   const Module* module_data,
   const int* h0_candidates,
   const int* h2_candidates,
-  bool* hit_used,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
-  int* tracks_to_follow,
-  unsigned int* h1_rel_indices,
-  unsigned int* local_number_of_hits
+  int* tracks_to_follow
 ) {
-  // Add to an array all non-used h1 hits with candidates
-  for (int i=0; i<(module_data[1].hitNums + blockDim.x - 1) / blockDim.x; ++i) {
-    const auto h1_rel_index = i*blockDim.x + threadIdx.x;
-    if (h1_rel_index < module_data[1].hitNums) {
-      const auto h1_index = module_data[1].hitStart + h1_rel_index;
-      const auto h0_first_candidate = h0_candidates[2*h1_index];
-      const auto h2_first_candidate = h2_candidates[2*h1_index];
-      if (!hit_used[h1_index] && h0_first_candidate!=-1 && h2_first_candidate!=-1) {
-        const auto current_hit = atomicAdd(local_number_of_hits, 1);
-        h1_rel_indices[current_hit] = h1_rel_index;
-      }
-    }
-  }
-
-  // Due to h1_rel_indices
-  __syncthreads();
-
   // Some constants of the calculation below
   const auto dmax = PARAM_TOLERANCE_ALPHA * (module_data[0].z - module_data[1].z);
   const auto scatterDenom2 = 1.f / ((module_data[2].z - module_data[1].z) * (module_data[2].z - module_data[1].z));
@@ -44,10 +27,10 @@ __device__ void trackSeeding(
   // Adaptive number of xthreads and ythreads,
   // depending on number of hits in h1 to process
 
-  // Process at a time a maximum of MAX_CONCURRENT_H1 elements
-  const auto number_of_hits_h1 = local_number_of_hits[0];
-  const auto last_iteration = (number_of_hits_h1 + MAX_CONCURRENT_H1 - 1) / MAX_CONCURRENT_H1;
-  const auto num_hits_last_iteration = ((number_of_hits_h1 - 1) % MAX_CONCURRENT_H1) + 1;
+  // Process at a time a maximum of MAX_CONCURRENT_H1_FIRST_ITERATION elements
+  const auto number_of_hits_h1 = module_data[1].hitNums;
+  const auto last_iteration = (number_of_hits_h1 + MAX_CONCURRENT_H1_FIRST_ITERATION - 1) / MAX_CONCURRENT_H1_FIRST_ITERATION;
+  const auto num_hits_last_iteration = ((number_of_hits_h1 - 1) % MAX_CONCURRENT_H1_FIRST_ITERATION) + 1;
   for (int i=0; i<last_iteration; ++i) {
     // The output we are searching for
     unsigned int best_h0 = 0;
@@ -58,7 +41,7 @@ __device__ void trackSeeding(
     // Assign an adaptive x and y id for the current thread depending on the load.
     // This is not trivial because:
     // 
-    // - We want a MAX_CONCURRENT_H1:
+    // - We want a MAX_CONCURRENT_H1_FIRST_ITERATION:
     //     It turns out the load is more evenly balanced if we distribute systematically
     //     the processing of one h1 across several threads (ie. h0_candidates x h2_candidates)
     //     
@@ -67,7 +50,7 @@ __device__ void trackSeeding(
     //     
     const auto is_last_iteration = i==last_iteration-1;
     const auto block_dim_x = is_last_iteration*num_hits_last_iteration + 
-                             !is_last_iteration*MAX_CONCURRENT_H1;
+                             !is_last_iteration*MAX_CONCURRENT_H1_FIRST_ITERATION;
 
     // Adapted local thread ID of each thread
     const auto thread_id_x = threadIdx.x % block_dim_x;
@@ -86,13 +69,12 @@ __device__ void trackSeeding(
     // Work with thread_id_x, thread_id_y and block_dim_y from now on
     // Each h1 is associated with a thread_id_x
     // 
-    // Ie. if processing 30 h1 hits, with MAX_CONCURRENT_H1 = 8, #h1 in each iteration to process are:
+    // Ie. if processing 30 h1 hits, with MAX_CONCURRENT_H1_FIRST_ITERATION = 8, #h1 in each iteration to process are:
     // {8, 8, 8, 6}
-    // On the fourth iteration, we should start from 3*MAX_CONCURRENT_H1 (24 + thread_id_x)
-    const auto h1_rel_rel_index = i*MAX_CONCURRENT_H1 + thread_id_x;
-    if (h1_rel_rel_index < number_of_hits_h1) {
+    // On the fourth iteration, we should start from 3*MAX_CONCURRENT_H1_FIRST_ITERATION (24 + thread_id_x)
+    const auto h1_rel_index = i*MAX_CONCURRENT_H1_FIRST_ITERATION + thread_id_x;
+    if (h1_rel_index < number_of_hits_h1) {
       // Fetch h1
-      const auto h1_rel_index = h1_rel_indices[h1_rel_rel_index];
       h1_index = module_data[1].hitStart + h1_rel_index;
       const Hit h1 {hit_Xs[h1_index], hit_Ys[h1_index]};
 
@@ -109,42 +91,36 @@ __device__ void trackSeeding(
         const auto h0_rel_candidate = j*block_dim_y + thread_id_y;
         if (h0_rel_candidate < h0_num_candidates) {
           const auto h0_index = h0_first_candidate + h0_rel_candidate;
-          if (!hit_used[h0_index]) {
-            // Fetch h0
-            const Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index]};
+          // Fetch h0
+          const Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index]};
 
-            // Finally, iterate over all h2 indices
-            for (int h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
-              if (!hit_used[h2_index]) {
-                // const auto best_fits_index = thread_id_y*MAX_NUMHITS_IN_MODULE + h1_rel_index;
+          // Finally, iterate over all h2 indices
+          for (int h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
+            // Our triplet is h0_index, h1_index, h2_index
+            // Fit it and check if it's better than what this thread had
+            // for any triplet with h1
+            const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
 
-                // Our triplet is h0_index, h1_index, h2_index
-                // Fit it and check if it's better than what this thread had
-                // for any triplet with h1
-                const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
+            // Calculate prediction
+            const auto x = h0.x + (h1.x - h0.x) * z2_tz;
+            const auto y = h0.y + (h1.y - h0.y) * z2_tz;
+            const auto dx = x - h2.x;
+            const auto dy = y - h2.y;
 
-                // Calculate prediction
-                const auto x = h0.x + (h1.x - h0.x) * z2_tz;
-                const auto y = h0.y + (h1.y - h0.y) * z2_tz;
-                const auto dx = x - h2.x;
-                const auto dy = y - h2.y;
+            // Calculate fit
+            const auto scatterNum = (dx * dx) + (dy * dy);
+            const auto scatter = scatterNum * scatterDenom2;
+            const auto condition = fabs(h1.x - h0.x) < dmax &&
+                                   fabs(h1.y - h0.y) < dmax &&
+                                   fabs(dx) < PARAM_TOLERANCE &&
+                                   fabs(dy) < PARAM_TOLERANCE &&
+                                   scatter < MAX_SCATTER_SEEDING &&
+                                   scatter < best_fit;
 
-                // Calculate fit
-                const auto scatterNum = (dx * dx) + (dy * dy);
-                const auto scatter = scatterNum * scatterDenom2;
-                const auto condition = fabs(h1.x - h0.x) < dmax &&
-                                       fabs(h1.y - h0.y) < dmax &&
-                                       fabs(dx) < PARAM_TOLERANCE &&
-                                       fabs(dy) < PARAM_TOLERANCE &&
-                                       scatter < MAX_SCATTER_SEEDING &&
-                                       scatter < best_fit;
-
-                // Populate fit, h0 and h2 in case we have found a better one
-                best_fit = condition*scatter + !condition*best_fit;
-                best_h0 = condition*h0_index + !condition*best_h0;
-                best_h2 = condition*h2_index + !condition*best_h2;
-              }
-            }
+            // Populate fit, h0 and h2 in case we have found a better one
+            best_fit = condition*scatter + !condition*best_fit;
+            best_h0 = condition*h0_index + !condition*best_h0;
+            best_h2 = condition*h2_index + !condition*best_h2;
           }
         }
       }

@@ -12,6 +12,7 @@ __device__ float fitHitToTrack(
 
 __device__ void processModules(
   Module* module_data,
+  float* shared_best_fits,
   const int starting_module,
   const int stride,
   bool* hit_used,
@@ -26,7 +27,6 @@ __device__ void processModules(
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
-  unsigned int* sh_hit_lastPointer,
   unsigned int* tracks_insertPointer,
   int* tracks_to_follow,
   int* weak_tracks,
@@ -68,6 +68,7 @@ __device__ void trackForwarding(
 );
 
 __device__ void trackSeeding(
+  float* shared_best_fits,
   const float* hit_Xs,
   const float* hit_Ys,
   const Module* module_data,
@@ -80,6 +81,39 @@ __device__ void trackSeeding(
   int* tracks_to_follow,
   unsigned int* h1_rel_indices,
   unsigned int* local_number_of_hits
+);
+
+__device__ void trackSeedingFirst(
+  float* shared_best_fits,
+  const float* hit_Xs,
+  const float* hit_Ys,
+  const Module* module_data,
+  const int* h0_candidates,
+  const int* h2_candidates,
+  unsigned int* tracklets_insertPointer,
+  unsigned int* ttf_insertPointer,
+  Track* tracklets,
+  int* tracks_to_follow
+);
+
+__device__ void weakTracksAdder(
+  int* shared_hits,
+  unsigned int* weaktracks_insertPointer,
+  unsigned int* tracks_insertPointer,
+  int* weak_tracks,
+  Track* tracklets,
+  Track* tracks,
+  bool* hit_used
+);
+
+__device__ void weakTracksAdderShared(
+  int* shared_hits,
+  unsigned int* weaktracks_insertPointer,
+  unsigned int* tracks_insertPointer,
+  int* weak_tracks,
+  Track* tracklets,
+  Track* tracks,
+  bool* hit_used
 );
 
 __global__ void searchByTriplet(

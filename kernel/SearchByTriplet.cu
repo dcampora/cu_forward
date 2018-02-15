@@ -58,9 +58,10 @@ __global__ void searchByTriplet(
   unsigned int* weaktracks_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 1;
   unsigned int* tracklets_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 2;
   unsigned int* ttf_insertPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 3;
-  unsigned int* sh_hit_lastPointer = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
-  unsigned int* local_number_of_hits = (unsigned int*) dev_atomicsStorage + ip_shift + 5;
+  unsigned int* local_number_of_hits = (unsigned int*) dev_atomicsStorage + ip_shift + 4;
 
+  // Shared memory
+  __shared__ float shared_best_fits [NUMTHREADS_X];
   __shared__ int module_data [9];
 
 #if DO_REPEATED_EXECUTION
@@ -89,10 +90,10 @@ __global__ void searchByTriplet(
     hit_Phis
   );
 
-  // Process each side separately
-  // A-side
+  // Process modules
   processModules(
     (Module*) &module_data[0],
+    (float*) &shared_best_fits[0],
     number_of_modules-1,
     1,
     hit_used,
@@ -107,7 +108,6 @@ __global__ void searchByTriplet(
     weaktracks_insertPointer,
     tracklets_insertPointer,
     ttf_insertPointer,
-    sh_hit_lastPointer,
     tracks_insertPointer,
     tracks_to_follow,
     weak_tracks,
@@ -118,55 +118,18 @@ __global__ void searchByTriplet(
     local_number_of_hits
   );
 
-  // // B-side
-  // processModules(
-  //   (Module*) &module_data[0],
-  //   number_of_modules-2,
-  //   2,
-  //   hit_used,
-  //   h0_candidates,
-  //   h2_candidates,
-  //   number_of_modules,
-  //   module_hitStarts,
-  //   module_hitNums,
-  //   hit_Xs,
-  //   hit_Ys,
-  //   module_Zs,
-  //   weaktracks_insertPointer,
-  //   tracklets_insertPointer,
-  //   ttf_insertPointer,
-  //   sh_hit_lastPointer,
-  //   tracks_insertPointer,
-  //   tracks_to_follow,
-  //   weak_tracks,
-  //   tracklets,
-  //   tracks,
-  //   number_of_hits,
-  //   h1_rel_indices,
-  //   local_number_of_hits
-  // );
-
   __syncthreads();
 
-  // Compute the three-hit tracks left
-  const unsigned int weaktracks_total = weaktracks_insertPointer[0];
-  for (int i=0; i<(weaktracks_total + blockDim.x - 1) / blockDim.x; ++i) {
-    const unsigned int weaktrack_no = blockDim.x * i + threadIdx.y * blockDim.x + threadIdx.x;
-    if (weaktrack_no < weaktracks_total) {
-      // Load the tracks from the tracklets
-      const Track t = tracklets[weak_tracks[weaktrack_no]];
-
-      // Store them in the tracks bag iff they
-      // are made out of three unused hits
-      if (!hit_used[t.hits[0]] &&
-          !hit_used[t.hits[1]] &&
-          !hit_used[t.hits[2]]) {
-        const unsigned int trackno = atomicAdd(tracks_insertPointer, 1);
-        ASSERT(trackno < MAX_TRACKS)
-        tracks[trackno] = t;
-      }
-    }
-  }
+  // Process left weak tracks
+  weakTracksAdder(
+    (int*) &shared_best_fits[0],
+    weaktracks_insertPointer,
+    tracks_insertPointer,
+    weak_tracks,
+    tracklets,
+    tracks,
+    hit_used
+  );
 
 #if DO_REPEATED_EXECUTION
   __syncthreads();

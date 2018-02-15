@@ -6,18 +6,14 @@ cudaError_t invokeParallelSearch(
 ) {
   int eventsToProcess = input.size();
 
-  // Choose which GPU to run on, change this on a multi-GPU system.
+  // Choose which GPU to run on
   const int device_number = 0;
   cudaCheck(cudaSetDevice(device_number));
-#if USE_SHARED_FOR_HITS
-  cudaCheck(cudaDeviceSetCacheConfig(cudaFuncCachePreferShared));
-#else
   cudaCheck(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
-#endif
   cudaDeviceProp* device_properties = (cudaDeviceProp*) malloc(sizeof(cudaDeviceProp));
   cudaGetDeviceProperties(device_properties, 0);
 
-  // Some startup settings
+  // Blocks and threads
   dim3 numBlocks(eventsToProcess);
   dim3 numThreads(NUMTHREADS_X);
 
@@ -36,7 +32,7 @@ cudaError_t invokeParallelSearch(
   }
 
   // Number of defined atomics
-  const int atomic_space = NUM_ATOMICS + 1;
+  constexpr int atomic_space = NUM_ATOMICS + 1;
 
   // GPU datatypes
   Track* dev_tracks;
@@ -190,7 +186,7 @@ cudaError_t invokeParallelSearch(
       // Print to output file with event no.
       const int numberOfTracks = output[i].size() / sizeof(Track);
       Track* tracks_in_solution = (Track*) &(output[i])[0];
-      std::ofstream outfile (std::string(RESULTS_FOLDER) + std::string("/") + std::to_string(i) + std::string(".out"));
+      std::ofstream outfile (std::string(RESULTS_FOLDER) + std::string("/") + std::to_string(i) + std::string(".txt"));
       for(int j=0; j<numberOfTracks; ++j){
         printTrack(EventInfo(input[i]), tracks_in_solution, j, outfile);
       }

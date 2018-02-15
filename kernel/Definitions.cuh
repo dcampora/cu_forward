@@ -15,6 +15,10 @@
 // It should be a divisor of NUMTHREADS_X
 #define MAX_CONCURRENT_H1 16
 
+// Number of concurrent h1s in the first iteration
+// The first iteration has no flagged hits and more triplets per hit
+#define MAX_CONCURRENT_H1_FIRST_ITERATION 8
+
 // These parameters impact the found tracks
 // Maximum / minimum acceptable phi
 // This impacts enourmously the speed of track seeding
@@ -25,7 +29,12 @@
 #define PARAM_TOLERANCE 0.6f
 
 // Maximum scatter of each three hits
-#define MAX_SCATTER 0.000016f
+#define MAX_SCATTER_SEEDING 0.000016f
+#define MAX_SCATTER_FORWARDING 0.0001f
+
+// Number of seeding iterations before storing tracklets
+// This impacts the amount of shared memory to request per thread
+// #define SEEDING_CONTINUOUS_ITERATIONS 2
 
 // Maximum number of skipped modules allowed for a track
 // before storing it
@@ -33,7 +42,7 @@
 
 // Total number of atomics required
 // This is just a constant (that I keep changing)
-#define NUM_ATOMICS 5
+#define NUM_ATOMICS 4
 
 // Constants for requested storage on device
 #define MAX_TRACKS 3000
@@ -43,7 +52,7 @@
 // Maximum number of tracks to follow at a time
 #define TTF_MODULO 2000
 
-// Run over same data several times
+// Run over same data several times to stress processor
 // (ie. increase the runtime of kernels)
 #define DO_REPEATED_EXECUTION false
 #define REPEAT_ITERATIONS 100

@@ -5,6 +5,7 @@
  */
 __device__ void processModules(
   Module* module_data,
+  float* shared_best_fits,
   const int starting_module,
   const int stride,
   bool* hit_used,
@@ -19,7 +20,6 @@ __device__ void processModules(
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
-  unsigned int* sh_hit_lastPointer,
   unsigned int* tracks_insertPointer,
   int* tracks_to_follow,
   int* weak_tracks,
@@ -31,12 +31,39 @@ __device__ void processModules(
 ) {
   int first_module = starting_module;
 
-  // Prepare s1 and s2 for the first iteration
-  unsigned int prev_ttf;
+  // Prepare the first seeding iteration
+  // Load shared module information
+  if (threadIdx.x < 3) {
+    const int module_number = first_module - threadIdx.x * 2;
+    module_data[threadIdx.x].hitStart = module_hitStarts[module_number];
+    module_data[threadIdx.x].hitNums = module_hitNums[module_number];
+    module_data[threadIdx.x].z = module_Zs[module_number];
+  }
+
+  // Due to shared module data loading
+  __syncthreads();
+
+  // Do first track seeding
+  trackSeedingFirst(
+    shared_best_fits,
+    hit_Xs,
+    hit_Ys,
+    module_data,
+    h0_candidates,
+    h2_candidates,
+    tracklets_insertPointer,
+    ttf_insertPointer,
+    tracklets,
+    tracks_to_follow
+  );
+
+  // Prepare forwarding - seeding loop
   unsigned int last_ttf = 0;
+  first_module -= stride;
 
   while (first_module >= 4) {
 
+    // Due to WAR between trackSeedingFirst and the code below
     __syncthreads();
     
     // Iterate in modules
@@ -47,17 +74,15 @@ __device__ void processModules(
       module_data[threadIdx.x].hitNums = module_hitNums[module_number];
       module_data[threadIdx.x].z = module_Zs[module_number];
     }
-    else if (threadIdx.x == 4) {
-      sh_hit_lastPointer[0] = 0;
-    }
 
-    prev_ttf = last_ttf;
+    const unsigned int prev_ttf = last_ttf;
     last_ttf = ttf_insertPointer[0];
     const unsigned int diff_ttf = last_ttf - prev_ttf;
 
     // Reset atomics
     local_number_of_hits[0] = 0;
 
+    // Due to module data loading
     __syncthreads();
 
     // Track Forwarding
@@ -82,10 +107,12 @@ __device__ void processModules(
       module_hitNums
     );
 
+    // Due to ttf_insertPointer
     __syncthreads();
 
     // Seeding
     trackSeeding(
+      shared_best_fits,
       hit_Xs,
       hit_Ys,
       module_data,
@@ -103,9 +130,10 @@ __device__ void processModules(
     first_module -= stride;
   }
 
+  // Due to last seeding ttf_insertPointer
   __syncthreads();
 
-  prev_ttf = last_ttf;
+  const unsigned int prev_ttf = last_ttf;
   last_ttf = ttf_insertPointer[0];
   const unsigned int diff_ttf = last_ttf - prev_ttf;
 

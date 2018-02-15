@@ -31,7 +31,7 @@ __device__ float fitHitToTrack(
   const float scatterDenom = 1.f / (h2_z - h1_z);
   const float scatter = scatterNum * scatterDenom * scatterDenom;
 
-  const bool scatter_condition = scatter < MAX_SCATTER;
+  const bool scatter_condition = scatter < MAX_SCATTER_FORWARDING;
   const bool condition = tolx_condition && toly_condition && scatter_condition;
 
   return condition * scatter + !condition * FLT_MAX;
