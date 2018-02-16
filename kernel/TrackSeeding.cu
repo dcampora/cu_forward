@@ -9,19 +9,19 @@ __device__ void trackSeeding(
   const float* hit_Xs,
   const float* hit_Ys,
   const Module* module_data,
-  const int* h0_candidates,
-  const int* h2_candidates,
+  const short* h0_candidates,
+  const short* h2_candidates,
   bool* hit_used,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
-  int* tracks_to_follow,
-  unsigned int* h1_rel_indices,
+  unsigned int* tracks_to_follow,
+  unsigned short* h1_rel_indices,
   unsigned int* local_number_of_hits
 ) {
   // Add to an array all non-used h1 hits with candidates
   for (int i=0; i<(module_data[1].hitNums + blockDim.x - 1) / blockDim.x; ++i) {
-    const auto h1_rel_index = i*blockDim.x + threadIdx.x;
+    const unsigned short h1_rel_index = i*blockDim.x + threadIdx.x;
     if (h1_rel_index < module_data[1].hitNums) {
       const auto h1_index = module_data[1].hitStart + h1_rel_index;
       const auto h0_first_candidate = h0_candidates[2*h1_index];
@@ -50,9 +50,9 @@ __device__ void trackSeeding(
   const auto num_hits_last_iteration = ((number_of_hits_h1 - 1) % MAX_CONCURRENT_H1) + 1;
   for (int i=0; i<last_iteration; ++i) {
     // The output we are searching for
-    unsigned int best_h0 = 0;
-    unsigned int best_h2 = 0;
-    unsigned int h1_index = 0;
+    unsigned short best_h0 = 0;
+    unsigned short best_h2 = 0;
+    unsigned short h1_index = 0;
     float best_fit = FLT_MAX;
 
     // Assign an adaptive x and y id for the current thread depending on the load.
@@ -114,7 +114,7 @@ __device__ void trackSeeding(
             const Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index]};
 
             // Finally, iterate over all h2 indices
-            for (int h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
+            for (auto h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
               if (!hit_used[h2_index]) {
                 // const auto best_fits_index = thread_id_y*MAX_NUMHITS_IN_MODULE + h1_rel_index;
 
@@ -170,14 +170,14 @@ __device__ void trackSeeding(
     // If this condition holds, then necessarily best_fit < FLT_MAX
     if (threadIdx.x == winner_thread) {
       // Add the track to the bag of tracks
-      const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
+      const auto trackP = atomicAdd(tracklets_insertPointer, 1);
       // ASSERT(trackP < number_of_hits)
       tracklets[trackP] = Track {3, best_h0, h1_index, best_h2};
 
       // Add the tracks to the bag of tracks to_follow
       // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
       // and hence it is stored in tracklets
-      const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+      const auto ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
       tracks_to_follow[ttfP] = 0x80000000 | trackP;
     }
 

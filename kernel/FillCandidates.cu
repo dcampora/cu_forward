@@ -1,29 +1,28 @@
 #include "SearchByTriplet.cuh"
 
 __device__ void fillCandidates(
-  int* h0_candidates,
-  int* h2_candidates,
-  const int number_of_modules,
-  const int* module_hitStarts,
-  const int* module_hitNums,
+  short* h0_candidates,
+  short* h2_candidates,
+  const unsigned int number_of_modules,
+  const unsigned int* module_hitStarts,
+  const unsigned int* module_hitNums,
   const float* hit_Phis
 ) {
   // Notation is m0, m1, m2 in reverse order for each module
   // A hit in those is h0, h1, h2 respectively
 
-  // Assign a module, h1 combination to each threadIdx.x
-  int module_h1_counter = 0;
-  for (int module_index=2; module_index<=49; ++module_index) {
+  // Assign a h1 to each threadIdx.x
+  for (auto module_index=2; module_index<=49; ++module_index) {
     const auto m1_hitNums = module_hitNums[module_index];
-    for (int i=0; i<(m1_hitNums + blockDim.x - 1) / blockDim.x; ++i) {
+    for (auto i=0; i<(m1_hitNums + blockDim.x - 1) / blockDim.x; ++i) {
       const auto h1_rel_index = i*blockDim.x + threadIdx.x;
 
       if (h1_rel_index < m1_hitNums) {
         // Find for module module_index, hit h1_rel_index the candidates
-        const auto m0_hitStarts = module_hitStarts[module_index+2];
-        const auto m2_hitStarts = module_hitStarts[module_index-2];
-        const auto m0_hitNums = module_hitNums[module_index+2];
-        const auto m2_hitNums = module_hitNums[module_index-2];
+        const unsigned short m0_hitStarts = module_hitStarts[module_index+2];
+        const unsigned short m2_hitStarts = module_hitStarts[module_index-2];
+        const unsigned short m0_hitNums = module_hitNums[module_index+2];
+        const unsigned short m2_hitNums = module_hitNums[module_index-2];
         const auto h1_index = module_hitStarts[module_index] + h1_rel_index;
 
         // Calculate phi limits
@@ -34,7 +33,7 @@ __device__ void fillCandidates(
         bool first_h2_found = false, last_h2_found = false;
         
         // Add h0 candidates
-        for (int h0_index=m0_hitStarts; h0_index < m0_hitStarts + m0_hitNums; ++h0_index) {
+        for (auto h0_index=m0_hitStarts; h0_index < m0_hitStarts + m0_hitNums; ++h0_index) {
           const auto h0_phi = hit_Phis[h0_index];
           const bool tolerance_condition = fabs(h1_phi - h0_phi) < PHI_EXTRAPOLATION;
 

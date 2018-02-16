@@ -78,13 +78,16 @@
 #endif
 
 struct Module {
-    unsigned int hitStart;
-    unsigned int hitNums;
+    unsigned short hitStart;
+    unsigned short hitNums;
     float z;
 
     __device__ Module(){}
-    __device__ Module(const unsigned int _hitStart, const unsigned int _hitNums, const float _z) : 
-        hitStart(_hitStart), hitNums(_hitNums), z(_z) {}
+    __device__ Module(
+      const unsigned short _hitStart,
+      const unsigned short _hitNums,
+      const float _z
+    ) : hitStart(_hitStart), hitNums(_hitNums), z(_z) {}
 };
 
 struct Hit {
@@ -92,20 +95,25 @@ struct Hit {
     float y;
 
     __device__ Hit(){}
-    __device__ Hit(const float _x, const float _y) :
-        x(_x), y(_y) {}
+    __device__ Hit(
+      const float _x,
+      const float _y
+    ) : x(_x), y(_y) {}
 };
 
-struct Track { // 4 + 24 * 4 = 100 B
-    unsigned int hitsNum;
-    unsigned int hits[MAX_TRACK_SIZE];
+struct Track { // 2 + 24 * 2 = 50 B
+  unsigned short hitsNum;
+  unsigned short hits[MAX_TRACK_SIZE];
 
-    __device__ Track(){}
-    __device__ Track(const unsigned int _hitsNum, const unsigned int _h0, const unsigned int _h1, const unsigned int _h2) : 
-        hitsNum(_hitsNum) {
-        
-        hits[0] = _h0;
-        hits[1] = _h1;
-        hits[2] = _h2;
-    }
+  __device__ Track(){}
+  __device__ Track(
+    const unsigned short _hitsNum,
+    const unsigned short _h0,
+    const unsigned short _h1,
+    const unsigned short _h2
+  ) : hitsNum(_hitsNum) {
+    hits[0] = _h0;
+    hits[1] = _h1;
+    hits[2] = _h2;
+  }
 };

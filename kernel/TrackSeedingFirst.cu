@@ -12,12 +12,12 @@ __device__ void trackSeedingFirst(
   const float* hit_Xs,
   const float* hit_Ys,
   const Module* module_data,
-  const int* h0_candidates,
-  const int* h2_candidates,
+  const short* h0_candidates,
+  const short* h2_candidates,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
-  int* tracks_to_follow
+  unsigned int* tracks_to_follow
 ) {
   // Some constants of the calculation below
   const auto dmax = MAX_SLOPE * (module_data[0].z - module_data[1].z);
@@ -33,9 +33,9 @@ __device__ void trackSeedingFirst(
   const auto num_hits_last_iteration = ((number_of_hits_h1 - 1) % MAX_CONCURRENT_H1_FIRST_ITERATION) + 1;
   for (int i=0; i<last_iteration; ++i) {
     // The output we are searching for
-    unsigned int best_h0 = 0;
-    unsigned int best_h2 = 0;
-    unsigned int h1_index = 0;
+    unsigned short best_h0 = 0;
+    unsigned short best_h2 = 0;
+    unsigned short h1_index = 0;
     float best_fit = FLT_MAX;
 
     // Assign an adaptive x and y id for the current thread depending on the load.
@@ -95,7 +95,7 @@ __device__ void trackSeedingFirst(
           const Hit h0 {hit_Xs[h0_index], hit_Ys[h0_index]};
 
           // Finally, iterate over all h2 indices
-          for (int h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
+          for (auto h2_index=h2_first_candidate; h2_index<h2_last_candidate; ++h2_index) {
             // Our triplet is h0_index, h1_index, h2_index
             // Fit it and check if it's better than what this thread had
             // for any triplet with h1
@@ -146,14 +146,14 @@ __device__ void trackSeedingFirst(
     // If this condition holds, then necessarily best_fit < FLT_MAX
     if (threadIdx.x == winner_thread) {
       // Add the track to the bag of tracks
-      const unsigned int trackP = atomicAdd(tracklets_insertPointer, 1);
+      const auto trackP = atomicAdd(tracklets_insertPointer, 1);
       // ASSERT(trackP < number_of_hits)
       tracklets[trackP] = Track {3, best_h0, h1_index, best_h2};
 
       // Add the tracks to the bag of tracks to_follow
       // Note: The first bit flag marks this is a tracklet (hitsNum == 3),
       // and hence it is stored in tracklets
-      const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+      const auto ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
       tracks_to_follow[ttfP] = 0x80000000 | trackP;
     }
 

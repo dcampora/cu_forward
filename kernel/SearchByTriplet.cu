@@ -6,32 +6,32 @@
 __global__ void searchByTriplet(
   Track* dev_tracks,
   const char* dev_input,
-  int* dev_tracks_to_follow,
+  unsigned int* dev_tracks_to_follow,
   bool* dev_hit_used,
   int* dev_atomicsStorage,
   Track* dev_tracklets,
-  int* dev_weak_tracks,
-  int* dev_event_offsets,
-  int* dev_hit_offsets,
-  int* dev_h0_candidates,
-  int* dev_h2_candidates,
-  unsigned int* dev_rel_indices
+  unsigned int* dev_weak_tracks,
+  unsigned int* dev_event_offsets,
+  unsigned int* dev_hit_offsets,
+  short* dev_h0_candidates,
+  short* dev_h2_candidates,
+  unsigned short* dev_rel_indices
 ) {
   /* Data initialization */
   // Each event is treated with two blocks, one for each side.
-  const int event_number = blockIdx.x;
-  const int events_under_process = gridDim.x;
-  const int tracks_offset = event_number * MAX_TRACKS;
+  const unsigned int event_number = blockIdx.x;
+  const unsigned int events_under_process = gridDim.x;
+  const unsigned int tracks_offset = event_number * MAX_TRACKS;
 
   // Pointers to data within the event
-  const int data_offset = dev_event_offsets[event_number];
-  const int* no_modules = (const int*) &dev_input[data_offset];
-  const int* no_hits = (const int*) (no_modules + 1);
+  const unsigned int data_offset = dev_event_offsets[event_number];
+  const unsigned int* no_modules = (const unsigned int*) &dev_input[data_offset];
+  const unsigned int* no_hits = (const unsigned int*) (no_modules + 1);
   const float* module_Zs = (const float*) (no_hits + 1);
-  const int number_of_modules = no_modules[0];
-  const int number_of_hits = no_hits[0];
-  const int* module_hitStarts = (const int*) (module_Zs + number_of_modules);
-  const int* module_hitNums = (const int*) (module_hitStarts + number_of_modules);
+  const unsigned int number_of_modules = no_modules[0];
+  const unsigned int number_of_hits = no_hits[0];
+  const unsigned int* module_hitStarts = (const unsigned int*) (module_Zs + number_of_modules);
+  const unsigned int* module_hitNums = (const unsigned int*) (module_hitStarts + number_of_modules);
   const unsigned int* hit_IDs = (const unsigned int*) (module_hitNums + number_of_modules);
   const float* hit_Xs = (const float*) (hit_IDs + number_of_hits);
   const float* hit_Ys = (const float*) (hit_Xs + number_of_hits);
@@ -42,15 +42,15 @@ __global__ void searchByTriplet(
   unsigned int* tracks_insertPointer = (unsigned int*) dev_atomicsStorage + event_number;
 
   // Per side datatypes
-  const int hit_offset = dev_hit_offsets[event_number];
+  const unsigned int hit_offset = dev_hit_offsets[event_number];
   bool* hit_used = dev_hit_used + hit_offset;
-  int* h0_candidates = dev_h0_candidates + hit_offset * 2;
-  int* h2_candidates = dev_h2_candidates + hit_offset * 2;
+  short* h0_candidates = dev_h0_candidates + hit_offset * 2;
+  short* h2_candidates = dev_h2_candidates + hit_offset * 2;
 
-  int* tracks_to_follow = dev_tracks_to_follow + event_number * TTF_MODULO;
-  int* weak_tracks = dev_weak_tracks + hit_offset;
+  unsigned int* tracks_to_follow = dev_tracks_to_follow + event_number * TTF_MODULO;
+  unsigned int* weak_tracks = dev_weak_tracks + hit_offset;
   Track* tracklets = dev_tracklets + hit_offset;
-  unsigned int* h1_rel_indices = dev_rel_indices + event_number * MAX_NUMHITS_IN_MODULE;
+  unsigned short* h1_rel_indices = dev_rel_indices + event_number * MAX_NUMHITS_IN_MODULE;
 
   // Initialize variables according to event number and module side
   // Insert pointers (atomics)
@@ -62,7 +62,7 @@ __global__ void searchByTriplet(
 
   // Shared memory
   __shared__ float shared_best_fits [NUMTHREADS_X];
-  __shared__ int module_data [9];
+  __shared__ int module_data [6];
 
 #if DO_REPEATED_EXECUTION
   for (int repetitions=0; repetitions<REPEAT_ITERATIONS; ++repetitions) {

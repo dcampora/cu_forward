@@ -41,7 +41,8 @@ void writeBinaryTrack(
   const Track& track,
   std::ofstream& outstream
 ) {
-  outstream.write((char*) &track.hitsNum, sizeof(uint32_t));
+  uint32_t hitsNum = track.hitsNum;
+  outstream.write((char*) &hitsNum, sizeof(uint32_t));
   for (int i=0; i<track.hitsNum; ++i) {
     outstream.write((char*) &info.hit_IDs[track.hits[i]], sizeof(uint32_t));
   }

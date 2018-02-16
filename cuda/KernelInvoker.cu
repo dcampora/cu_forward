@@ -4,7 +4,7 @@ cudaError_t invokeParallelSearch(
   const std::vector<std::vector<uint8_t>>& input,
   std::vector<std::vector<uint8_t>>& output
 ) {
-  int eventsToProcess = input.size();
+  unsigned int eventsToProcess = input.size();
 
   // Choose which GPU to run on
   const int device_number = 0;
@@ -19,10 +19,10 @@ cudaError_t invokeParallelSearch(
 
   // Allocate memory
   // Prepare event offset and hit offset
-  std::vector<int> event_offsets;
-  std::vector<int> hit_offsets;
+  std::vector<unsigned int> event_offsets;
+  std::vector<unsigned int> hit_offsets;
   int acc_size = 0, acc_hits = 0;
-  for (int i=0; i<eventsToProcess; ++i) {
+  for (unsigned int i=0; i<eventsToProcess; ++i) {
     auto info = EventInfo(input[i]);
     const int event_size = input[i].size();
     event_offsets.push_back(acc_size);
@@ -32,42 +32,42 @@ cudaError_t invokeParallelSearch(
   }
 
   // Number of defined atomics
-  constexpr int atomic_space = NUM_ATOMICS + 1;
+  constexpr unsigned int atomic_space = NUM_ATOMICS + 1;
 
   // GPU datatypes
   Track* dev_tracks;
   char* dev_input;
-  int* dev_tracks_to_follow;
+  unsigned int* dev_tracks_to_follow;
   bool* dev_hit_used;
   int* dev_atomicsStorage;
   Track* dev_tracklets;
-  int* dev_weak_tracks;
-  int* dev_event_offsets;
-  int* dev_hit_offsets;
-  int* dev_hit_candidates;
-  int* dev_hit_h2_candidates;
-  unsigned int* dev_rel_indices;
+  unsigned int* dev_weak_tracks;
+  unsigned int* dev_event_offsets;
+  unsigned int* dev_hit_offsets;
+  short* dev_h0_candidates;
+  short* dev_h2_candidates;
+  unsigned short* dev_rel_indices;
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_tracklets, acc_hits * sizeof(Track)));
-  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, acc_hits * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * TTF_MODULO * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
   cudaCheck(cudaMalloc((void**)&dev_input, acc_size));
-  cudaCheck(cudaMalloc((void**)&dev_hit_candidates, 2 * acc_hits * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_h2_candidates, 2 * acc_hits * sizeof(int)));
-  cudaCheck(cudaMalloc((void**)&dev_rel_indices, eventsToProcess * MAX_NUMHITS_IN_MODULE * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracks_to_follow, eventsToProcess * TTF_MODULO * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_used, acc_hits * sizeof(bool)));
+  cudaCheck(cudaMalloc((void**)&dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int)));
+  cudaCheck(cudaMalloc((void**)&dev_tracklets, acc_hits * sizeof(Track)));
+  cudaCheck(cudaMalloc((void**)&dev_weak_tracks, acc_hits * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_event_offsets, event_offsets.size() * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_offsets, hit_offsets.size() * sizeof(unsigned int)));
+  cudaCheck(cudaMalloc((void**)&dev_h0_candidates, 2 * acc_hits * sizeof(short)));
+  cudaCheck(cudaMalloc((void**)&dev_h2_candidates, 2 * acc_hits * sizeof(short)));
+  cudaCheck(cudaMalloc((void**)&dev_rel_indices, eventsToProcess * MAX_NUMHITS_IN_MODULE * sizeof(unsigned short)));
 
   // Copy stuff from host memory to GPU buffers
-  cudaCheck(cudaMemcpy(dev_event_offsets, &event_offsets[0], event_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
-  cudaCheck(cudaMemcpy(dev_hit_offsets, &hit_offsets[0], hit_offsets.size() * sizeof(int), cudaMemcpyHostToDevice));
+  cudaCheck(cudaMemcpy(dev_event_offsets, event_offsets.data(), event_offsets.size() * sizeof(unsigned int), cudaMemcpyHostToDevice));
+  cudaCheck(cudaMemcpy(dev_hit_offsets, hit_offsets.data(), hit_offsets.size() * sizeof(unsigned int), cudaMemcpyHostToDevice));
 
   acc_size = 0;
-  for (int i=0; i<eventsToProcess; ++i){
+  for (unsigned int i=0; i<eventsToProcess; ++i){
     cudaCheck(cudaMemcpy(&dev_input[acc_size], input[i].data(), input[i].size(), cudaMemcpyHostToDevice));
     acc_size += input[i].size();
   }
@@ -115,8 +115,8 @@ cudaError_t invokeParallelSearch(
         dev_weak_tracks,
         dev_event_offsets,
         dev_hit_offsets,
-        dev_hit_candidates,
-        dev_hit_h2_candidates,
+        dev_h0_candidates,
+        dev_h2_candidates,
         dev_rel_indices
       );
 
@@ -139,27 +139,27 @@ cudaError_t invokeParallelSearch(
   }
 
   if (PRINT_FILL_CANDIDATES) {
-    std::vector<int> hit_h0_candidates (2 * acc_hits);
-    std::vector<int> hit_h2_candidates (2 * acc_hits);
-    cudaCheck(cudaMemcpy(hit_h0_candidates.data(), dev_hit_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
-    cudaCheck(cudaMemcpy(hit_h2_candidates.data(), dev_hit_h2_candidates, 2 * acc_hits * sizeof(int), cudaMemcpyDeviceToHost));
+    std::vector<short> h0_candidates (2 * acc_hits);
+    std::vector<short> h2_candidates (2 * acc_hits);
+    cudaCheck(cudaMemcpy(h0_candidates.data(), dev_h0_candidates, 2 * acc_hits * sizeof(short), cudaMemcpyDeviceToHost));
+    cudaCheck(cudaMemcpy(h2_candidates.data(), dev_h2_candidates, 2 * acc_hits * sizeof(short), cudaMemcpyDeviceToHost));
     
     // Just print modules 49, 47 and 45
     auto info = EventInfo(input[0]);
 
-    std::vector<int> modules {49, 47, 45};
+    std::vector<unsigned int> modules {49, 47, 45};
     for (auto module : modules) {
-      std::cout << "Module " << module << std::endl << " hit h0 candidates: ";
-      for (int i=info.module_hitStarts[module]; i<info.module_hitStarts[module]+info.module_hitNums[module]; ++i) {
-        std::cout << "(" << hit_h0_candidates[2*i] << ", " << hit_h0_candidates[2*i+1] << ") ";
+      std::cout << "Module " << module << std::endl << " h0 candidates: ";
+      for (auto i=info.module_hitStarts[module]; i<info.module_hitStarts[module]+info.module_hitNums[module]; ++i) {
+        std::cout << "(" << h0_candidates[2*i] << ", " << h0_candidates[2*i+1] << ") ";
       }
       std::cout << std::endl;
     }
     
     for (auto module : modules) {
-      std::cout << "Module " << module << std::endl << " hit h2 candidates: ";
-      for (int i=info.module_hitStarts[module]; i<info.module_hitStarts[module]+info.module_hitNums[module]; ++i) {
-        std::cout << "(" << hit_h2_candidates[2*i] << ", " << hit_h2_candidates[2*i+1] << ") ";
+      std::cout << "Module " << module << std::endl << " h2 candidates: ";
+      for (auto i=info.module_hitStarts[module]; i<info.module_hitStarts[module]+info.module_hitNums[module]; ++i) {
+        std::cout << "(" << h2_candidates[2*i] << ", " << h2_candidates[2*i+1] << ") ";
       }
       std::cout << std::endl;
     }
@@ -169,8 +169,8 @@ cudaError_t invokeParallelSearch(
   if (PRINT_SOLUTION) DEBUG << "Number of tracks found per event:" << std::endl << " ";
   std::vector<int> atomics (eventsToProcess * atomic_space);
   cudaCheck(cudaMemcpy(atomics.data(), dev_atomicsStorage, eventsToProcess * atomic_space * sizeof(int), cudaMemcpyDeviceToHost));
-  for (int i=0; i<eventsToProcess; ++i){
-    const int numberOfTracks = atomics[i];
+  for (unsigned int i=0; i<eventsToProcess; ++i){
+    const unsigned int numberOfTracks = atomics[i];
     if (PRINT_SOLUTION) DEBUG << numberOfTracks << ", ";
 
     std::vector<uint8_t> output_track (numberOfTracks * sizeof(Track));
@@ -181,7 +181,7 @@ cudaError_t invokeParallelSearch(
 
   if (PRINT_VERBOSE) {
     // Print solution of all events processed, to results
-    for (int i=0; i<eventsToProcess; ++i) {
+    for (unsigned int i=0; i<eventsToProcess; ++i) {
 
       // Print to output file with event no.
       const int numberOfTracks = output[i].size() / sizeof(Track);
@@ -196,7 +196,7 @@ cudaError_t invokeParallelSearch(
 
   if (PRINT_BINARY) {
     std::cout << "Printing binary solution" << std::endl;
-    for (int i=0; i<eventsToProcess; ++i) {
+    for (unsigned int i=0; i<eventsToProcess; ++i) {
       const int numberOfTracks = output[i].size() / sizeof(Track);
       Track* tracks_in_solution = (Track*) &(output[i])[0];
 

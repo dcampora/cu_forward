@@ -49,23 +49,24 @@ __device__ void trackForwarding(
   unsigned int* weaktracks_insertPointer,
   const Module* module_data,
   const unsigned int diff_ttf,
-  int* tracks_to_follow,
-  int* weak_tracks,
+  unsigned int* tracks_to_follow,
+  unsigned int* weak_tracks,
   const unsigned int prev_ttf,
   Track* tracklets,
   Track* tracks,
-  const int number_of_hits,
-  const int first_module,
+  const unsigned int number_of_hits,
+  const unsigned int first_module,
   const float* module_Zs,
-  const int* module_hitStarts,
-  const int* module_hitNums
+  const unsigned int* module_hitStarts,
+  const unsigned int* module_hitNums
 ) {
   for (int i=0; i<(diff_ttf + blockDim.x - 1) / blockDim.x; ++i) {
-    const unsigned int ttf_element = blockDim.x * i + threadIdx.y * blockDim.x + threadIdx.x;
+    const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
     // These variables need to go here, shared memory and scope requirements
     float tx, ty, h1_z, h0_z;
-    unsigned int trackno, fulltrackno, skipped_modules, best_hit_h2;
+    unsigned int trackno, fulltrackno, skipped_modules;
+    unsigned short best_hit_h2;
     Track t;
     Hit h0;
 
@@ -84,10 +85,9 @@ __device__ void trackForwarding(
       t = track_pointer[trackno];
 
       // Load last two hits in h0, h1
-      const int t_hitsNum = t.hitsNum;
-      ASSERT(t_hitsNum < MAX_TRACK_SIZE)
-      const int h0_num = t.hits[t_hitsNum - 2];
-      const int h1_num = t.hits[t_hitsNum - 1];
+      ASSERT(t.hitsNum < MAX_TRACK_SIZE)
+      const auto h0_num = t.hits[t.hitsNum - 2];
+      const auto h1_num = t.hits[t.hitsNum - 1];
 
       ASSERT(h0_num < number_of_hits)
       h0.x = hit_Xs[h0_num];
@@ -131,7 +131,7 @@ __device__ void trackForwarding(
     // Tiled memory access on h2
     // Only load for threadIdx.y == 0
     float best_fit = FLT_MAX;
-    for (int k=0; k<(module_data[2].hitNums + blockDim.x - 1) / blockDim.x; ++k) {
+    for (auto k=0; k<(module_data[2].hitNums + blockDim.x - 1) / blockDim.x; ++k) {
       
 #if USE_SHARED_FOR_HITS
       __syncthreads();
@@ -148,12 +148,12 @@ __device__ void trackForwarding(
 #endif
       
       if (ttf_condition) {
-        const int last_hit_h2 = min(blockDim.x * (k + 1), module_data[2].hitNums);
-        for (int kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
+        const auto last_hit_h2 = min(blockDim.x * (k + 1), module_data[2].hitNums);
+        for (auto kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
           
-          const int h2_index = module_data[2].hitStart + kk;
+          const auto h2_index = module_data[2].hitStart + kk;
 #if USE_SHARED_FOR_HITS
-          const int shared_h2_index = kk % blockDim.x;
+          const auto shared_h2_index = kk % blockDim.x;
           const Hit h2 {shared_hit_x[shared_h2_index], shared_hit_y[shared_h2_index]};
 #else
           const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
@@ -202,7 +202,7 @@ __device__ void trackForwarding(
         tracks[trackno] = t;
 
         // Add the tracks to the bag of tracks to_follow
-        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+        const auto ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
         tracks_to_follow[ttfP] = trackno;
       }
       // A track just skipped a module
@@ -212,13 +212,13 @@ __device__ void trackForwarding(
         trackno = ((skipped_modules + 1) << 28) | (fulltrackno & 0x8FFFFFFF);
 
         // Add the tracks to the bag of tracks to_follow
-        const unsigned int ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
+        const auto ttfP = atomicAdd(ttf_insertPointer, 1) % TTF_MODULO;
         tracks_to_follow[ttfP] = trackno;
       }
       // If there are only three hits in this track,
       // mark it as "doubtful"
       else if (t.hitsNum == 3) {
-        const unsigned int weakP = atomicAdd(weaktracks_insertPointer, 1);
+        const auto weakP = atomicAdd(weaktracks_insertPointer, 1);
         ASSERT(weakP < number_of_hits)
         weak_tracks[weakP] = trackno;
       }

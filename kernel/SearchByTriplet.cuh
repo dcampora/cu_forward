@@ -13,14 +13,14 @@ __device__ float fitHitToTrack(
 __device__ void processModules(
   Module* module_data,
   float* shared_best_fits,
-  const int starting_module,
-  const int stride,
+  const unsigned int starting_module,
+  const unsigned int stride,
   bool* hit_used,
-  const int* h0_candidates,
-  const int* h2_candidates,
-  const int number_of_modules,
-  const int* module_hitStarts,
-  const int* module_hitNums,
+  const short* h0_candidates,
+  const short* h2_candidates,
+  const unsigned int number_of_modules,
+  const unsigned int* module_hitStarts,
+  const unsigned int* module_hitNums,
   const float* hit_Xs,
   const float* hit_Ys,
   const float* module_Zs,
@@ -28,21 +28,21 @@ __device__ void processModules(
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   unsigned int* tracks_insertPointer,
-  int* tracks_to_follow,
-  int* weak_tracks,
+  unsigned int* tracks_to_follow,
+  unsigned int* weak_tracks,
   Track* tracklets,
   Track* tracks,
-  const int number_of_hits,
-  unsigned int* h1_rel_indices,
+  const unsigned int number_of_hits,
+  unsigned short* h1_rel_indices,
   unsigned int* local_number_of_hits
 );
 
 __device__ void fillCandidates(
-  int* h0_candidates,
-  int* h2_candidates,
-  const int number_of_modules,
-  const int* module_hitStarts,
-  const int* module_hitNums,
+  short* h0_candidates,
+  short* h2_candidates,
+  const unsigned int number_of_modules,
+  const unsigned int* module_hitStarts,
+  const unsigned int* module_hitNums,
   const float* hit_Phis
 );
 
@@ -55,16 +55,16 @@ __device__ void trackForwarding(
   unsigned int* weaktracks_insertPointer,
   const Module* module_data,
   const unsigned int diff_ttf,
-  int* tracks_to_follow,
-  int* weak_tracks,
+  unsigned int* tracks_to_follow,
+  unsigned int* weak_tracks,
   const unsigned int prev_ttf,
   Track* tracklets,
   Track* tracks,
-  const int number_of_hits,
-  const int first_module,
+  const unsigned int number_of_hits,
+  const unsigned int first_module,
   const float* module_Zs,
-  const int* module_hitStarts,
-  const int* module_hitNums
+  const unsigned int* module_hitStarts,
+  const unsigned int* module_hitNums
 );
 
 __device__ void trackSeeding(
@@ -72,14 +72,14 @@ __device__ void trackSeeding(
   const float* hit_Xs,
   const float* hit_Ys,
   const Module* module_data,
-  const int* h0_candidates,
-  const int* h2_candidates,
+  const short* h0_candidates,
+  const short* h2_candidates,
   bool* hit_used,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
-  int* tracks_to_follow,
-  unsigned int* h1_rel_indices,
+  unsigned int* tracks_to_follow,
+  unsigned short* h1_rel_indices,
   unsigned int* local_number_of_hits
 );
 
@@ -88,19 +88,19 @@ __device__ void trackSeedingFirst(
   const float* hit_Xs,
   const float* hit_Ys,
   const Module* module_data,
-  const int* h0_candidates,
-  const int* h2_candidates,
+  const short* h0_candidates,
+  const short* h2_candidates,
   unsigned int* tracklets_insertPointer,
   unsigned int* ttf_insertPointer,
   Track* tracklets,
-  int* tracks_to_follow
+  unsigned int* tracks_to_follow
 );
 
 __device__ void weakTracksAdder(
   int* shared_hits,
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracks_insertPointer,
-  int* weak_tracks,
+  unsigned int* weak_tracks,
   Track* tracklets,
   Track* tracks,
   bool* hit_used
@@ -110,7 +110,7 @@ __device__ void weakTracksAdderShared(
   int* shared_hits,
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracks_insertPointer,
-  int* weak_tracks,
+  unsigned int* weak_tracks,
   Track* tracklets,
   Track* tracks,
   bool* hit_used
@@ -119,14 +119,14 @@ __device__ void weakTracksAdderShared(
 __global__ void searchByTriplet(
   Track* dev_tracks,
   const char* dev_input,
-  int* dev_tracks_to_follow,
+  unsigned int* dev_tracks_to_follow,
   bool* dev_hit_used,
   int* dev_atomicsStorage,
   Track* dev_tracklets,
-  int* dev_weak_tracks,
-  int* dev_event_offsets,
-  int* dev_hit_offsets,
-  int* dev_h0_candidates,
-  int* dev_h2_candidates,
-  unsigned int* dev_rel_indices
+  unsigned int* dev_weak_tracks,
+  unsigned int* dev_event_offsets,
+  unsigned int* dev_hit_offsets,
+  short* dev_h0_candidates,
+  short* dev_h2_candidates,
+  unsigned short* dev_rel_indices
 );

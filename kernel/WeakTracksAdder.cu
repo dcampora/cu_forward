@@ -4,7 +4,7 @@ __device__ void weakTracksAdder(
   int* shared_hits,
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracks_insertPointer,
-  int* weak_tracks,
+  unsigned int* weak_tracks,
   Track* tracklets,
   Track* tracks,
   bool* hit_used
@@ -16,11 +16,10 @@ __device__ void weakTracksAdder(
     if (weaktrack_no < weaktracks_total) {
       // Load the tracks from the tracklets
       const Track t = tracklets[weak_tracks[weaktrack_no]];
+      const unsigned int used = hit_used[t.hits[0]] + hit_used[t.hits[1]] + hit_used[t.hits[2]];
 
       // Store them in the tracks bag
-      if (!hit_used[t.hits[0]] &&
-          !hit_used[t.hits[1]] &&
-          !hit_used[t.hits[2]]) {
+      if (used < 1) {
         const unsigned int trackno = atomicAdd(tracks_insertPointer, 1);
         ASSERT(trackno < MAX_TRACKS)
         tracks[trackno] = t;
@@ -40,7 +39,7 @@ __device__ void weakTracksAdderShared(
   int* shared_hits,
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracks_insertPointer,
-  int* weak_tracks,
+  unsigned int* weak_tracks,
   Track* tracklets,
   Track* tracks,
   bool* hit_used
