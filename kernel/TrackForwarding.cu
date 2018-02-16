@@ -20,11 +20,11 @@ __device__ float fitHitToTrack(
   const float dz = h2_z - h0_z;
   const float x_prediction = h0.x + tx * dz;
   const float dx = fabs(x_prediction - h2.x);
-  const bool tolx_condition = dx < PARAM_TOLERANCE;
+  const bool tolx_condition = dx < TOLERANCE;
 
   const float y_prediction = h0.y + ty * dz;
   const float dy = fabs(y_prediction - h2.y);
-  const bool toly_condition = dy < PARAM_TOLERANCE;
+  const bool toly_condition = dy < TOLERANCE;
 
   // Scatter - Updated to last PrPixel
   const float scatterNum = (dx * dx) + (dy * dy);

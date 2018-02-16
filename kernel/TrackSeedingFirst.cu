@@ -20,7 +20,7 @@ __device__ void trackSeedingFirst(
   int* tracks_to_follow
 ) {
   // Some constants of the calculation below
-  const auto dmax = PARAM_TOLERANCE_ALPHA * (module_data[0].z - module_data[1].z);
+  const auto dmax = MAX_SLOPE * (module_data[0].z - module_data[1].z);
   const auto scatterDenom2 = 1.f / ((module_data[2].z - module_data[1].z) * (module_data[2].z - module_data[1].z));
   const auto z2_tz = (module_data[2].z - module_data[0].z) / (module_data[1].z - module_data[0].z);
 
@@ -112,8 +112,8 @@ __device__ void trackSeedingFirst(
             const auto scatter = scatterNum * scatterDenom2;
             const auto condition = fabs(h1.x - h0.x) < dmax &&
                                    fabs(h1.y - h0.y) < dmax &&
-                                   fabs(dx) < PARAM_TOLERANCE &&
-                                   fabs(dy) < PARAM_TOLERANCE &&
+                                   fabs(dx) < TOLERANCE &&
+                                   fabs(dy) < TOLERANCE &&
                                    scatter < MAX_SCATTER_SEEDING &&
                                    scatter < best_fit;
 

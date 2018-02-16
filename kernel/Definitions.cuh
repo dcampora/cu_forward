@@ -25,12 +25,17 @@
 #define PHI_EXTRAPOLATION 0.08
 
 // Tolerance angle for forming triplets
-#define PARAM_TOLERANCE_ALPHA 0.3f
-#define PARAM_TOLERANCE 0.6f
+#define MAX_SLOPE 0.4f
+#define TOLERANCE 0.6f
 
 // Maximum scatter of each three hits
-#define MAX_SCATTER_SEEDING 0.000016f
-#define MAX_SCATTER_FORWARDING 0.0001f
+// This impacts velo tracks and a to a lesser extent
+// long and long strange tracks
+#define MAX_SCATTER_SEEDING 0.004f
+
+// Making a bigger forwarding scatter window causes
+// less clones and more ghosts
+#define MAX_SCATTER_FORWARDING 0.004f
 
 // Number of seeding iterations before storing tracklets
 // This impacts the amount of shared memory to request per thread
