@@ -3,6 +3,7 @@
 #include <iostream>
 #include "../kernel/Definitions.cuh"
 #include "../kernel/SearchByTriplet.cuh"
+#include "../kernel/CalculatePhiAndSort.cuh"
 #include "Tools.cuh"
 #include "../src/Logger.h"
 #include "../src/Common.h"

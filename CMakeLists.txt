@@ -12,6 +12,6 @@ set(CUDA_HOST_COMPILER "g++")
 
 set(CUDA_SEPARABLE_COMPILATION ON)
 
-set(CUDA_NVCC_FLAGS "-std=c++11;-O3;-g;--use_fast_math;--expt-relaxed-constexpr;--generate-line-info;--resource-usage;--verbose;--nvlink-options=--verbose;-Xptxas=--verbose;--maxrregcount=64;--gpu-architecture=compute_60;--gpu-code=sm_60;")
+set(CUDA_NVCC_FLAGS "-std=c++11;-O0;-G;-g;--use_fast_math;--expt-relaxed-constexpr;--generate-line-info;--resource-usage;--verbose;--nvlink-options=--verbose;-Xptxas=--verbose;--maxrregcount=64;--gpu-architecture=compute_60;--gpu-code=sm_60;")
 
-cuda_add_executable(cuForward src/main.cpp src/Tools.cpp src/Logger.cpp cuda/CudaException.cpp cuda/Tools.cu cuda/KernelInvoker.cu kernel/TrackForwarding.cu kernel/TrackSeeding.cu kernel/FillCandidates.cu kernel/SearchByTriplet.cu kernel/ProcessModules.cu kernel/TrackSeedingFirst.cu kernel/WeakTracksAdder.cu)
+cuda_add_executable(cuForward src/main.cpp src/Tools.cpp src/Logger.cpp cuda/CudaException.cpp cuda/Tools.cu cuda/KernelInvoker.cu kernel/TrackForwarding.cu kernel/TrackSeeding.cu kernel/FillCandidates.cu kernel/SearchByTriplet.cu kernel/ProcessModules.cu kernel/TrackSeedingFirst.cu kernel/WeakTracksAdder.cu kernel/CalculatePhi.cu kernel/SortByPhi.cu kernel/CalculatePhiAndSort.cu)

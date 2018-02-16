@@ -47,6 +47,9 @@ cudaError_t invokeParallelSearch(
   short* dev_h0_candidates;
   short* dev_h2_candidates;
   unsigned short* dev_rel_indices;
+  float* dev_hit_phi;
+  int32_t* dev_hit_temp;
+  unsigned char* dev_hit_permutation;
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
@@ -61,21 +64,87 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_h0_candidates, 2 * acc_hits * sizeof(short)));
   cudaCheck(cudaMalloc((void**)&dev_h2_candidates, 2 * acc_hits * sizeof(short)));
   cudaCheck(cudaMalloc((void**)&dev_rel_indices, eventsToProcess * MAX_NUMHITS_IN_MODULE * sizeof(unsigned short)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_phi, acc_hits * sizeof(float)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_temp, acc_hits * sizeof(int32_t)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_permutation, acc_hits * sizeof(unsigned char)));
 
   // Copy stuff from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_event_offsets, event_offsets.data(), event_offsets.size() * sizeof(unsigned int), cudaMemcpyHostToDevice));
   cudaCheck(cudaMemcpy(dev_hit_offsets, hit_offsets.data(), hit_offsets.size() * sizeof(unsigned int), cudaMemcpyHostToDevice));
+  acc_size = 0;
+  for (unsigned int event_no=0; event_no<eventsToProcess; ++event_no){
+    cudaCheck(cudaMemcpy(&dev_input[acc_size], input[event_no].data(), input[event_no].size(), cudaMemcpyHostToDevice));
+    acc_size += input[event_no].size();
+  }
+
+  // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
+  cudaEvent_t start_sort, stop_sort;
+  float tsort;
+  cudaEventCreate(&start_sort);
+  cudaEventCreate(&stop_sort);
+  cudaEventRecord(start_sort, 0);
+
+  calculatePhiAndSort<<<numBlocks, 64>>>(
+    (const char*) dev_input,
+    dev_event_offsets,
+    dev_hit_offsets,
+    dev_hit_phi,
+    dev_hit_temp,
+    dev_hit_permutation
+  );
+
+  cudaEventRecord(stop_sort, 0);
+  cudaEventSynchronize(stop_sort);
+  cudaEventElapsedTime(&tsort, start_sort, stop_sort);
+  cudaEventDestroy(start_sort);
+  cudaEventDestroy(stop_sort);
 
   acc_size = 0;
-  for (unsigned int i=0; i<eventsToProcess; ++i){
-    cudaCheck(cudaMemcpy(&dev_input[acc_size], input[i].data(), input[i].size(), cudaMemcpyHostToDevice));
-    acc_size += input[i].size();
+  for (unsigned int event_no=0; event_no<eventsToProcess; ++event_no){
+    cudaCheck(cudaMemcpy((uint8_t*) &(input[event_no][0]), &dev_input[acc_size], input[event_no].size(), cudaMemcpyDeviceToHost));
+    acc_size += input[event_no].size();
   }
+
+  // Check sorting is correct in the resulting phi array
+  bool ordered = true;
+  for (unsigned int i=0; i<eventsToProcess; ++i) {
+    auto info = EventInfo(input[i]);
+
+    // DEBUG << "Event " << i << ":" << std::endl;
+    for (unsigned int module=0; module<52; ++module) {
+      const unsigned int start_hit = info.module_hitStarts[module];
+      const unsigned int num_hits = info.module_hitNums[module];
+      float phi = -10.f;
+
+      // DEBUG << "Module " << module << ":";
+      for (unsigned int hit_id=start_hit; hit_id<(start_hit + num_hits); ++hit_id) {
+        const float hit_phi = info.hit_Zs[hit_id];
+        // DEBUG << " " << hit_phi;
+
+        if (hit_phi < phi) {
+          ordered = false;
+          // DEBUG << std::endl << hit_phi << " vs " << phi << std::endl;
+          break;
+        } else {
+          phi = hit_phi;
+        }
+      }
+      // DEBUG << std::endl;
+      if (!ordered) { break; }
+    }
+    if (!ordered) { break; }
+  }
+
+  DEBUG << (ordered ? "Phi array is properly ordered" : "Phi array is not ordered") << std::endl << std::endl;
+
+  DEBUG << "Sort throughput: "
+    << eventsToProcess / (tsort * 0.001) << " events/s, (" 
+    << tsort << " ms)" << std::endl << std::endl;
 
   // Adding timing
   // Timing calculation
-  unsigned int niterations = 3;
-  unsigned int nexperiments = 1;
+  unsigned int niterations = 1;
+  unsigned int nexperiments = 0;
 
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -103,8 +172,7 @@ cudaError_t invokeParallelSearch(
       cudaEventCreate(&stop_searchByTriplet);
 
       cudaEventRecord(start_searchByTriplet, 0 );
-      
-      // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
+
       searchByTriplet<<<numBlocks, numThreads>>>(
         dev_tracks,
         (const char*) dev_input,
@@ -117,7 +185,9 @@ cudaError_t invokeParallelSearch(
         dev_hit_offsets,
         dev_h0_candidates,
         dev_h2_candidates,
-        dev_rel_indices
+        dev_rel_indices,
+        dev_hit_phi,
+        dev_hit_temp
       );
 
       cudaEventRecord( stop_searchByTriplet, 0 );

@@ -22,6 +22,7 @@
  * @brief Struct to typecast events.
  */
 struct EventInfo {
+  size_t size;
   uint32_t numberOfModules;
   uint32_t numberOfHits;
   float* module_Zs;
@@ -31,8 +32,6 @@ struct EventInfo {
   float* hit_Xs;
   float* hit_Ys;
   float* hit_Zs;
-  
-  int size;
 
   EventInfo() = default;
   EventInfo(const std::vector<uint8_t>& event) {

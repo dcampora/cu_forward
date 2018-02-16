@@ -127,5 +127,7 @@ __global__ void searchByTriplet(
   unsigned int* dev_hit_offsets,
   short* dev_h0_candidates,
   short* dev_h2_candidates,
-  unsigned short* dev_rel_indices
+  unsigned short* dev_rel_indices,
+  float* dev_hit_phi,
+  int32_t* dev_hit_temp
 );

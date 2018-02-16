@@ -52,7 +52,7 @@
 // Constants for requested storage on device
 #define MAX_TRACKS 3000
 #define MAX_TRACK_SIZE 24
-#define MAX_NUMHITS_IN_MODULE 300
+#define MAX_NUMHITS_IN_MODULE 256
 
 // Maximum number of tracks to follow at a time
 #define TTF_MODULO 2000
@@ -67,7 +67,7 @@
 #define PRINT_FILL_CANDIDATES false
 #define PRINT_VERBOSE false
 #define PRINT_BINARY false
-#define ASSERTS_ENABLED false
+#define ASSERTS_ENABLED true
 #define RESULTS_FOLDER "results"
 
 #if ASSERTS_ENABLED == true

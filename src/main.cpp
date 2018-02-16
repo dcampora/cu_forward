@@ -62,14 +62,11 @@ int main(int argc, char *argv[])
     std::vector<std::vector<unsigned char>> output;
 
     // Set verbosity to max
-    std::cout << std::fixed << std::setprecision(2);
+    std::cout << std::fixed << std::setprecision(6);
     logger::ll.verbosityLevel = 3;
 
     // Show some statistics
     statistics(input);
-
-    // Preorder events by X
-    sort_by_phi(input);
 
     // Attempt to execute all in one go
     cudaCheck(invokeParallelSearch(input, output));
