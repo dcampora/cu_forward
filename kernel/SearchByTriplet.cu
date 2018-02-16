@@ -84,7 +84,6 @@ __global__ void searchByTriplet(
   fillCandidates(
     h0_candidates,
     h2_candidates,
-    number_of_modules,
     module_hitStarts,
     module_hitNums,
     hit_Phis

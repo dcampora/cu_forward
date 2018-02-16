@@ -22,7 +22,7 @@
 // These parameters impact the found tracks
 // Maximum / minimum acceptable phi
 // This impacts enourmously the speed of track seeding
-#define PHI_EXTRAPOLATION 0.08
+#define PHI_EXTRAPOLATION 0.062
 
 // Tolerance angle for forming triplets
 #define MAX_SLOPE 0.4f
