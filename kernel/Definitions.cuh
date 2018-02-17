@@ -51,7 +51,7 @@
 
 // Constants for requested storage on device
 #define MAX_TRACKS 3000
-#define MAX_TRACK_SIZE 24
+#define MAX_TRACK_SIZE 26
 #define MAX_NUMHITS_IN_MODULE 256
 
 // Maximum number of tracks to follow at a time
@@ -67,7 +67,7 @@
 #define PRINT_FILL_CANDIDATES false
 #define PRINT_VERBOSE false
 #define PRINT_BINARY false
-#define ASSERTS_ENABLED true
+#define ASSERTS_ENABLED false
 #define RESULTS_FOLDER "results"
 
 #if ASSERTS_ENABLED == true
@@ -101,7 +101,7 @@ struct Hit {
     ) : x(_x), y(_y) {}
 };
 
-struct Track { // 2 + 24 * 2 = 50 B
+struct Track { // 2 + 26 * 2 = 58 B
   unsigned short hitsNum;
   unsigned short hits[MAX_TRACK_SIZE];
 

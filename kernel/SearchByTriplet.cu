@@ -34,10 +34,10 @@ __global__ void searchByTriplet(
   const unsigned int number_of_hits = no_hits[0];
   const unsigned int* module_hitStarts = (const unsigned int*) (module_Zs + number_of_modules);
   const unsigned int* module_hitNums = (const unsigned int*) (module_hitStarts + number_of_modules);
-  unsigned int* hit_IDs = (unsigned int*) (module_hitNums + number_of_modules);
-  float* hit_Xs = (float*) (hit_IDs + number_of_hits);
-  float* hit_Ys = (float*) (hit_Xs + number_of_hits);
+  int32_t* hit_temp = (int32_t*) (module_hitNums + number_of_modules);
+  float* hit_Ys = (float*) (hit_temp + number_of_hits);
   float* hit_Zs = (float*) (hit_Ys + number_of_hits);
+  unsigned int* hit_IDs = (unsigned int*) (hit_Zs + number_of_hits);
 
   // Per event datatypes
   Track* tracks = dev_tracks + tracks_offset;
@@ -49,7 +49,7 @@ __global__ void searchByTriplet(
   short* h0_candidates = dev_h0_candidates + hit_offset * 2;
   short* h2_candidates = dev_h2_candidates + hit_offset * 2;
   float* hit_Phis = (float*) (dev_hit_phi + hit_offset);
-  int32_t* hit_temp = (int32_t*) (dev_hit_temp + hit_offset);
+  float* hit_Xs = (float*) (dev_hit_temp + hit_offset);
 
   unsigned int* tracks_to_follow = dev_tracks_to_follow + event_number * TTF_MODULO;
   unsigned int* weak_tracks = dev_weak_tracks + hit_offset;
@@ -90,7 +90,7 @@ __global__ void searchByTriplet(
     h2_candidates,
     module_hitStarts,
     module_hitNums,
-    hit_Zs // hit_Phis
+    hit_Phis
   );
 
   // Process modules
@@ -105,8 +105,8 @@ __global__ void searchByTriplet(
     number_of_modules,
     module_hitStarts,
     module_hitNums,
-    (float*) hit_temp, // hit_Xs
-    hit_Xs, // hit_Ys
+    hit_Xs,
+    hit_Ys,
     module_Zs,
     weaktracks_insertPointer,
     tracklets_insertPointer,

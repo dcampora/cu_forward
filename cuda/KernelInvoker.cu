@@ -49,7 +49,7 @@ cudaError_t invokeParallelSearch(
   unsigned short* dev_rel_indices;
   float* dev_hit_phi;
   int32_t* dev_hit_temp;
-  unsigned char* dev_hit_permutation;
+  unsigned short* dev_hit_permutation;
 
   // Allocate GPU buffers
   cudaCheck(cudaMalloc((void**)&dev_tracks, eventsToProcess * MAX_TRACKS * sizeof(Track)));
@@ -66,7 +66,7 @@ cudaError_t invokeParallelSearch(
   cudaCheck(cudaMalloc((void**)&dev_rel_indices, eventsToProcess * MAX_NUMHITS_IN_MODULE * sizeof(unsigned short)));
   cudaCheck(cudaMalloc((void**)&dev_hit_phi, acc_hits * sizeof(float)));
   cudaCheck(cudaMalloc((void**)&dev_hit_temp, acc_hits * sizeof(int32_t)));
-  cudaCheck(cudaMalloc((void**)&dev_hit_permutation, acc_hits * sizeof(unsigned char)));
+  cudaCheck(cudaMalloc((void**)&dev_hit_permutation, acc_hits * sizeof(unsigned short)));
 
   // Copy stuff from host memory to GPU buffers
   cudaCheck(cudaMemcpy(dev_event_offsets, event_offsets.data(), event_offsets.size() * sizeof(unsigned int), cudaMemcpyHostToDevice));
@@ -77,7 +77,7 @@ cudaError_t invokeParallelSearch(
     acc_size += input[event_no].size();
   }
 
-  // Dynamic allocation - , 3 * numThreads.x * sizeof(float)
+  // Sorting
   cudaEvent_t start_sort, stop_sort;
   float tsort;
   cudaEventCreate(&start_sort);
@@ -99,53 +99,9 @@ cudaError_t invokeParallelSearch(
   cudaEventDestroy(start_sort);
   cudaEventDestroy(stop_sort);
 
-  acc_size = 0;
-  for (unsigned int event_no=0; event_no<eventsToProcess; ++event_no){
-    cudaCheck(cudaMemcpy((uint8_t*) &(input[event_no][0]), &dev_input[acc_size], input[event_no].size(), cudaMemcpyDeviceToHost));
-    acc_size += input[event_no].size();
-  }
-
-  // Check sorting is correct in the resulting phi array
-  bool ordered = true;
-  for (unsigned int i=0; i<eventsToProcess; ++i) {
-    auto info = EventInfo(input[i]);
-
-    // DEBUG << "Event " << i << ":" << std::endl;
-    for (unsigned int module=0; module<52; ++module) {
-      const unsigned int start_hit = info.module_hitStarts[module];
-      const unsigned int num_hits = info.module_hitNums[module];
-      float phi = -10.f;
-
-      // DEBUG << "Module " << module << ":";
-      for (unsigned int hit_id=start_hit; hit_id<(start_hit + num_hits); ++hit_id) {
-        const float hit_phi = info.hit_Zs[hit_id];
-        // DEBUG << " " << hit_phi;
-
-        if (hit_phi < phi) {
-          ordered = false;
-          // DEBUG << std::endl << hit_phi << " vs " << phi << std::endl;
-          break;
-        } else {
-          phi = hit_phi;
-        }
-      }
-      // DEBUG << std::endl;
-      if (!ordered) { break; }
-    }
-    if (!ordered) { break; }
-  }
-
-  DEBUG << (ordered ? "Phi array is properly ordered" : "Phi array is not ordered") << std::endl << std::endl;
-
-  DEBUG << "Sort throughput: "
-    << eventsToProcess / (tsort * 0.001) << " events/s, (" 
-    << tsort << " ms)" << std::endl << std::endl;
-
-  // Adding timing
-  // Timing calculation
-  unsigned int niterations = 1;
-  unsigned int nexperiments = 0;
-
+  // Repeat the processing several times to average time
+  unsigned int niterations = 3;
+  unsigned int nexperiments = 1;
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
 
@@ -272,8 +228,12 @@ cudaError_t invokeParallelSearch(
 
       std::ofstream outfile (std::string(RESULTS_FOLDER) + std::string("/") + std::to_string(i) + std::string(".bin"), std::ios::binary);
       outfile.write((char*) &numberOfTracks, sizeof(int32_t));
+      // Fetch back the event
+      std::vector<uint8_t> event_data (input[i].size());
+      cudaCheck(cudaMemcpy(event_data.data(), &dev_input[event_offsets[i]], event_data.size(), cudaMemcpyDeviceToHost));
+      auto info = EventInfo(event_data);
       for(int j=0; j<numberOfTracks; ++j){
-        writeBinaryTrack(EventInfo(input[i]), tracks_in_solution[j], outfile);
+        writeBinaryTrack((unsigned int*) info.hit_Zs, tracks_in_solution[j], outfile);
       }
       outfile.close();
 
@@ -284,13 +244,18 @@ cudaError_t invokeParallelSearch(
     std::cout << std::endl;
   }
 
-  DEBUG << std::endl << "Time averages:" << std::endl;
+  DEBUG << std::endl << "Time averages:" << std::endl
+    << " Phi + sorting throughput: " << eventsToProcess / (tsort * 0.001)
+    << " events/s, (" << tsort << " ms)" << std::endl;
+
   int exp = 1;
   for (auto i=0; i<nexperiments; ++i){
     mresults[i] = calcResults(time_values[i]);
-    DEBUG << " nthreads (" << NUMTHREADS_X << ", " << exp << "): "
+    DEBUG << " nthreads (" << NUMTHREADS_X << "): "
       << eventsToProcess / (mresults[i]["mean"] * 0.001) << " events/s, "
-      << mresults[i]["mean"] << " ms (std dev " << mresults[i]["deviation"] << ")" << std::endl;
+      << mresults[i]["mean"] << " ms (std dev " << mresults[i]["deviation"] << "), "
+      << eventsToProcess / ((mresults[i]["mean"] + tsort) * 0.001) << " events/s with sorting"
+      << std::endl;
 
     exp *= 2;
   }

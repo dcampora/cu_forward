@@ -39,7 +39,14 @@ void printTrack(
 );
 
 void writeBinaryTrack(
-  const EventInfo& info,
+  const unsigned int* hit_IDs,
   const Track& track,
   std::ofstream& outstream
+);
+
+cudaError_t checkSorting(
+  const std::vector<std::vector<uint8_t>>& input,
+  unsigned int acc_hits,
+  unsigned short* dev_hit_phi,
+  const std::vector<unsigned int>& hit_offsets
 );
