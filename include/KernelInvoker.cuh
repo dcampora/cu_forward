@@ -1,12 +1,12 @@
 #pragma once
 
-#include <iostream>
-#include "../kernel/Definitions.cuh"
-#include "../kernel/SearchByTriplet.cuh"
-#include "../kernel/CalculatePhiAndSort.cuh"
+#include "Definitions.cuh"
+#include "SearchByTriplet.cuh"
+#include "CalculatePhiAndSort.cuh"
 #include "Tools.cuh"
-#include "../src/Logger.h"
-#include "../src/Common.h"
+#include "Logger.h"
+#include "Common.h"
+#include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>

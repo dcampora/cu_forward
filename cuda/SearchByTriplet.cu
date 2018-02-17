@@ -1,4 +1,4 @@
-﻿#include "SearchByTriplet.cuh"
+﻿#include "../include/SearchByTriplet.cuh"
 
 /**
  * @brief Track forwarding algorithm based on triplet finding

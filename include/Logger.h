@@ -1,18 +1,13 @@
 #pragma once
 
-/**
- *      FileStdLogger
- *
- *      author  -   Daniel Campora
- *      email   -   dcampora@cern.ch
- *
- *      April, 2014
- *      CERN
- */
+#define DEBUG logger::logger(3)
+#define INFO  logger::logger(2)
+#define ERROR logger::logger(1)
 
-#include <iostream>
-#include <fstream>
 #include <sstream>
+#include <iostream>
+#include <iomanip>
+#include <fstream>
 #include <string>
 
 // Dumb type, just making constructor public
@@ -74,3 +69,23 @@ public:
     }
 
 };
+
+namespace logger {
+    class Logger {
+    public:
+      int verbosityLevel;
+      FileStdLogger discardStream;
+      VoidLogger* discardLogger;
+      Logger(){
+        discardLogger = new VoidLogger(&discardStream);
+      }
+    };
+
+    std::ostream& logger(int requestedLogLevel);
+
+    #ifndef CUDALOGGER_CPP
+    extern Logger ll;
+    #else
+    Logger ll;
+    #endif
+}

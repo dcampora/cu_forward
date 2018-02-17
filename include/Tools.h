@@ -1,16 +1,47 @@
 #pragma once
 
+#include <dirent.h>
+#include <math.h>
 #include <iostream>
-#include <vector>
 #include <fstream>
+#include <vector>
+#include <string>
+#include <numeric>
+#include <algorithm>
 #include <map>
 #include <cmath>
 #include <stdint.h>
-#include "CudaException.h"
-#include "KernelInvoker.cuh"
-#include "../src/Common.h"
+#include "Common.h"
 
-std::map<std::string, float> calcResults(std::vector<float>& times);
+/**
+ * Generic StrException launcher
+ */
+class StrException : public std::exception
+{
+public:
+    std::string s;
+    StrException(std::string ss) : s(ss) {}
+    ~StrException() throw () {} // Updated
+    const char* what() const throw() { return s.c_str(); }
+};
+
+void readFileIntoVector(
+  const std::string& foldername,
+  std::vector<uint8_t> & output
+);
+
+std::vector<std::vector<uint8_t>> readFolder(
+  const std::string& foldername,
+  int fileNumber
+);
+
+void statistics(
+  const std::vector<std::vector<uint8_t>>& input
+);
+
+std::map<std::string, float> calcResults(
+  std::vector<float>& times
+);
 
 void printOutSensorHits(
   const EventInfo& info,

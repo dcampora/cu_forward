@@ -4,7 +4,8 @@
  *      author  -   Daniel Campora
  *      email   -   dcampora@cern.ch
  *
- *      June, 2014 - February, 2018
+ *      Original development June, 2014
+ *      Restarted development on February, 2018
  *      CERN
  */
 
@@ -16,10 +17,10 @@
 #include <cstdlib>
 #include <vector>
 #include <algorithm>
-#include "Common.h"
-#include "Logger.h"
-#include "Tools.h"
 #include "cuda_runtime.h"
+#include "../include/Common.h"
+#include "../include/Logger.h"
+#include "../include/Tools.h"
 
 extern cudaError_t invokeParallelSearch(
   const std::vector<std::vector<uint8_t>>& input,
