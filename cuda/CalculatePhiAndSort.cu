@@ -1,4 +1,4 @@
-#include "CalculatePhiAndSort.cuh"
+#include "../include/CalculatePhiAndSort.cuh"
 
 /**
  * @brief Track forwarding algorithm based on triplet finding
@@ -35,7 +35,7 @@ __global__ void calculatePhiAndSort(
   int32_t* hit_temp = (int32_t*) (dev_hit_temp + hit_offset);
   unsigned short* hit_permutations = dev_hit_permutations + hit_offset;
 
-  // Calculate phi
+  // Calculate phi and populate hit_permutations
   calculatePhi(
     module_hitStarts,
     module_hitNums,

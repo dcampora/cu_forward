@@ -1,6 +1,9 @@
-#include "SearchByTriplet.cuh"
+#include "../include/SearchByTriplet.cuh"
 #include "math_constants.h"
 
+/**
+ * @brief Apply permutation from prev container to new container
+ */
 template<class T>
 __device__ void applyPermutation(
   unsigned short* permutation,
@@ -46,5 +49,4 @@ __device__ void sortByPhi(
   applyPermutation(hit_permutation, number_of_hits, hit_Zs, new_hit_Zs);
   __syncthreads();
   applyPermutation(hit_permutation, number_of_hits, hit_IDs, new_hit_IDs);
-  __syncthreads();
 }
