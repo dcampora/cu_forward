@@ -107,6 +107,7 @@ __global__ void searchByTriplet(
     module_hitNums,
     hit_Xs,
     hit_Ys,
+    hit_Zs,
     module_Zs,
     weaktracks_insertPointer,
     tracklets_insertPointer,

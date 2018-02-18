@@ -23,6 +23,7 @@ __device__ void processModules(
   const unsigned int* module_hitNums,
   const float* hit_Xs,
   const float* hit_Ys,
+  const float* hit_Zs,
   const float* module_Zs,
   unsigned int* weaktracks_insertPointer,
   unsigned int* tracklets_insertPointer,
@@ -48,6 +49,7 @@ __device__ void fillCandidates(
 __device__ void trackForwarding(
   const float* hit_Xs,
   const float* hit_Ys,
+  const float* hit_Zs,
   bool* hit_used,
   unsigned int* tracks_insertPointer,
   unsigned int* ttf_insertPointer,

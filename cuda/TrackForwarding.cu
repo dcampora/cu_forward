@@ -43,6 +43,7 @@ __device__ float fitHitToTrack(
 __device__ void trackForwarding(
   const float* hit_Xs,
   const float* hit_Ys,
+  const float* hit_Zs,
   bool* hit_used,
   unsigned int* tracks_insertPointer,
   unsigned int* ttf_insertPointer,
@@ -64,7 +65,7 @@ __device__ void trackForwarding(
     const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
 
     // These variables need to go here, shared memory and scope requirements
-    float tx, ty, h1_z, h0_z;
+    float tx, ty, h0_z, h1_z;
     unsigned int trackno, fulltrackno, skipped_modules;
     unsigned short best_hit_h2;
     Track t;
@@ -92,28 +93,12 @@ __device__ void trackForwarding(
       ASSERT(h0_num < number_of_hits)
       h0.x = hit_Xs[h0_num];
       h0.y = hit_Ys[h0_num];
+      h0_z = hit_Zs[h0_num];
 
       ASSERT(h1_num < number_of_hits)
       const float h1_x = hit_Xs[h1_num];
       const float h1_y = hit_Ys[h1_num];
-
-      // 99% of the times the last two hits came from consecutive modules
-      if (h0_num < module_data[0].hitStart + module_data[0].hitNums) {
-        h0_z = module_data[0].z;
-        h1_z = module_data[1].z;
-      } else {
-        // Oh boy.
-        // We assume only one module can be skipped
-        h1_z = (h1_num < module_data[1].hitStart + module_data[1].hitNums) ? module_data[1].z : module_data[0].z;
-
-        // We do not know if h0 was in the previous module or the previous-previous one.
-        // So we have to pay the price and ask the question
-        if (h0_num < module_hitStarts[first_module+2] + module_hitNums[first_module+2]) {
-          h0_z = module_Zs[first_module+2];
-        } else {
-          h0_z = module_Zs[first_module+4];
-        }
-      }
+      h1_z = hit_Zs[h1_num];
 
       // Track forwarding over t, for all hits in the next module
       // Line calculations
