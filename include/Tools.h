@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <math.h>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -11,7 +12,9 @@
 #include <map>
 #include <cmath>
 #include <stdint.h>
+#include "Logger.h"
 #include "Common.h"
+#include "Definitions.cuh"
 
 /**
  * Generic StrException launcher
