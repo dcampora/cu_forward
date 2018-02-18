@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Definitions.cuh"
+#include "CalculatePhiAndSort.cuh"
 
 __device__ float fitHitToTrack(
   const float tx,
@@ -129,5 +130,6 @@ __global__ void searchByTriplet(
   short* dev_h2_candidates,
   unsigned short* dev_rel_indices,
   float* dev_hit_phi,
-  int32_t* dev_hit_temp
+  int32_t* dev_hit_temp,
+  unsigned short* dev_hit_permutation
 );

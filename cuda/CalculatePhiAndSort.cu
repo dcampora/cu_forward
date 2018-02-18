@@ -3,7 +3,7 @@
 /**
  * @brief Track forwarding algorithm based on triplet finding
  */
-__global__ void calculatePhiAndSort(
+__device__ void calculatePhiAndSort(
   const char* dev_input,
   unsigned int* dev_event_offsets,
   unsigned int* dev_hit_offsets,

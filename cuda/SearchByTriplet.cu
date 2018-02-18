@@ -17,8 +17,19 @@ __global__ void searchByTriplet(
   short* dev_h2_candidates,
   unsigned short* dev_rel_indices,
   float* dev_hit_phi,
-  int32_t* dev_hit_temp
+  int32_t* dev_hit_temp,
+  unsigned short* dev_hit_permutation
 ) {
+  // Sort by phi
+  calculatePhiAndSort(
+    dev_input,
+    dev_event_offsets,
+    dev_hit_offsets,
+    dev_hit_phi,
+    dev_hit_temp,
+    dev_hit_permutation
+  );
+
   /* Data initialization */
   // Each event is treated with two blocks, one for each side.
   const unsigned int event_number = blockIdx.x;
@@ -37,7 +48,8 @@ __global__ void searchByTriplet(
   int32_t* hit_temp = (int32_t*) (module_hitNums + number_of_modules);
   float* hit_Ys = (float*) (hit_temp + number_of_hits);
   float* hit_Zs = (float*) (hit_Ys + number_of_hits);
-  unsigned int* hit_IDs = (unsigned int*) (hit_Zs + number_of_hits);
+  // Note: At the moment, we are not using the hit_IDs
+  // unsigned int* hit_IDs = (unsigned int*) (hit_Zs + number_of_hits);
 
   // Per event datatypes
   Track* tracks = dev_tracks + tracks_offset;

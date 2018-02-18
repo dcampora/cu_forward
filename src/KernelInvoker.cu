@@ -77,30 +77,30 @@ cudaError_t invokeParallelSearch(
     acc_size += input[event_no].size();
   }
 
-  // Sorting
-  cudaEvent_t start_sort, stop_sort;
-  float tsort;
-  cudaEventCreate(&start_sort);
-  cudaEventCreate(&stop_sort);
-  cudaEventRecord(start_sort, 0);
+  // // Sorting
+  // cudaEvent_t start_sort, stop_sort;
+  // float tsort;
+  // cudaEventCreate(&start_sort);
+  // cudaEventCreate(&stop_sort);
+  // cudaEventRecord(start_sort, 0);
 
-  calculatePhiAndSort<<<numBlocks, 64>>>(
-    (const char*) dev_input,
-    dev_event_offsets,
-    dev_hit_offsets,
-    dev_hit_phi,
-    dev_hit_temp,
-    dev_hit_permutation
-  );
+  // calculatePhiAndSort<<<numBlocks, 64>>>(
+  //   (const char*) dev_input,
+  //   dev_event_offsets,
+  //   dev_hit_offsets,
+  //   dev_hit_phi,
+  //   dev_hit_temp,
+  //   dev_hit_permutation
+  // );
 
-  cudaEventRecord(stop_sort, 0);
-  cudaEventSynchronize(stop_sort);
-  cudaEventElapsedTime(&tsort, start_sort, stop_sort);
-  cudaEventDestroy(start_sort);
-  cudaEventDestroy(stop_sort);
+  // cudaEventRecord(stop_sort, 0);
+  // cudaEventSynchronize(stop_sort);
+  // cudaEventElapsedTime(&tsort, start_sort, stop_sort);
+  // cudaEventDestroy(start_sort);
+  // cudaEventDestroy(stop_sort);
 
   // Repeat the processing several times to average time
-  unsigned int niterations = 3;
+  unsigned int niterations = 1;
   unsigned int nexperiments = 1;
   std::vector<std::vector<float>> time_values {nexperiments};
   std::vector<std::map<std::string, float>> mresults {nexperiments};
@@ -131,7 +131,7 @@ cudaError_t invokeParallelSearch(
 
       searchByTriplet<<<numBlocks, numThreads>>>(
         dev_tracks,
-        (const char*) dev_input,
+        dev_input,
         dev_tracks_to_follow,
         dev_hit_used,
         dev_atomicsStorage,
@@ -143,7 +143,8 @@ cudaError_t invokeParallelSearch(
         dev_h2_candidates,
         dev_rel_indices,
         dev_hit_phi,
-        dev_hit_temp
+        dev_hit_temp,
+        dev_hit_permutation
       );
 
       cudaEventRecord( stop_searchByTriplet, 0 );
@@ -244,9 +245,9 @@ cudaError_t invokeParallelSearch(
     std::cout << std::endl;
   }
 
-  DEBUG << std::endl << "Time averages:" << std::endl
-    << " Phi + sorting throughput: " << eventsToProcess / (tsort * 0.001)
-    << " events/s, (" << tsort << " ms)" << std::endl;
+  // DEBUG << std::endl << "Time averages:" << std::endl
+  //   << " Phi + sorting throughput: " << eventsToProcess / (tsort * 0.001)
+  //   << " events/s, (" << tsort << " ms)" << std::endl;
 
   int exp = 1;
   for (auto i=0; i<nexperiments; ++i){
@@ -254,7 +255,7 @@ cudaError_t invokeParallelSearch(
     DEBUG << " nthreads (" << NUMTHREADS_X << "): "
       << eventsToProcess / (mresults[i]["mean"] * 0.001) << " events/s, "
       << mresults[i]["mean"] << " ms (std dev " << mresults[i]["deviation"] << "), "
-      << eventsToProcess / ((mresults[i]["mean"] + tsort) * 0.001) << " events/s with sorting"
+      // << eventsToProcess / ((mresults[i]["mean"] + tsort) * 0.001) << " events/s with sorting"
       << std::endl;
 
     exp *= 2;

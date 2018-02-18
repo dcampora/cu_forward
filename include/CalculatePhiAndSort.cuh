@@ -21,7 +21,7 @@ __device__ void sortByPhi(
   unsigned short* hit_permutation
 );
 
-__global__ void calculatePhiAndSort(
+__device__ void calculatePhiAndSort(
   const char* dev_input,
   unsigned int* dev_event_offsets,
   unsigned int* dev_hit_offsets,
