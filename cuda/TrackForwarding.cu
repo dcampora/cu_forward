@@ -8,28 +8,24 @@
  *          returns FLT_MAX.
  */
 __device__ float fitHitToTrack(
-  const float tx,
-  const float ty,
   const Hit& h0,
-  const float h0_z,
-  const float h1_z,
   const Hit& h2,
-  const float h2_z
+  const float predx,
+  const float predy,
+  const float scatterDenom2
 ) {
   // tolerances
-  const float dz = h2_z - h0_z;
-  const float x_prediction = h0.x + tx * dz;
+  const float x_prediction = h0.x + predx;
   const float dx = fabs(x_prediction - h2.x);
   const bool tolx_condition = dx < TOLERANCE;
 
-  const float y_prediction = h0.y + ty * dz;
+  const float y_prediction = h0.y + predy;
   const float dy = fabs(y_prediction - h2.y);
   const bool toly_condition = dy < TOLERANCE;
 
-  // Scatter - Updated to last PrPixel
+  // Scatter
   const float scatterNum = (dx * dx) + (dy * dy);
-  const float scatterDenom = 1.f / (h2_z - h1_z);
-  const float scatter = scatterNum * scatterDenom * scatterDenom;
+  const float scatter = scatterNum * scatterDenom2;
 
   const bool scatter_condition = scatter < MAX_SCATTER_FORWARDING;
   const bool condition = tolx_condition && toly_condition && scatter_condition;
@@ -61,29 +57,20 @@ __device__ void trackForwarding(
   const unsigned int* module_hitStarts,
   const unsigned int* module_hitNums
 ) {
+  // Assign a track to follow to each thread
   for (int i=0; i<(diff_ttf + blockDim.x - 1) / blockDim.x; ++i) {
     const unsigned int ttf_element = blockDim.x * i + threadIdx.x;
-
-    // These variables need to go here, shared memory and scope requirements
-    float tx, ty, h0_z, h1_z;
-    unsigned int trackno, fulltrackno, skipped_modules;
-    unsigned short best_hit_h2;
-    Track t;
-    Hit h0;
-
-    // The logic is broken in two parts for shared memory loading
-    const bool ttf_condition = ttf_element < diff_ttf;
-    if (ttf_condition) {
-      fulltrackno = tracks_to_follow[(prev_ttf + ttf_element) % TTF_MODULO];
+    if (ttf_element < diff_ttf) {
+      const auto fulltrackno = tracks_to_follow[(prev_ttf + ttf_element) % TTF_MODULO];
       const bool track_flag = (fulltrackno & 0x80000000) == 0x80000000;
-      skipped_modules = (fulltrackno & 0x70000000) >> 28;
-      trackno = fulltrackno & 0x0FFFFFFF;
+      const auto skipped_modules = (fulltrackno & 0x70000000) >> 28;
+      auto trackno = fulltrackno & 0x0FFFFFFF;
 
       const Track* track_pointer = track_flag ? tracklets : tracks;
       
       ASSERT(track_pointer==tracklets ? trackno < number_of_hits : true)
       ASSERT(track_pointer==tracks ? trackno < MAX_TRACKS : true)
-      t = track_pointer[trackno];
+      auto t = track_pointer[trackno];
 
       // Load last two hits in h0, h1
       ASSERT(t.hitsNum < MAX_TRACK_SIZE)
@@ -91,80 +78,57 @@ __device__ void trackForwarding(
       const auto h1_num = t.hits[t.hitsNum - 1];
 
       ASSERT(h0_num < number_of_hits)
-      h0.x = hit_Xs[h0_num];
-      h0.y = hit_Ys[h0_num];
-      h0_z = hit_Zs[h0_num];
+      const Hit h0 {hit_Xs[h0_num], hit_Ys[h0_num]};
+      const auto h0_z = hit_Zs[h0_num];
 
       ASSERT(h1_num < number_of_hits)
-      const float h1_x = hit_Xs[h1_num];
-      const float h1_y = hit_Ys[h1_num];
-      h1_z = hit_Zs[h1_num];
+      const Hit h1 {hit_Xs[h1_num], hit_Ys[h1_num]};
+      const auto h1_z = hit_Zs[h1_num];
 
       // Track forwarding over t, for all hits in the next module
       // Line calculations
-      const float td = 1.0f / (h1_z - h0_z);
-      const float txn = (h1_x - h0.x);
-      const float tyn = (h1_y - h0.y);
-      tx = txn * td;
-      ty = tyn * td;
-    }
+      const auto td = 1.0f / (h1_z - h0_z);
+      const auto txn = (h1.x - h0.x);
+      const auto tyn = (h1.y - h0.y);
+      const auto tx = txn * td;
+      const auto ty = tyn * td;
 
-    // Search for a best fit
-    // Load shared elements
-    
-    // Iterate in the third list of hits
-    // Tiled memory access on h2
-    // Only load for threadIdx.y == 0
-    float best_fit = FLT_MAX;
-    for (auto k=0; k<(module_data[2].hitNums + blockDim.x - 1) / blockDim.x; ++k) {
-      
-#if USE_SHARED_FOR_HITS
-      __syncthreads();
-      const int shared_hit_no = blockDim.x * k + threadIdx.x;
-      if (shared_hit_no < module_data[2].hitNums) {
-        const int h2_index = module_data[2].hitStart + shared_hit_no;
+      // Find the best candidate
+      float best_fit = FLT_MAX;
+      unsigned short best_h2;
 
-        // Coalesced memory accesses
-        ASSERT(tid < blockDim.x)
-        shared_hit_x[tid] = hit_Xs[h2_index];
-        shared_hit_y[tid] = hit_Ys[h2_index];
+      // Some constants of fitting
+      const auto h2_z = module_data[2].z;
+      const auto dz = h2_z - h0_z;
+      const auto predx = tx * dz;
+      const auto predy = ty * dz;
+      const auto scatterDenom2 = 1.f / ((h2_z - h1_z) * (h2_z - h1_z));
+
+      for (auto j=0; j<module_data[2].hitNums; ++j) {
+        const auto h2_index = module_data[2].hitStart + j;
+        const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
+        const auto fit = fitHitToTrack(
+          h0,
+          h2,
+          predx,
+          predy,
+          scatterDenom2
+        );
+        const auto fit_is_better = fit < best_fit;
+        best_fit = fit_is_better*fit + !fit_is_better*best_fit;
+        best_h2 = fit_is_better*h2_index + !fit_is_better*best_h2;
       }
-      __syncthreads();
-#endif
-      
-      if (ttf_condition) {
-        const auto last_hit_h2 = min(blockDim.x * (k + 1), module_data[2].hitNums);
-        for (auto kk=blockDim.x * k; kk<last_hit_h2; ++kk) {
-          
-          const auto h2_index = module_data[2].hitStart + kk;
-#if USE_SHARED_FOR_HITS
-          const auto shared_h2_index = kk % blockDim.x;
-          const Hit h2 {shared_hit_x[shared_h2_index], shared_hit_y[shared_h2_index]};
-#else
-          const Hit h2 {hit_Xs[h2_index], hit_Ys[h2_index]};
-#endif
 
-          const float fit = fitHitToTrack(tx, ty, h0, h0_z, h1_z, h2, module_data[2].z);
-          const bool fit_is_better = fit < best_fit;
-
-          best_fit = fit_is_better ? fit : best_fit;
-          best_hit_h2 = fit_is_better ? h2_index : best_hit_h2;
-        }
-      }
-    }
-
-    // We have a best fit!
-    // Fill in t, ONLY in case the best fit is acceptable
-    if (ttf_condition) {
+      // Condition for finding a h2
       if (best_fit != FLT_MAX) {
         // Mark h2 as used
-        ASSERT(best_hit_h2 < number_of_hits)
-        hit_used[best_hit_h2] = true;
+        ASSERT(best_h2 < number_of_hits)
+        hit_used[best_h2] = true;
 
         // Update the tracks to follow, we'll have to follow up
         // this track on the next iteration :)
         ASSERT(t.hitsNum < MAX_TRACK_SIZE)
-        t.hits[t.hitsNum++] = best_hit_h2;
+        t.hits[t.hitsNum++] = best_h2;
 
         // Update the track in the bag
         if (t.hitsNum <= 4) {

@@ -2,14 +2,6 @@
 
 #include "Definitions.cuh"
 
-__device__ float fitHitToTrack(
-  const float tx,
-  const float ty,
-  const Hit& h0,
-  const float h1_z,
-  const Hit& h2
-);
-
 __device__ void processModules(
   Module* module_data,
   float* shared_best_fits,
